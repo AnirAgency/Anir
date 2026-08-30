@@ -1,0 +1,275 @@
+---
+/*
+  Dev-only reference for the design foundation. Excluded from the production
+  build by the stripStyleguide integration in astro.config.mjs — if you can
+  reach this on aniragency.mn, that integration has broken.
+*/
+import Base from '../layouts/Base.astro';
+import Section from '../components/Section.astro';
+import Grid from '../components/Grid.astro';
+
+const colours = [
+  { token: '--ink', hex: '#08090B', use: 'primary background' },
+  { token: '--ink-2', hex: '#121519', use: 'deep surface, hover ground' },
+  { token: '--paper', hex: '#EEF0F3', use: 'light background' },
+  { token: '--paper-2', hex: '#DCE0E5', use: 'plates — where imagery sits' },
+  { token: '--dim', hex: '#767C85', use: 'secondary text on dark — 4.74:1' },
+  { token: '--dim-2', hex: '#656B75', use: 'secondary text on light — 4.70:1' },
+  { token: '--orange', hex: '#FF3300', use: 'active state ONLY' },
+];
+
+const derived = [
+  { token: '--line-dark', use: 'hairline on dark — paper 12% into ink' },
+  { token: '--line-light', use: 'hairline on light — = --paper-2' },
+];
+
+// Every sample carries Ө Ү ө ү. If a face is subset wrong, it tofus here first.
+const scale = [
+  { cls: 't-display-xl', name: 'Display/XL', spec: 'Oswald 600 · 92px / 96% / +0.5%', sample: 'ӨРГӨН ҮЗҮҮЛЭЛТ' },
+  { cls: 't-display-l', name: 'Display/L', spec: 'Oswald 600 · 56px / 98%', sample: 'ӨӨРИЙН ҮЙЛЧИЛГЭЭ' },
+  { cls: 't-display-m', name: 'Display/M', spec: 'Oswald 600 · 34px / 100%', sample: 'ӨНӨӨДӨР ҮҮСГЭЕ' },
+  { cls: 't-display-s', name: 'Display/S', spec: 'Oswald 500 · 22px / 110% / +8%', sample: 'ӨРГӨТГӨЛ ҮЙЛДЭЛ' },
+  { cls: 't-serif-display', name: 'Serif/Display', spec: 'PT Serif 400 · 44px / 120%', sample: 'Өнөөдөр, Үүлэн доор' },
+  { cls: 't-serif-italic', name: 'Serif/Italic', spec: 'PT Serif 400i · 21px / 135%', sample: 'Өөрийн үзэл, өөрийн үг' },
+  { cls: 't-mono-body', name: 'Mono/Body', spec: 'JB Mono 300 · 11px / 200% / +7%', sample: 'ӨДӨР ТУТМЫН ҮЙЛ АЖИЛЛАГАА ӨҮ' },
+  { cls: 't-mono-label', name: 'Mono/Label', spec: 'JB Mono 400 · 10px / 160% / +18%', sample: 'ӨНГӨ ҮЗҮҮЛЭЛТ ӨҮ' },
+  { cls: 't-mono-spec', name: 'Mono/Spec', spec: 'JB Mono 400 · 10.5px / 185%', sample: 'Өргөн 1440 · Үзүүлэлт 92px · ӨҮ өү' },
+];
+---
+
+<Base title="Styleguide — Anir" chrome={true}>
+  <Section tone="dark" id="sg-colour" label="Өнгө">
+    <p class="t-mono-label eyebrow">01 — Colour</p>
+    <h3 class="t-display-l head">Tokens</h3>
+    <p class="t-mono-body note">
+      The only six colours in the project. Anything not on this list is a bug.
+    </p>
+
+    <Grid cols={3} class="stack">
+      {
+        colours.map((colour) => (
+          <div class="swatch">
+            <span class="swatch__chip" style={`background: var(${colour.token});`} />
+            <p class="t-mono-label">{colour.token}</p>
+            <p class="t-mono-spec muted">
+              {colour.hex} · {colour.use}
+            </p>
+          </div>
+        ))
+      }
+    </Grid>
+
+    <Grid cols={2} class="stack">
+      {
+        derived.map((line) => (
+          <div class="swatch">
+            <span class="swatch__rule" style={`background: var(${line.token});`} />
+            <p class="t-mono-label">{line.token}</p>
+            <p class="t-mono-spec muted">{line.use}</p>
+          </div>
+        ))
+      }
+    </Grid>
+  </Section>
+
+  <Section tone="light" id="sg-type-light" label="Үсгийн хэв">
+    <p class="t-mono-label eyebrow">02 — Type scale on light</p>
+    <h3 class="t-display-l head">Ө Ү ө ү</h3>
+    <p class="t-mono-body note">
+      Every style below is set in Mongolian. If any line shows a box, that face's
+      subset is missing cyrillic-ext.
+    </p>
+
+    <div class="stack">
+      {
+        scale.map((style) => (
+          <div class="row">
+            <p class="t-mono-spec muted row__meta">
+              .{style.cls}
+              <br />
+              {style.name} · {style.spec}
+            </p>
+            <p class={style.cls}>{style.sample}</p>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <Section tone="dark" id="sg-type-dark" label="Харанхуй хэв">
+    <p class="t-mono-label eyebrow">03 — Type scale on dark</p>
+    <div class="stack">
+      {
+        scale.map((style) => (
+          <div class="row">
+            <p class="t-mono-spec muted row__meta">.{style.cls}</p>
+            <p class={style.cls}>{style.sample}</p>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <Section tone="light" id="sg-grid" label="Тор">
+    <p class="t-mono-label eyebrow">04 — Grid primitive</p>
+    <h3 class="t-display-m head">Hairline grid</h3>
+    <p class="t-mono-body note">
+      The container is the hairline colour; cells are --bg with a 1px gap. All of
+      these collapse to one column under 860px.
+    </p>
+
+    <Grid cols={4} class="stack">
+      {
+        [1, 2, 3, 4].map((n) => (
+          <div class="cell">
+            <p class="t-mono-label">Cell {n}</p>
+            <p class="t-mono-spec muted">cols={4}</p>
+          </div>
+        ))
+      }
+    </Grid>
+
+    <Grid template="0.9fr 1.1fr" class="stack">
+      <div class="cell">
+        <p class="t-mono-label">0.9fr</p>
+        <p class="t-mono-spec muted">template="0.9fr 1.1fr"</p>
+      </div>
+      <div class="cell">
+        <p class="t-mono-label">1.1fr</p>
+        <p class="t-mono-spec muted">the split Phase 04 needs</p>
+      </div>
+    </Grid>
+
+    <Grid cols="auto" min="12rem" class="stack">
+      {
+        ['auto', 'auto', 'auto', 'auto', 'auto'].map((_, n) => (
+          <div class="cell">
+            <p class="t-mono-label">Auto {n + 1}</p>
+            <p class="t-mono-spec muted">min=12rem</p>
+          </div>
+        ))
+      }
+    </Grid>
+  </Section>
+
+  <Section tone="dark" id="sg-plate" label="Хавтан">
+    <p class="t-mono-label eyebrow">05 — Tone variables</p>
+    <h3 class="t-display-m head">--bg · --fg · --muted · --line · --plate</h3>
+    <Grid cols={2} class="stack">
+      <div class="cell">
+        <p class="t-mono-label">--plate</p>
+        <span class="plate"></span>
+        <p class="t-mono-spec muted">where imagery sits</p>
+      </div>
+      <div class="cell">
+        <p class="t-mono-label">--muted</p>
+        <p class="t-mono-body muted">ӨДРИЙН ҮЙЛЧИЛГЭЭ — MUTED BODY COPY</p>
+        <p class="t-mono-spec muted">--dim in both tones</p>
+      </div>
+    </Grid>
+  </Section>
+
+  <Section tone="light" id="sg-focus" label="Фокус">
+    <p class="t-mono-label eyebrow">06 — Focus and reduced motion</p>
+    <p class="t-mono-body note">
+      Tab through these. The ring is --orange at 2px with a 3px offset. Turn on
+      prefers-reduced-motion and every transition below dies.
+    </p>
+    <div class="stack focus-row">
+      <a class="t-mono-label focus-demo" href="#sg-focus">Холбоос</a>
+      <button class="t-mono-label focus-demo" type="button">Товч</button>
+      <input class="t-mono-label focus-demo" type="text" aria-label="Оролт" placeholder="ОРОЛТ ӨҮ" />
+    </div>
+  </Section>
+</Base>
+
+<style>
+  .eyebrow {
+    color: var(--orange);
+  }
+
+  .head {
+    margin-block: 0.75rem 1rem;
+  }
+
+  .note {
+    color: var(--muted);
+    max-width: 60ch;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+
+  .muted {
+    color: var(--muted);
+  }
+
+  .stack {
+    margin-top: 2.5rem;
+  }
+
+  .swatch,
+  .cell {
+    padding: 1.25rem;
+  }
+
+  .swatch__chip {
+    display: block;
+    height: 4.5rem;
+    margin-bottom: 0.75rem;
+    border: var(--hairline) solid var(--line);
+  }
+
+  .swatch__rule {
+    display: block;
+    height: var(--hairline);
+    margin-bottom: 0.75rem;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: baseline;
+    padding-block: 1.25rem;
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .row__meta {
+    color: var(--muted);
+  }
+
+  .plate {
+    display: block;
+    aspect-ratio: 16 / 10;
+    margin-block: 0.75rem;
+    background: var(--plate);
+  }
+
+  .focus-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .focus-demo {
+    padding: 0.75rem 1.25rem;
+    border: var(--hairline) solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    transition:
+      background 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .focus-demo:hover {
+    background: var(--plate);
+    color: var(--orange);
+  }
+
+  @media (max-width: 860px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.5rem;
+    }
+  }
+</style>

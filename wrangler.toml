@@ -1,0 +1,6 @@
+# Cloudflare Pages project config.
+# The build is static: dist/ is uploaded as assets, functions/ is compiled into
+# the single Pages Function that serves /api/*. There is no SSR adapter.
+name = "anir-site"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-08-30"

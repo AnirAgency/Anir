@@ -1,0 +1,169 @@
+/*
+  Design tokens. The single source for colour and type on this site.
+
+  Both tables come from CLAUDE.md and the Figma `02 · Foundations` page. Do not
+  add a colour here, and do not invent a type size — if a design needs something
+  that isn't below, the design is wrong or CLAUDE.md needs amending first.
+*/
+
+:root {
+  /* ---------------------------------------------------------------- colour */
+
+  --ink: #08090b; /* primary background         */
+  --ink-2: #121519; /* deep surface, hover ground */
+  --paper: #eef0f3; /* light background           */
+  --paper-2: #dce0e5; /* plates — where imagery sits */
+  --dim: #767c85; /* secondary text on dark     */
+  --dim-2: #656b75; /* secondary text on light    */
+  --orange: #ff3300; /* active state ONLY          */
+
+  /*
+    --dim is tone-split because one grey cannot serve both grounds, measured:
+
+      #767C85 on --ink    4.74:1  passes AA
+      #767C85 on --paper  3.68:1  fails
+      #656B75 on --paper  4.70:1  passes AA
+      #656B75 on --ink    3.71:1  fails
+
+    Each value passes on its own ground and fails on the other, so there is no
+    single grey to pick. Section.astro maps --muted to the right one; never
+    reach for --dim or --dim-2 directly in a component.
+  */
+
+  /*
+    Hairlines. Structure on this site is drawn with 1px rules, so the rule has
+    to be visible on a phone in daylight — the audience is outdoors on mobile.
+
+    On light, --paper-2 does the job unaided. On dark it has no equal: --ink-2
+    against --ink is a 3-value difference per channel and disappears, and --dim
+    is far too loud for a rule. So the dark hairline is mixed from two palette
+    colours rather than picked as a seventh hex. Derived, not invented.
+  */
+  --line-dark: color-mix(in srgb, var(--paper) 12%, var(--ink));
+  --line-light: var(--paper-2);
+
+  /* ------------------------------------------------------------------ type */
+
+  /*
+    Fluid between 390px and 1440px. The CLAUDE.md figure is the 1440 anchor and
+    is hit exactly there; the 390 end is the mobile anchor.
+
+    Sizes are rem so the scale still answers to a reader who has raised their
+    browser's base font size. At the default 16px root these are the Figma
+    pixel values to the decimal.
+  */
+  --size-display-xl: clamp(2.625rem, 1.4643rem + 4.7619vw, 5.75rem); /*  42 →  92px */
+  --size-display-l: clamp(2rem, 1.4429rem + 2.2857vw, 3.5rem); /*  32 →  56px */
+  --size-display-m: clamp(1.625rem, 1.4393rem + 0.7619vw, 2.125rem); /*  26 →  34px */
+  --size-display-s: clamp(1.125rem, 1.0321rem + 0.381vw, 1.375rem); /*  18 →  22px */
+  --size-serif-display: clamp(1.75rem, 1.3786rem + 1.5238vw, 2.75rem); /*  28 →  44px */
+  --size-serif-italic: clamp(1.0625rem, 0.9696rem + 0.381vw, 1.3125rem); /*  17 →  21px */
+
+  /*
+    The mono sizes do not scale. 11px and 10px are already at the floor of what
+    is readable in uppercase with wide tracking; shrinking them for a phone
+    would make the body copy worse on the device most of the audience uses.
+    Fixed is the deliberate answer here, not an oversight.
+  */
+  --size-mono-body: 0.6875rem; /* 11px   */
+  --size-mono-label: 0.625rem; /* 10px   */
+  --size-mono-spec: 0.65625rem; /* 10.5px */
+
+  /* ---------------------------------------------------------------- layout */
+
+  --rail: 88px; /* fixed left rail                       */
+  --inset: 144px; /* content inset: 88px rail + 56px pad   */
+  --inset-right: 56px;
+  --inset-mobile: 38px; /* rail is hidden below 860px            */
+  --hairline: 1px;
+
+  /* Single breakpoint. Below it the rail goes and every grid is one column. */
+  --bp-collapse: 860px;
+}
+
+/*
+  Type-scale utilities. One class per named Figma style — never restate a size,
+  weight or tracking in a component; reach for the class.
+*/
+
+.t-display-xl,
+.t-display-l,
+.t-display-m,
+.t-display-s {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.t-display-xl {
+  font-weight: 600;
+  font-size: var(--size-display-xl);
+  line-height: 0.96;
+  letter-spacing: 0.005em;
+}
+
+.t-display-l {
+  font-weight: 600;
+  font-size: var(--size-display-l);
+  line-height: 0.98;
+}
+
+.t-display-m {
+  font-weight: 600;
+  font-size: var(--size-display-m);
+  line-height: 1;
+}
+
+.t-display-s {
+  font-weight: 500;
+  font-size: var(--size-display-s);
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+}
+
+.t-serif-display,
+.t-serif-italic {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  margin: 0;
+}
+
+.t-serif-display {
+  font-size: var(--size-serif-display);
+  line-height: 1.2;
+}
+
+.t-serif-italic {
+  font-style: italic;
+  font-size: var(--size-serif-italic);
+  line-height: 1.35;
+}
+
+.t-mono-body,
+.t-mono-label,
+.t-mono-spec {
+  font-family: var(--font-mono);
+  margin: 0;
+}
+
+.t-mono-body {
+  font-weight: 300;
+  font-size: var(--size-mono-body);
+  line-height: 2;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.t-mono-label {
+  font-weight: 400;
+  font-size: var(--size-mono-label);
+  line-height: 1.6;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.t-mono-spec {
+  font-weight: 400;
+  font-size: var(--size-mono-spec);
+  line-height: 1.85;
+}

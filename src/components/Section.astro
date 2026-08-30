@@ -1,0 +1,171 @@
+---
+/*
+  The alternating section wrapper. Sections run light, dark, light, dark — never
+  two of the same in a row (CLAUDE.md > Layout).
+
+  Its real job is to set the tone variables. Everything inside a section reads
+  --bg / --fg / --muted / --line / --plate and never touches --ink or --paper
+  directly, which is what lets a section flip tone without any child knowing.
+*/
+
+interface Props {
+  tone: 'dark' | 'light';
+  id: string;
+  /** Shown by the rail as the current-section marker. Mongolian, from site.ts. */
+  label?: string;
+  /** Drop the top rule when two sections should read as one block. */
+  seam?: boolean;
+  class?: string;
+}
+
+const { tone, id, label, seam = false, class: className } = Astro.props;
+---
+
+<section
+  id={id}
+  class:list={['section', `section--${tone}`, { 'section--seam': seam }, className]}
+  data-section
+  data-label={label}
+  aria-labelledby={label ? `${id}-label` : undefined}
+>
+  {label && <h2 id={`${id}-label`} class="visually-hidden">{label}</h2>}
+
+  {/* Blueprint corner ticks. Decorative — never announced. */}
+  <span class="section__tick section__tick--tl" aria-hidden="true"></span>
+  <span class="section__tick section__tick--tr" aria-hidden="true"></span>
+  <span class="section__tick section__tick--bl" aria-hidden="true"></span>
+  <span class="section__tick section__tick--br" aria-hidden="true"></span>
+
+  <div class="section__inner">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .section {
+    position: relative;
+    background: var(--bg);
+    color: var(--fg);
+    padding-block: var(--section-pad-y);
+    padding-left: var(--inset);
+    padding-right: var(--inset-right);
+  }
+
+  .section--dark {
+    --bg: var(--ink);
+    --fg: var(--paper);
+    --muted: var(--dim);
+    --line: var(--line-dark);
+    --plate: var(--ink-2);
+  }
+
+  .section--light {
+    --bg: var(--paper);
+    --fg: var(--ink);
+    --muted: var(--dim-2);
+    --line: var(--line-light);
+    --plate: var(--paper-2);
+  }
+
+  .section {
+    --section-pad-y: clamp(3.5rem, 2.2rem + 5.3vw, 7.5rem);
+    --tick: 9px;
+  }
+
+  /* The boundary rule between two sections. */
+  .section::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--hairline);
+    background: var(--line);
+  }
+
+  .section--seam::before {
+    display: none;
+  }
+
+  /*
+    Corner ticks — two 1px arms meeting at each corner, inset from the edge so
+    they read as registration marks rather than a broken border.
+  */
+  .section__tick {
+    position: absolute;
+    width: var(--tick);
+    height: var(--tick);
+    pointer-events: none;
+  }
+
+  .section__tick::before,
+  .section__tick::after {
+    content: '';
+    position: absolute;
+    background: var(--line);
+  }
+
+  .section__tick::before {
+    inset-inline: 0;
+    height: var(--hairline);
+  }
+
+  .section__tick::after {
+    inset-block: 0;
+    width: var(--hairline);
+  }
+
+  .section__tick--tl {
+    top: var(--tick);
+    left: var(--tick);
+  }
+  .section__tick--tl::before {
+    top: 0;
+  }
+  .section__tick--tl::after {
+    left: 0;
+  }
+
+  .section__tick--tr {
+    top: var(--tick);
+    right: var(--tick);
+  }
+  .section__tick--tr::before {
+    top: 0;
+  }
+  .section__tick--tr::after {
+    right: 0;
+  }
+
+  .section__tick--bl {
+    bottom: var(--tick);
+    left: var(--tick);
+  }
+  .section__tick--bl::before {
+    bottom: 0;
+  }
+  .section__tick--bl::after {
+    left: 0;
+  }
+
+  .section__tick--br {
+    bottom: var(--tick);
+    right: var(--tick);
+  }
+  .section__tick--br::before {
+    bottom: 0;
+  }
+  .section__tick--br::after {
+    right: 0;
+  }
+
+  .section__inner {
+    position: relative;
+  }
+
+  @media (max-width: 860px) {
+    .section {
+      padding-left: var(--inset-mobile);
+      padding-right: var(--inset-mobile);
+      --tick: 7px;
+    }
+  }
+</style>

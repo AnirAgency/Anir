@@ -1,0 +1,66 @@
+/*
+  Self-hosted faces. Built by `npm run fonts` from the upstream OFL sources and
+  subset to latin + cyrillic + cyrillic-ext (+ U+20AE ₮).
+
+  Every face here has been verified to carry Ө Ү ө ү with real outlines — a
+  cyrillic-only subset tofus on those four, which is why cyrillic-ext is not
+  optional. Do not swap these files for Google Fonts links: an extra DNS lookup
+  and TLS handshake is expensive on a 17 Mbps connection.
+
+  The fallback stacks are Cyrillic-capable on purpose, so the swap period shows
+  Mongolian text rather than boxes.
+*/
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/fonts/oswald-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/fonts/oswald-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Serif';
+  src: url('/fonts/ptserif-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Serif';
+  src: url('/fonts/ptserif-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrainsmono-300.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrainsmono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-display: 'Oswald', 'Arial Narrow', Arial, 'Helvetica Neue', sans-serif;
+  --font-serif: 'PT Serif', Georgia, 'Times New Roman', Times, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, 'Cascadia Mono', 'Liberation Mono', monospace;
+}

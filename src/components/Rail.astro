@@ -1,0 +1,166 @@
+---
+import { site } from '../content/site';
+
+/*
+  The fixed 88px left rail: a "УБ" tick, a 1px track carrying an --orange
+  progress fill, and the current section's name set vertically.
+
+  Same two-layer trick as the header, for the same reason — the tick, track and
+  label blend with difference so they read on both tones, and the orange fill is
+  a separate unblended fixed element so it stays orange over light sections.
+  The fill's geometry is measured from the track rather than guessed, so the two
+  layers stay aligned whatever the tick and label end up sizing to.
+
+  The whole thing is aria-hidden: it is a visual restatement of the section
+  headings, which a screen reader already has, and a progress bar nobody can act
+  on is noise in the buffer.
+*/
+
+const { railTick } = site.chrome;
+---
+
+<div class="rail" aria-hidden="true">
+  <span class="rail__tick t-mono-label">{railTick}</span>
+  <span class="rail__track" data-rail-track></span>
+  <span class="rail__label t-mono-label" data-rail-label></span>
+</div>
+
+<span class="rail__fill" aria-hidden="true" data-rail-fill></span>
+
+<style>
+  .rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    width: var(--rail);
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-block: 1.375rem 2.5rem;
+    gap: 1.5rem;
+    color: var(--paper);
+    mix-blend-mode: difference;
+    pointer-events: none;
+  }
+
+  .rail__tick {
+    flex: none;
+  }
+
+  .rail__track {
+    flex: 1 1 auto;
+    width: var(--hairline);
+    min-height: 2rem;
+    background: currentColor;
+    opacity: 0.35;
+  }
+
+  .rail__label {
+    flex: none;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    max-height: 11rem;
+    overflow: hidden;
+    /* Empty until the script names a section; reserves no space when unset. */
+    min-height: 0;
+  }
+
+  /*
+    Unblended sibling. Sits on the track's x-centre; the script gives it a top
+    and a height. Zero-height without JS, which is the honest state — there is
+    no scroll progress to report.
+  */
+  .rail__fill {
+    position: fixed;
+    left: calc(var(--rail) / 2);
+    z-index: 31;
+    width: var(--hairline);
+    height: 0;
+    background: var(--orange);
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+
+  @media (max-width: 860px) {
+    .rail,
+    .rail__fill {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  /*
+    Scroll progress and current-section readout.
+
+    Reads are batched into one rAF per frame — the scroll handler only raises a
+    flag. Track geometry is cached and only remeasured on resize, so the frame
+    does no layout reads beyond the sections' rects.
+  */
+  const collapse = window.matchMedia('(max-width: 860px)');
+
+  const track = document.querySelector<HTMLElement>('[data-rail-track]');
+  const fill = document.querySelector<HTMLElement>('[data-rail-fill]');
+  const label = document.querySelector<HTMLElement>('[data-rail-label]');
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section][data-label]'));
+
+  if (track && fill && label) {
+    let trackTop = 0;
+    let trackHeight = 0;
+    let queued = false;
+    let current = '';
+
+    const measure = () => {
+      const rect = track.getBoundingClientRect();
+      trackTop = rect.top;
+      trackHeight = rect.height;
+      fill.style.top = `${trackTop}px`;
+    };
+
+    const render = () => {
+      queued = false;
+      if (collapse.matches) return;
+
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0;
+      fill.style.height = `${progress * trackHeight}px`;
+
+      // The section holding the upper third of the viewport is the current one.
+      const line = window.innerHeight * 0.33;
+      let name = '';
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= line && rect.bottom > line) {
+          name = section.dataset.label ?? '';
+          break;
+        }
+      }
+      if (name !== current) {
+        current = name;
+        label.textContent = name;
+      }
+    };
+
+    const request = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(render);
+    };
+
+    const remeasure = () => {
+      measure();
+      request();
+    };
+
+    measure();
+    render();
+
+    window.addEventListener('scroll', request, { passive: true });
+    window.addEventListener('resize', remeasure, { passive: true });
+    collapse.addEventListener('change', remeasure);
+    if (document.fonts) document.fonts.ready.then(remeasure);
+  }
+</script>

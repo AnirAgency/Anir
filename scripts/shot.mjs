@@ -1,0 +1,189 @@
+/**
+ * Screenshots and page measurements, driven over the Chrome DevTools Protocol.
+ *
+ * Uses whatever Chromium is already installed (Chrome or Edge) and Node's
+ * built-in WebSocket, so it adds no dependencies to the project. Viewport size
+ * is set with Emulation.setDeviceMetricsOverride rather than --window-size, so
+ * 390 means 390 CSS pixels exactly.
+ *
+ *   node scripts/shot.mjs <url> <out.png> [width] [height] [--full]
+ *   node scripts/shot.mjs <url> --measure [width]
+ */
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+const CHROME_PATHS = [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+];
+
+const browser = CHROME_PATHS.find((path) => existsSync(path));
+if (!browser) {
+  console.error('No Chrome or Edge found. Add its path to CHROME_PATHS.');
+  process.exit(1);
+}
+
+const [url, target, ...rest] = process.argv.slice(2);
+const measureOnly = target === '--measure';
+const full = rest.includes('--full');
+const nums = rest.filter((arg) => !arg.startsWith('--')).map(Number);
+const width = (measureOnly ? nums[0] : nums[0]) || 1440;
+const height = (measureOnly ? 900 : nums[1]) || 900;
+
+const port = 9222 + Math.floor(Math.random() * 500);
+const chrome = spawn(browser, [
+  '--headless=new',
+  `--remote-debugging-port=${port}`,
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-gpu',
+  '--hide-scrollbars',
+  '--user-data-dir=' + (process.env.TEMP || '/tmp') + '/anir-cdp-' + port,
+  'about:blank',
+]);
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+/** Waits for the DevTools endpoint to come up. */
+async function endpoint() {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/json/version`);
+      if (res.ok) return (await res.json()).webSocketDebuggerUrl;
+    } catch {
+      /* not up yet */
+    }
+    await sleep(200);
+  }
+  throw new Error('Chrome never opened its debugging port');
+}
+
+const socket = new WebSocket(await endpoint());
+await new Promise((done, fail) => {
+  socket.addEventListener('open', done, { once: true });
+  socket.addEventListener('error', fail, { once: true });
+});
+
+let nextId = 0;
+const pending = new Map();
+const events = [];
+
+socket.addEventListener('message', (event) => {
+  const message = JSON.parse(event.data);
+  if (message.id !== undefined) {
+    const settle = pending.get(message.id);
+    pending.delete(message.id);
+    if (settle) message.error ? settle.fail(new Error(message.error.message)) : settle.done(message.result);
+  } else {
+    events.push(message);
+  }
+});
+
+const send = (method, params = {}, sessionId) =>
+  new Promise((done, fail) => {
+    const id = (nextId += 1);
+    pending.set(id, { done, fail });
+    socket.send(JSON.stringify({ id, method, params, sessionId }));
+  });
+
+// Attach to a fresh tab.
+const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
+const call = (method, params) => send(method, params, sessionId);
+
+await call('Page.enable');
+await call('Emulation.setDeviceMetricsOverride', {
+  width,
+  height,
+  deviceScaleFactor: 1,
+  mobile: width < 860,
+});
+
+if (rest.includes('--reduced-motion')) {
+  await call('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  });
+}
+
+await call('Page.navigate', { url });
+
+// Wait for the load event, then give fonts and layout a beat to settle.
+for (let attempt = 0; attempt < 100; attempt += 1) {
+  if (events.some((event) => event.method === 'Page.loadEventFired')) break;
+  await sleep(100);
+}
+await call('Runtime.evaluate', {
+  expression: 'document.fonts ? document.fonts.ready.then(() => true) : true',
+  awaitPromise: true,
+});
+await sleep(350);
+
+// --scroll=N jumps N pixels down before capturing, for anything that only
+// exists mid-page: the header blending over a light section, the rail fill.
+const scrollArg = rest.find((arg) => arg.startsWith('--scroll='));
+if (scrollArg) {
+  await call('Runtime.evaluate', {
+    expression: `window.scrollTo({ top: ${Number(scrollArg.split('=')[1])}, behavior: 'instant' });`,
+  });
+  await sleep(400);
+}
+
+const evalArg = rest.find((arg) => arg.startsWith('--eval='));
+if (evalArg) {
+  const { result } = await call('Runtime.evaluate', {
+    returnByValue: true,
+    expression: evalArg.slice('--eval='.length),
+  });
+  console.log(JSON.stringify(result.value, null, 2));
+} else if (measureOnly) {
+  const { result } = await call('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(() => {
+      const doc = document.documentElement;
+      const limit = doc.clientWidth;
+      const guilty = [];
+      for (const el of document.querySelectorAll('body *')) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) continue;
+        if (getComputedStyle(el).position === 'fixed') continue;
+        if (rect.right > limit + 0.5 || rect.left < -0.5) {
+          guilty.push({
+            tag: el.tagName.toLowerCase(),
+            cls: (el.getAttribute('class') || '').slice(0, 60),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+          });
+        }
+      }
+      return {
+        viewport: limit,
+        scrollWidth: doc.scrollWidth,
+        scrollHeight: doc.scrollHeight,
+        overflow: doc.scrollWidth - limit,
+        guilty: guilty.slice(0, 25),
+      };
+    })()`,
+  });
+  console.log(JSON.stringify(result.value, null, 2));
+} else {
+  // No clip: clip coordinates are document-relative, which fights --scroll.
+  // Without it, captureScreenshot takes exactly the current viewport.
+  const shot = await call('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: full,
+  });
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, Buffer.from(shot.data, 'base64'));
+  console.log(`${target}  ${width}x${full ? 'full' : height}`);
+}
+
+socket.close();
+chrome.kill();
+process.exit(0);

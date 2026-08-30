@@ -1,0 +1,57 @@
+---
+/*
+  The hairline grid.
+
+  There are no borders here and no shadows. The container is painted the
+  hairline colour and the cells are painted --bg with a 1px gap, so the rules
+  between cells are the container showing through. That is why every direct
+  child gets an opaque background whether it asks for one or not — a
+  transparent cell would punch a hole in the grid.
+
+  Outer edges are deliberately not ruled: cells are separated by rules, the
+  block is not boxed. Section boundaries do that job.
+*/
+
+interface Props {
+  /** Column count, or 'auto' to fit as many as the row allows. */
+  cols?: number | 'auto';
+  /** Escape hatch for asymmetric tracks, e.g. '0.9fr 1.1fr'. Wins over `cols`. */
+  template?: string;
+  /** Minimum track width when cols='auto'. */
+  min?: string;
+  class?: string;
+}
+
+const { cols = 'auto', template, min = '14rem', class: className } = Astro.props;
+
+const columns =
+  template ?? (cols === 'auto' ? `repeat(auto-fit, minmax(${min}, 1fr))` : `repeat(${cols}, minmax(0, 1fr))`);
+---
+
+<div class:list={['grid', className]} style={`--grid-cols: ${columns};`}>
+  <slot />
+</div>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: var(--grid-cols);
+    gap: var(--hairline);
+    background: var(--line);
+  }
+
+  /*
+    Slotted children carry the parent page's scope, not this component's, so the
+    cell background has to be applied globally to direct children.
+  */
+  .grid > :global(*) {
+    background: var(--bg);
+    min-width: 0; /* let long words wrap instead of blowing the track out */
+  }
+
+  @media (max-width: 860px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

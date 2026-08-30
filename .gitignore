@@ -1,0 +1,23 @@
+# build
+dist/
+.astro/
+node_modules/
+
+# env / secrets — Supabase keys live in the Cloudflare dashboard
+.env
+.env.*
+!.env.example
+
+# cloudflare
+.wrangler/
+
+# font pipeline (re-creatable with `npm run fonts`)
+tools/.venv/
+tools/fonts-src/
+
+# raw media, before `npm run media` (Phase 08)
+raw-media/
+
+# os
+.DS_Store
+Thumbs.db

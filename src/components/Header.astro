@@ -1,0 +1,153 @@
+---
+import { site } from '../content/site';
+
+/*
+  Fixed top bar.
+
+  It reads on both tones via mix-blend-mode: difference — --paper differenced
+  against --paper is pure black, and against --ink is near-white, so the same
+  markup renders dark on light sections and light on dark ones with no JS.
+
+  The catch: difference would also eat the --orange CTA. Orange over --ink stays
+  orange, but orange over --paper comes out cyan (#11BDF3), which breaks the
+  orange rule exactly where it matters — the one link that converts. So the bar
+  is two fixed layers: the blended one carries the wordmark and the four plain
+  links, and the CTA is a separate unblended fixed element in true --orange.
+  A hidden ghost of the CTA's label holds its width open in the blended bar so
+  the two layers line up without either knowing the other's measurements.
+
+  Both layers have to be fixed siblings rather than nested: position: fixed
+  creates a stacking context, which isolates the blend group, so a blended child
+  inside a fixed parent would have nothing to blend against.
+*/
+
+const { navLabel } = site.chrome;
+const links = site.nav.links.filter((link) => !link.accent);
+const cta = site.nav.links.find((link) => link.accent);
+---
+
+<header class="header">
+  <div class="header__blend">
+    <a class="header__mark t-display-s" href="#top">{site.nav.wordmark}</a>
+
+    <nav class="header__nav" aria-label={navLabel}>
+      <ul class="header__list">
+        {
+          links.map((link) => (
+            <li>
+              <a class="header__link t-mono-label" href={link.href}>
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      {cta && <span class="header__ghost t-mono-label" aria-hidden="true">{cta.label}</span>}
+    </nav>
+  </div>
+
+  {
+    cta && (
+      <a class="header__cta t-mono-label" href={cta.href}>
+        {cta.label}
+      </a>
+    )
+  }
+</header>
+
+<style>
+  /*
+    Deliberately not positioned and with no z-index: .header must not become a
+    stacking context, or it would isolate the blend below it.
+  */
+  .header {
+    display: contents;
+  }
+
+  .header__blend,
+  .header__cta {
+    position: fixed;
+    top: 0;
+    z-index: 40;
+    padding-block: 1.375rem;
+    /* The bar spans the viewport; only its links should catch the pointer. */
+    pointer-events: none;
+  }
+
+  .header__blend {
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    padding-left: var(--inset);
+    padding-right: var(--inset-right);
+    color: var(--paper);
+    mix-blend-mode: difference;
+  }
+
+  .header__mark {
+    pointer-events: auto;
+    letter-spacing: 0.14em;
+  }
+
+  .header__nav {
+    display: flex;
+    align-items: center;
+    gap: 2.25rem;
+  }
+
+  .header__list {
+    display: flex;
+    align-items: center;
+    gap: 2.25rem;
+    margin: 0;
+  }
+
+  .header__link {
+    pointer-events: auto;
+    transition: opacity 0.3s ease;
+  }
+
+  .header__link:hover {
+    opacity: 0.55;
+  }
+
+  /* Holds the CTA's width open in the blended layer. Never seen, never read. */
+  .header__ghost {
+    visibility: hidden;
+  }
+
+  .header__cta {
+    right: var(--inset-right);
+    z-index: 41;
+    pointer-events: auto;
+    color: var(--orange);
+    transition: opacity 0.3s ease;
+  }
+
+  .header__cta:hover {
+    opacity: 0.7;
+  }
+
+  @media (max-width: 860px) {
+    .header__blend {
+      padding-left: var(--inset-mobile);
+      padding-right: var(--inset-mobile);
+    }
+
+    .header__cta {
+      right: var(--inset-mobile);
+    }
+
+    /*
+      Wordmark plus the CTA only. Phase 09 decides what the mobile nav actually
+      becomes — two links or a disclosure — so this is a holding position, not
+      the answer.
+    */
+    .header__list {
+      display: none;
+    }
+  }
+</style>

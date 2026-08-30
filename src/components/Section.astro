@@ -13,28 +13,56 @@ interface Props {
   id: string;
   /** Shown by the rail as the current-section marker. Mongolian, from site.ts. */
   label?: string;
+  /*
+    default — normal block: inset, vertical rhythm, corner ticks.
+    hero    — fills the viewport and centres its contents.
+    strip   — thin, full-bleed, no ticks. The marquee.
+  */
+  layout?: 'default' | 'hero' | 'strip';
+  /**
+   * Whether to emit the visually-hidden <h2> naming the section. Turn it off
+   * where the section supplies its own heading — the hero, which owns the h1.
+   */
+  heading?: boolean;
   /** Drop the top rule when two sections should read as one block. */
   seam?: boolean;
   class?: string;
 }
 
-const { tone, id, label, seam = false, class: className } = Astro.props;
+const {
+  tone,
+  id,
+  label,
+  layout = 'default',
+  heading = true,
+  seam = false,
+  class: className,
+} = Astro.props;
+
+const showHeading = heading && Boolean(label);
 ---
 
 <section
   id={id}
-  class:list={['section', `section--${tone}`, { 'section--seam': seam }, className]}
+  class:list={['section', `section--${tone}`, `section--${layout}`, { 'section--seam': seam }, className]}
   data-section
   data-label={label}
-  aria-labelledby={label ? `${id}-label` : undefined}
+  aria-labelledby={showHeading ? `${id}-label` : undefined}
+  aria-label={!showHeading && label ? label : undefined}
 >
-  {label && <h2 id={`${id}-label`} class="visually-hidden">{label}</h2>}
+  {showHeading && <h2 id={`${id}-label`} class="visually-hidden">{label}</h2>}
 
-  {/* Blueprint corner ticks. Decorative — never announced. */}
-  <span class="section__tick section__tick--tl" aria-hidden="true"></span>
-  <span class="section__tick section__tick--tr" aria-hidden="true"></span>
-  <span class="section__tick section__tick--bl" aria-hidden="true"></span>
-  <span class="section__tick section__tick--br" aria-hidden="true"></span>
+  {
+    layout !== 'strip' && (
+      <Fragment>
+        {/* Blueprint corner ticks. Decorative — never announced. */}
+        <span class="section__tick section__tick--tl" aria-hidden="true" />
+        <span class="section__tick section__tick--tr" aria-hidden="true" />
+        <span class="section__tick section__tick--bl" aria-hidden="true" />
+        <span class="section__tick section__tick--br" aria-hidden="true" />
+      </Fragment>
+    )
+  }
 
   <div class="section__inner">
     <slot />
@@ -43,6 +71,9 @@ const { tone, id, label, seam = false, class: className } = Astro.props;
 
 <style>
   .section {
+    --section-pad-y: clamp(3.5rem, 2.2rem + 5.3vw, 7.5rem);
+    --tick: 9px;
+
     position: relative;
     background: var(--bg);
     color: var(--fg);
@@ -67,9 +98,18 @@ const { tone, id, label, seam = false, class: className } = Astro.props;
     --plate: var(--paper-2);
   }
 
-  .section {
-    --section-pad-y: clamp(3.5rem, 2.2rem + 5.3vw, 7.5rem);
-    --tick: 9px;
+  /* svh, not vh: the mobile URL bar must not push the hero taller than the screen. */
+  .section--hero {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .section--strip {
+    padding-block: 0;
+    padding-inline: 0;
+    overflow: hidden;
   }
 
   /* The boundary rule between two sections. */
@@ -161,11 +201,19 @@ const { tone, id, label, seam = false, class: className } = Astro.props;
     position: relative;
   }
 
+  .section--hero .section__inner {
+    width: 100%;
+  }
+
   @media (max-width: 860px) {
     .section {
       padding-left: var(--inset-mobile);
       padding-right: var(--inset-mobile);
       --tick: 7px;
+    }
+
+    .section--strip {
+      padding-inline: 0;
     }
   }
 </style>

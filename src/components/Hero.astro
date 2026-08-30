@@ -1,0 +1,213 @@
+---
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import Grid from './Grid.astro';
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+// Inlined, not <img>, because the mark takes its colour from currentColor —
+// an external file cannot inherit --orange.
+import logo from '../../public/media/logo.svg?raw';
+
+const { hero, chrome } = site;
+
+/*
+  The hero video is optional. Phase 08 encodes it; until then the slot renders
+  as a plate so the build never depends on an asset that has not been shot.
+  Checked on disk rather than trusted from site.ts, so a missing file is caught
+  at build time instead of becoming a 404 for a visitor in Ulaanbaatar.
+*/
+const videoPath = hero.video?.src ?? null;
+const hasVideo =
+  videoPath !== null && existsSync(fileURLToPath(new URL(`../../public${videoPath}`, import.meta.url)));
+const hasPoster =
+  hero.video?.poster != null &&
+  existsSync(fileURLToPath(new URL(`../../public${hero.video.poster}`, import.meta.url)));
+---
+
+<Section tone="dark" id="hero" label={chrome.heroLabel} layout="hero" heading={false} seam>
+  <div class="hero">
+    <div class="hero__stage">
+      <div class="hero__media" aria-hidden="true">
+        {
+          hasVideo && hero.video ? (
+            <video
+              class="hero__video"
+              src={hero.video.src}
+              poster={hasPoster ? hero.video.poster : undefined}
+              width={hero.video.width}
+              height={hero.video.height}
+              muted
+              playsinline
+              loop
+              autoplay
+              preload="none"
+            />
+          ) : (
+            /* No label: it would sit on the wordmark at narrow widths, and a
+               placeholder string must never ship. The build report says which
+               asset is missing. */
+            <div class="hero__plate" />
+          )
+        }
+      </div>
+
+      <h1 class="hero__logo">
+        <span class="visually-hidden">{hero.logoAlt}</span>
+        <Fragment set:html={logo} />
+      </h1>
+    </div>
+
+    <p class="hero__tagline t-serif-display">
+      {hero.tagline.line}
+      <em class="hero__tagline-italic">{hero.tagline.lineItalic}</em>
+    </p>
+
+    <p class="hero__lede t-mono-body">{hero.lede}</p>
+
+    <div class="hero__products">
+      <Grid cols={3}>
+        {
+          hero.products.map((product) => (
+            <a class="card" href={product.href}>
+              <span class="card__eyebrow t-mono-label">{product.eyebrow}</span>
+              <span class="card__name t-display-m">{product.name}</span>
+              <span class="card__tagline t-mono-spec">{product.tagline}</span>
+              <span class="card__cta t-mono-label">{product.cta}</span>
+            </a>
+          ))
+        }
+      </Grid>
+    </div>
+  </div>
+</Section>
+
+<style>
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(1.75rem, 1rem + 3vw, 3rem);
+  }
+
+  /*
+    Holds the logo and the footage behind it in one stacking box. The stage is
+    sized to the wordmark, not to the section, so the media's bleed is measured
+    against the mark — sized to the section it overran the page by 56px.
+  */
+  .hero__stage {
+    position: relative;
+    width: min(78vw, 660px);
+    max-width: 100%;
+  }
+
+  .hero__logo {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    margin: 0;
+    color: var(--orange);
+  }
+
+  .hero__logo :global(svg) {
+    width: 100%;
+    height: auto;
+  }
+
+  /*
+    Sits behind the mark, a little wider than it, and is held back so the
+    wordmark stays the thing you read first.
+  */
+  .hero__media {
+    position: absolute;
+    /* Tracks the wordmark's box with a small bleed, so the footage reads as a
+       band behind the mark rather than a panel cutting across the tagline. */
+    inset: -14% -9%;
+    overflow: hidden;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .hero__video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hero__plate {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--plate);
+  }
+
+  .hero__tagline {
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .hero__tagline-italic {
+    display: block;
+    font-style: italic;
+  }
+
+  .hero__lede {
+    max-width: 60ch;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .hero__products {
+    width: 100%;
+    margin-top: clamp(1rem, 0.25rem + 3vw, 2.5rem);
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.375rem;
+    transition:
+      background 0.35s ease,
+      color 0.35s ease;
+  }
+
+  .card__eyebrow,
+  .card__tagline {
+    color: var(--muted);
+    transition: color 0.35s ease;
+  }
+
+  .card__cta {
+    margin-top: 1.25rem;
+    color: var(--muted);
+    transition: color 0.35s ease;
+  }
+
+  /*
+    Hover fills the cell with --plate and turns the whole card --orange. Colour
+    and background only — CLAUDE.md rules out transforms on hover.
+  */
+  .card:hover,
+  .card:focus-visible {
+    background: var(--plate);
+    color: var(--orange);
+  }
+
+  .card:hover .card__eyebrow,
+  .card:hover .card__tagline,
+  .card:hover .card__cta,
+  .card:focus-visible .card__eyebrow,
+  .card:focus-visible .card__tagline,
+  .card:focus-visible .card__cta {
+    color: var(--orange);
+  }
+
+  @media (max-width: 860px) {
+    .card {
+      padding: 1.125rem;
+    }
+  }
+</style>

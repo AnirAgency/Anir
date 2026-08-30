@@ -195,6 +195,8 @@ export interface Chrome {
   /** aria-label on the rail's progress readout. */
   railLabel: string;
   skipToContent: string;
+  /** Rail marker for the hero, which has no visible section heading. */
+  heroLabel: string;
 }
 
 /* -------------------------------------------------------------------- meta */
@@ -233,6 +235,7 @@ export const site: Site = {
     navLabel: 'Үндсэн цэс',
     railLabel: 'Хуудсны явц',
     skipToContent: 'Үндсэн хэсэг рүү очих',
+    heroLabel: 'Нүүр',
   },
   nav: {
     wordmark: 'ANIR',
@@ -241,21 +244,51 @@ export const site: Site = {
       { label: 'Үнэ', href: '#pricing' },
       { label: 'Ажил', href: '#work' },
       { label: 'Баг', href: '#team' },
-      { label: 'Холбоо барих', href: '#contact', accent: true },
+      { label: 'Холбоо +', href: '#contact', accent: true },
     ],
   },
   hero: {
-    logoAlt: '',
+    logoAlt: 'Анир агентлаг',
     tagline: {
-      line: '',
-      lineItalic: '',
+      line: 'Улаанбаатараас —',
+      lineItalic: 'бодит бүтээгдэхүүн',
     },
-    lede: '',
-    video: null,
-    products: [],
+    lede:
+      'Вэб сайт, аппликейшн, постер, зураг авалт хийдэг дөрвөн хүний баг. ' +
+      'Багаа зориудаар жижиг байлгадаг — таны уулзсан хүн ажлыг чинь өөрөө хийнэ.',
+    video: {
+      src: '/media/hero.webm',
+      poster: '/media/hero.jpg',
+      alt: 'Анир багийн ажлын давталт',
+      width: 1280,
+      height: 720,
+    },
+    products: [
+      {
+        eyebrow: 'Бүтээгдэхүүн',
+        name: 'Ezmath',
+        tagline: 'Математикаа бэлд',
+        cta: 'Үзэх +',
+        href: '#work',
+      },
+      {
+        eyebrow: 'Бүтээгдэхүүн',
+        name: 'Ethos',
+        tagline: 'Зөв хандив',
+        cta: 'Үзэх +',
+        href: '#work',
+      },
+      {
+        eyebrow: 'Бүтээгдэхүүн',
+        name: 'Olymo',
+        tagline: 'Боловсролын мэдээлэл',
+        cta: 'Үзэх +',
+        href: '#work',
+      },
+    ],
   },
   marquee: {
-    text: '',
+    text: 'Жижиг баг — Бүтэн анхаарал —',
   },
   disciplines: [],
   pricing: {

@@ -1,0 +1,94 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The strip between the hero and the first section.
+
+  The phrase is stored in site.ts as one readable line so the team can proofread
+  it; the split happens here because colouring the em-dashes is presentation,
+  not content.
+*/
+const parts = site.marquee.text.split(/(—)/).filter((part) => part !== '');
+
+// Enough repeats to overflow a wide viewport. Two identical tracks and a
+// -50% translate is what makes the loop seamless.
+const REPEATS = 6;
+const repeats = Array.from({ length: REPEATS });
+---
+
+<Section tone="dark" id="marquee" layout="strip">
+  <p class="visually-hidden">{site.marquee.text}</p>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee__inner">
+      {
+        [0, 1].map(() => (
+          <div class="marquee__track">
+            {repeats.map(() => (
+              <span class="marquee__phrase t-display-s">
+                {parts.map((part) =>
+                  part === '—' ? <span class="marquee__dash">{part}</span> : <span class="marquee__word">{part}</span>
+                )}
+              </span>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</Section>
+
+<style>
+  .marquee {
+    padding-block: 1.25rem;
+    overflow: hidden;
+  }
+
+  .marquee__inner {
+    display: flex;
+    width: max-content;
+    animation: marquee-scroll 38s linear infinite;
+  }
+
+  .marquee__track {
+    display: flex;
+    flex: none;
+  }
+
+  .marquee__phrase {
+    display: inline-flex;
+    gap: 0.4em;
+    padding-right: 0.9em;
+    white-space: nowrap;
+  }
+
+  /* The words sit back; the dashes stay live orange. */
+  .marquee__word {
+    opacity: 0.45;
+  }
+
+  .marquee__dash {
+    color: var(--orange);
+  }
+
+  @keyframes marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /*
+    The global reduced-motion block already collapses the duration, but that
+    leaves the track parked at -50%. Killing the animation outright leaves it at
+    the start, which is the honest static state.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .marquee__inner {
+      animation: none;
+    }
+  }
+</style>

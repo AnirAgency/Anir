@@ -10,6 +10,11 @@
 
   Outer edges are deliberately not ruled: cells are separated by rules, the
   block is not boxed. Section boundaries do that job.
+
+  NOTE: a `class` passed in here lands on an element carrying THIS component's
+  style scope, not the caller's — so scoped rules in the parent that target that
+  class silently never match. To position or space a Grid, wrap it in an element
+  the parent owns rather than styling it through `class`.
 */
 
 interface Props {

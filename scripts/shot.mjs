@@ -105,6 +105,12 @@ await call('Emulation.setDeviceMetricsOverride', {
   mobile: width < 860,
 });
 
+// --no-js proves the page is content-first: everything must still render with
+// scripts off, since motion is enhancement (CLAUDE.md > Definition of done).
+if (rest.includes('--no-js')) {
+  await call('Emulation.setScriptExecutionDisabled', { value: true });
+}
+
 if (rest.includes('--reduced-motion')) {
   await call('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
@@ -134,24 +140,41 @@ if (scrollArg) {
   await sleep(400);
 }
 
+// --eval runs before any capture, so it can also set the page up for the shot
+// (forcing a hover state, opening something) rather than only reporting.
 const evalArg = rest.find((arg) => arg.startsWith('--eval='));
 if (evalArg) {
   const { result } = await call('Runtime.evaluate', {
     returnByValue: true,
     expression: evalArg.slice('--eval='.length),
+    awaitPromise: true,
   });
-  console.log(JSON.stringify(result.value, null, 2));
-} else if (measureOnly) {
+  if (result.value !== undefined) console.log(JSON.stringify(result.value, null, 2));
+  await sleep(250);
+}
+
+if (measureOnly) {
   const { result } = await call('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
       const doc = document.documentElement;
       const limit = doc.clientWidth;
+      // Content deliberately clipped by an overflow:hidden ancestor (a marquee
+      // track, say) is not a layout bug — only report what can actually push
+      // the page sideways.
+      const clipped = (el) => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          const o = getComputedStyle(p);
+          if (o.overflowX === 'hidden' || o.overflowX === 'clip') return true;
+        }
+        return false;
+      };
       const guilty = [];
       for (const el of document.querySelectorAll('body *')) {
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) continue;
         if (getComputedStyle(el).position === 'fixed') continue;
+        if (clipped(el)) continue;
         if (rect.right > limit + 0.5 || rect.left < -0.5) {
           guilty.push({
             tag: el.tagName.toLowerCase(),

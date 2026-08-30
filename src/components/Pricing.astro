@@ -1,0 +1,133 @@
+---
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  The price list. Two groups, rows separated by hairlines, the whole row going
+  --orange on hover.
+
+  Orange text is fine here: this section is --ink, where orange measures
+  5.43:1. The same treatment on a light section would fail AA.
+*/
+
+const { intro, groups } = site.pricing;
+---
+
+<Section tone="dark" id="pricing" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="pricing-title" />
+
+  {
+    groups.map((group) => (
+      <section class="group">
+        <h3 class="group__title t-display-s">{group.title}</h3>
+
+        <ul class="rows">
+          {group.rows.map((row) => (
+            <li class="row">
+              <span class="row__name t-display-m">{row.name}</span>
+              <span class="row__desc t-mono-label">{row.description}</span>
+              <span class="row__price">
+                <span class="row__amount t-display-m">{row.price}</span>
+                <span class="row__unit t-mono-label">{row.unit}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  }
+</Section>
+
+<style>
+  .group + .group {
+    margin-top: clamp(2.5rem, 1.5rem + 3vw, 4rem);
+  }
+
+  .group__title {
+    color: var(--muted);
+  }
+
+  .rows {
+    margin: 1.5rem 0 0;
+  }
+
+  /*
+    The price track is a fixed width, not `auto`. Each row is its own grid, so
+    an auto track sizes to that row's own figure and the description column
+    starts at a different x on every line — the list stops reading as a column.
+    15rem clears the longest figure in the list.
+  */
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) 15rem;
+    align-items: baseline;
+    gap: clamp(1rem, 0.5rem + 2vw, 2rem);
+    padding-block: clamp(1.125rem, 0.75rem + 1.2vw, 1.75rem);
+    border-top: var(--hairline) solid var(--line);
+    transition: color 0.35s ease;
+  }
+
+  .row:last-child {
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .row:hover {
+    color: var(--orange);
+  }
+
+  .row__desc {
+    color: var(--muted);
+    transition: color 0.35s ease;
+  }
+
+  .row:hover .row__desc,
+  .row:hover .row__unit {
+    color: var(--orange);
+  }
+
+  .row__price {
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+    text-align: right;
+  }
+
+  /* Figures line up column-wise across rows, which is the whole point of a list. */
+  .row__amount {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .row__unit {
+    margin-top: 0.35rem;
+    color: var(--muted);
+    transition: color 0.35s ease;
+  }
+
+  @media (max-width: 860px) {
+    /*
+      Name and price share the top line, the description wraps beneath —
+      a price list is unreadable if the figure drifts away from its name.
+    */
+    .row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem 1rem;
+    }
+
+    .row__name {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .row__price {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .row__desc {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
+</style>

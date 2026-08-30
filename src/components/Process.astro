@@ -1,0 +1,56 @@
+---
+import Grid from './Grid.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  Three steps, in order.
+
+  Unlike the disciplines, this IS a sequence, so the numerals are real
+  information rather than decoration — and CLAUDE.md's orange rule lists step
+  numbers among the things orange is allowed to mark. The section is --ink, so
+  orange clears AA here anyway.
+*/
+
+const { intro, items } = site.process;
+---
+
+<Section tone="dark" id="process" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="process-title" />
+
+  <Grid cols={3}>
+    {
+      items.map((step) => (
+        <article class="step">
+          <p class="step__number t-display-l">{step.number}</p>
+          <h3 class="step__title t-serif-display">{step.title}</h3>
+          <p class="step__desc t-mono-spec">{step.description}</p>
+        </article>
+      ))
+    }
+  </Grid>
+</Section>
+
+<style>
+  .step {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: clamp(1.5rem, 0.75rem + 2.5vw, 2rem);
+  }
+
+  .step__number {
+    color: var(--orange);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .step__title {
+    margin-top: 0.5rem;
+  }
+
+  .step__desc {
+    max-width: 38ch;
+    color: var(--muted);
+  }
+</style>

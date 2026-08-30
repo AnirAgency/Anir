@@ -1,0 +1,77 @@
+---
+import Grid from './Grid.astro';
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  Four people. Portraits are shot as one set — same light, same crop — so the
+  plates are a fixed 3:4 and the placeholder carries the slot number, which is
+  what the shoot list will be keyed to.
+*/
+
+const { intro, items } = site.team;
+---
+
+<Section tone="light" id="team" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="team-title" />
+
+  <Grid cols={4}>
+    {
+      items.map((member) => (
+        <article class="member">
+          <Plate media={member.portrait} ratio="3 / 4" kind="image" />
+          <div class="member__text">
+            <h3 class="member__name t-display-m">{member.name}</h3>
+            <p class="member__role t-mono-label">{member.role}</p>
+          </div>
+        </article>
+      ))
+    }
+  </Grid>
+</Section>
+
+<style>
+  .member {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .member__text {
+    padding: 1.125rem;
+  }
+
+  .member__name {
+    /* The longest name is Баярбаясгалан; let it shrink rather than overflow. */
+    overflow-wrap: break-word;
+  }
+
+  .member__role {
+    margin-top: 0.5rem;
+    color: var(--muted);
+  }
+
+  @media (max-width: 860px) {
+    /*
+      Stacked, the portraits would make the section enormous — four 3:4 plates
+      at full width is most of a phone screen each. Side by side in pairs keeps
+      the section scannable.
+    */
+    .member {
+      flex-direction: row;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+    }
+
+    .member :global(.plate) {
+      flex: none;
+      width: 6.5rem;
+    }
+
+    .member__text {
+      padding: 0;
+    }
+  }
+</style>

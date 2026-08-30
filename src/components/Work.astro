@@ -1,0 +1,136 @@
+---
+import Grid from './Grid.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  The three products, as rows.
+
+  None of them has a public URL yet, so a row renders as a plain block and only
+  becomes a link once site.ts gives it an href. The hover treatment is on the
+  row either way — it is how the row reads as one unit rather than three loose
+  columns, and it is the same affordance the link will carry.
+*/
+
+const { intro, specLabels, items } = site.projects;
+---
+
+<Section tone="light" id="work" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="work-title" />
+
+  <Grid cols={1}>
+    {
+      items.map((project) => {
+        const Row = project.href ? 'a' : 'div';
+        return (
+          <Row class="row" href={project.href}>
+            <p class="row__index t-mono-label">{project.index}</p>
+
+            <div class="row__body">
+              <h3 class="row__name t-display-l">{project.name}</h3>
+              <p class="row__tagline t-serif-italic">{project.tagline}</p>
+              <p class="row__desc t-mono-spec">{project.description}</p>
+            </div>
+
+            <dl class="spec">
+              <div class="spec__item">
+                <dt class="t-mono-label">{specLabels.role}</dt>
+                <dd class="t-mono-spec">{project.spec.role}</dd>
+              </div>
+              <div class="spec__item">
+                <dt class="t-mono-label">{specLabels.tech}</dt>
+                <dd class="t-mono-spec">{project.spec.tech}</dd>
+              </div>
+              <div class="spec__item">
+                <dt class="t-mono-label">{specLabels.year}</dt>
+                <dd class="t-mono-spec">{project.spec.year}</dd>
+              </div>
+            </dl>
+          </Row>
+        );
+      })
+    }
+  </Grid>
+</Section>
+
+<style>
+  .row {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: clamp(1.25rem, 0.5rem + 2vw, 2rem);
+    padding: clamp(1.5rem, 0.75rem + 2.5vw, 2.25rem);
+    color: inherit;
+    transition:
+      background 0.35s ease,
+      color 0.35s ease;
+  }
+
+  .row:hover,
+  .row:focus-visible {
+    background: var(--plate);
+  }
+
+  .row__index {
+    color: var(--muted);
+    transition: color 0.35s ease;
+  }
+
+  .row:hover .row__index,
+  .row:focus-visible .row__index {
+    color: var(--orange);
+  }
+
+  .row__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .row__tagline {
+    color: var(--fg);
+  }
+
+  .row__desc {
+    max-width: 46ch;
+    color: var(--muted);
+  }
+
+  .spec {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 0;
+    align-content: start;
+  }
+
+  .spec__item dt {
+    color: var(--muted);
+  }
+
+  .spec__item dd {
+    margin: 0;
+  }
+
+  @media (max-width: 860px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .spec {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.75rem;
+      padding-top: 0.5rem;
+      border-top: var(--hairline) solid var(--line);
+    }
+
+    /* Label and value on one line once the columns are gone. */
+    .spec__item {
+      display: grid;
+      grid-template-columns: 7.5rem minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+  }
+</style>

@@ -1,0 +1,98 @@
+---
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import type { Media } from '../content/site';
+
+/*
+  A media slot that degrades honestly.
+
+  When the file exists on disk it renders the real asset; when it does not, it
+  renders a labelled plate naming what belongs there and in what format, so an
+  unshot asset reads as a deliberate gap rather than a broken image. Existence
+  is checked at build time, not trusted from site.ts, so a typo in a path shows
+  up here instead of as a 404 for a visitor.
+*/
+
+interface Props {
+  media: Media;
+  /** CSS aspect-ratio for the slot, e.g. '16 / 10'. */
+  ratio?: string;
+  kind?: 'video' | 'image';
+  class?: string;
+}
+
+const { media, ratio = '16 / 10', kind = 'video', class: className } = Astro.props;
+
+const onDisk = (path: string | null) =>
+  path != null && existsSync(fileURLToPath(new URL(`../../public${path}`, import.meta.url)));
+
+const hasAsset = onDisk(media.src);
+const hasPoster = onDisk(media.poster);
+---
+
+<div class:list={['plate', className]} style={`--plate-ratio: ${ratio};`}>
+  {
+    hasAsset && media.src && kind === 'video' && (
+      <video
+        class="plate__asset"
+        src={media.src}
+        poster={hasPoster && media.poster ? media.poster : undefined}
+        width={media.width}
+        height={media.height}
+        aria-label={media.alt}
+        muted
+        playsinline
+        loop
+        autoplay
+        preload="none"
+      />
+    )
+  }
+
+  {
+    hasAsset && media.src && kind === 'image' && (
+      <img class="plate__asset" src={media.src} alt={media.alt} width={media.width} height={media.height} loading="lazy" decoding="async" />
+    )
+  }
+
+  {
+    !hasAsset && (
+      <div class="plate__pending">
+        {media.label && <span class="plate__label t-mono-label">{media.label}</span>}
+        {media.format && <span class="plate__format t-mono-label">{media.format}</span>}
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .plate {
+    position: relative;
+    aspect-ratio: var(--plate-ratio);
+    background: var(--plate);
+    overflow: hidden;
+  }
+
+  .plate__asset {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .plate__pending {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 0.9rem;
+    color: var(--muted);
+  }
+
+  @media (max-width: 860px) {
+    .plate__pending {
+      padding: 0.65rem 0.75rem;
+    }
+  }
+</style>

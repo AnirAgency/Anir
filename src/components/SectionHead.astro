@@ -1,0 +1,43 @@
+---
+import type { SectionIntro } from '../content/site';
+
+/*
+  Eyebrow pill plus the section's visible heading.
+
+  The pill is the one element on the site allowed a border radius (CLAUDE.md >
+  Layout: 100px, and nothing else). The <h2> lives here rather than in Section
+  because a section with a visible title should not also carry a hidden one.
+*/
+
+interface Props {
+  intro: SectionIntro;
+  id: string;
+}
+
+const { intro, id } = Astro.props;
+---
+
+<header class="head">
+  <p class="head__eyebrow t-mono-label">{intro.eyebrow}</p>
+  <h2 id={id} class="head__title t-display-xl">{intro.title}</h2>
+</header>
+
+<style>
+  .head {
+    margin-bottom: clamp(2.5rem, 1.5rem + 4vw, 5.75rem);
+  }
+
+  .head__eyebrow {
+    display: inline-block;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  .head__title {
+    max-width: 20ch;
+    margin-top: 1.5rem;
+    text-wrap: balance;
+  }
+</style>

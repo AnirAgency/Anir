@@ -34,13 +34,16 @@
     Hairlines. Structure on this site is drawn with 1px rules, so the rule has
     to be visible on a phone in daylight — the audience is outdoors on mobile.
 
-    On light, --paper-2 does the job unaided. On dark it has no equal: --ink-2
+    Neither ground has a palette colour that works as a rule. On dark, --ink-2
     against --ink is a 3-value difference per channel and disappears, and --dim
-    is far too loud for a rule. So the dark hairline is mixed from two palette
-    colours rather than picked as a seventh hex. Derived, not invented.
+    is far too loud. On light, --paper-2 IS --plate, so a rule between two
+    flush plates — the team portraits — vanishes into them entirely.
+
+    So both hairlines are mixed from two palette colours rather than picked as
+    new hexes. Derived, not invented.
   */
   --line-dark: color-mix(in srgb, var(--paper) 12%, var(--ink));
-  --line-light: var(--paper-2);
+  --line-light: color-mix(in srgb, var(--ink) 20%, var(--paper));
 
   /* ------------------------------------------------------------------ type */
 

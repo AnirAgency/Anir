@@ -7,7 +7,8 @@
  *  - Prices are data. A non-technical person must be able to change one number
  *    here and have the site update.
  *
- * Phase 01 ships the shape only. Content lands in Phases 03–06.
+ * Copy is stored in sentence case and uppercased by CSS where the type scale
+ * calls for it, so this file stays readable prose for proofreading.
  */
 
 /* ------------------------------------------------------------------ shared */
@@ -23,11 +24,25 @@ export interface Media {
   alt: string;
   width: number;
   height: number;
+  /** Shown on the placeholder until the asset exists: "Плейт 01". */
+  label?: string;
+  /** Shown on the placeholder: the format we expect back from the shoot. */
+  format?: string;
 }
 
 export interface Link {
   label: string;
   href: string;
+}
+
+/** The head of a section: its rail marker, its eyebrow pill, its heading. */
+export interface SectionIntro {
+  /** Short name — the rail marker and the section's accessible name. */
+  label: string;
+  /** The pill above the heading. */
+  eyebrow: string;
+  /** The visible heading. */
+  title: string;
 }
 
 /* --------------------------------------------------------------------- nav */
@@ -77,11 +92,16 @@ export interface Discipline {
   /** ВЭБ / ДИЗАЙН / ЗУРАГ / АПП. A marker, not a sequence number. */
   code: string;
   title: string;
-  /** The single word inside `title` set in italic. */
+  /** The single word inside `title` set in italic. Must appear in `title`. */
   italicWord: string;
   tags: string[];
   body: string;
   plate: Media;
+}
+
+export interface Disciplines {
+  intro: SectionIntro;
+  items: Discipline[];
 }
 
 /* ----------------------------------------------------------------- pricing */
@@ -89,12 +109,15 @@ export interface Discipline {
 export interface PriceRow {
   name: string;
   description: string;
-  /** Bare number in ₮. Formatting and the currency mark are the view's job. */
-  amount: number;
-  /** The small line under the price — "төслөөс", "хоногт", etc. */
+  /**
+   * The figure exactly as it should read: "1.5–3 сая", "60,000",
+   * "Тохиролцоно". A string rather than a number because the real list quotes
+   * ranges, open-ended starting prices, and one row that is not a number at
+   * all — and because this way changing a price means editing what you see.
+   */
+  price: string;
+  /** The small line beneath the figure: "төгрөг", "эхлээд", "ярилцъя". */
   unit: string;
-  /** Renders an "-аас" style prefix when the figure is a starting price. */
-  from?: boolean;
 }
 
 export interface PricingGroup {
@@ -103,6 +126,7 @@ export interface PricingGroup {
 }
 
 export interface Pricing {
+  intro: SectionIntro;
   groups: PricingGroup[];
 }
 
@@ -119,16 +143,37 @@ export interface Project {
     tech: string;
     year: string;
   };
-  href: string;
+  /** Optional: none of the three products has a public URL yet. When one
+   *  does, the row renders as a link instead of a plain block. */
+  href?: string;
+}
+
+/** Labels for the project spec list. Mongolian, so they live here. */
+export interface ProjectSpecLabels {
+  role: string;
+  tech: string;
+  year: string;
+}
+
+export interface Projects {
+  intro: SectionIntro;
+  specLabels: ProjectSpecLabels;
+  items: Project[];
 }
 
 /* ----------------------------------------------------------------- process */
 
 export interface ProcessStep {
-  /** A real sequence, unlike the disciplines. */
+  /** A real sequence, unlike the disciplines — so numbering is legitimate,
+   *  and CLAUDE.md's orange rule lists step numbers as a permitted use. */
   number: string;
   title: string;
   description: string;
+}
+
+export interface Process {
+  intro: SectionIntro;
+  items: ProcessStep[];
 }
 
 /* -------------------------------------------------------------------- team */
@@ -137,6 +182,11 @@ export interface TeamMember {
   name: string;
   role: string;
   portrait: Media;
+}
+
+export interface Team {
+  intro: SectionIntro;
+  items: TeamMember[];
 }
 
 /* ----------------------------------------------------------------- contact */
@@ -216,11 +266,11 @@ export interface Site {
   nav: Nav;
   hero: Hero;
   marquee: Marquee;
-  disciplines: Discipline[];
+  disciplines: Disciplines;
   pricing: Pricing;
-  projects: Project[];
-  process: ProcessStep[];
-  team: TeamMember[];
+  projects: Projects;
+  process: Process;
+  team: Team;
   contact: Contact;
 }
 
@@ -290,13 +340,293 @@ export const site: Site = {
   marquee: {
     text: 'Жижиг баг — Бүтэн анхаарал —',
   },
-  disciplines: [],
-  pricing: {
-    groups: [],
+  disciplines: {
+    intro: {
+      label: 'Үйлчилгээ',
+      eyebrow: 'Дөрвөн чиглэл',
+      title: 'Бидний хийдэг зүйл',
+    },
+    items: [
+      {
+        code: 'ВЭБ',
+        title: 'Хурдан ачаалагддаг сайт',
+        italicWord: 'Хурдан',
+        tags: ['Astro', 'Next', 'Webflow', 'CMS'],
+        body:
+          'Статик болгож бэлдээд ирмэг сүлжээнээс түгээдэг. Учир нь зочдын ихэнх нь ' +
+          'монголын мобайл холболт дээр байдаг. Эхний ачаалалт нэг мегабайтаас доош.',
+        plate: {
+          src: '/media/plate-01.webm',
+          poster: '/media/plate-01.jpg',
+          alt: 'Вэб төслийн дэлгэцийн бичлэг',
+          width: 1280,
+          height: 800,
+          label: 'Плейт 01',
+          format: 'Видео давталт · 720p',
+        },
+      },
+      {
+        code: 'ДИЗАЙН',
+        title: 'Хэвлэлийн бүтээл',
+        italicWord: 'Хэвлэлийн',
+        tags: ['Постер', 'Айдентити', 'Carousel', 'Хэвлэх файл'],
+        body:
+          'Эхлээд үсгийн урлаг. Арга хэмжээ, шинэ бүтээгдэхүүн, кампанит ажлын постер — ' +
+          'хэвлэхэд бэлэн, өнгө нь ялгагдсан файлаар хүлээлгэн өгнө.',
+        plate: {
+          src: '/media/plate-02.webm',
+          poster: '/media/plate-02.jpg',
+          alt: 'Хөдөлгөөнт постерын давталт',
+          width: 1280,
+          height: 800,
+          label: 'Плейт 02',
+          format: 'Хөдөлгөөнт постер',
+        },
+      },
+      {
+        code: 'ЗУРАГ',
+        title: 'Зураг ба видео',
+        italicWord: 'видео',
+        tags: ['Бүтээгдэхүүн', 'Хөрөг', 'Эвент', 'Reel'],
+        body:
+          'Эхлээд вэбд зориулж буудна. Багц бүр хөдөлгөөнгүй зураг, богино шахагдсан ' +
+          'давталт хоёулаа болж ирнэ — хуудсанд тавихад хагас мегабайт идэхгүй.',
+        plate: {
+          src: '/media/plate-03.webm',
+          poster: '/media/plate-03.jpg',
+          alt: 'Бүтээгдэхүүний зураг авалтын давталт',
+          width: 1280,
+          height: 800,
+          label: 'Плейт 03',
+          format: 'Видео давталт · 720p',
+        },
+      },
+      {
+        code: 'АПП',
+        title: 'Аппликейшн, эхнээс нь дуустал',
+        italicWord: 'дуустал',
+        tags: ['React', 'Supabase', 'Нэвтрэлт', 'Төлбөр'],
+        body:
+          'Бид өөрсдийн гурван бүтээгдэхүүнийг гаргаад одоо ажиллуулж байна. Тань дээр ' +
+          'ажиллахдаа дараа нь засварлаж арчлах талд нь суугаад ажилладаг.',
+        plate: {
+          src: '/media/plate-04.webm',
+          poster: '/media/plate-04.jpg',
+          alt: 'Аппликейшны дэлгэцийн бичлэг',
+          width: 1280,
+          height: 800,
+          label: 'Плейт 04',
+          format: 'Дэлгэцийн бичлэг',
+        },
+      },
+    ],
   },
-  projects: [],
-  process: [],
-  team: [],
+  pricing: {
+    intro: {
+      label: 'Үнэ',
+      eyebrow: 'Ил тод',
+      title: 'Үнийн санал',
+    },
+    groups: [
+      {
+        title: 'Вэб ба систем',
+        rows: [
+          {
+            name: 'Аудит',
+            description: 'Одоо байгаа сайт, системийн шинжилгээ ба зөвлөмж',
+            price: '1.5–3 сая',
+            unit: 'төгрөг',
+          },
+          {
+            name: 'Лендинг',
+            description: 'UI/UX дизайн, функцтэй нэг хуудас сайт',
+            price: '1.5–2.5 сая',
+            unit: 'төгрөг',
+          },
+          {
+            name: 'Backend + Frontend',
+            description: 'Системийн хэмжээнээс хамаарч тодорхойлно',
+            price: '3 сая ₮-с',
+            unit: 'эхлээд',
+          },
+          {
+            name: 'Сургалтын веб',
+            description: 'Видео хичээл, төлбөр, суралцагчийн бүртгэлтэй',
+            price: '5 сая ₮-с',
+            unit: 'эхлээд',
+          },
+        ],
+      },
+      {
+        title: 'Дизайн ба контент',
+        rows: [
+          {
+            name: 'Постер',
+            description: 'Нэг постер, хэвлэхэд бэлэн файлаар',
+            price: '60,000',
+            unit: 'төгрөг',
+          },
+          {
+            name: 'Instagram carousel',
+            description: 'Олон хуудастай багц дизайн',
+            price: '80,000',
+            unit: 'төгрөг',
+          },
+          {
+            name: 'Зураг авалт',
+            description: 'Бүх төрлийн зураг авалт, боловсруулалттай',
+            price: '300–500 мянга',
+            unit: 'төгрөг',
+          },
+          {
+            name: 'Reel видео',
+            description: 'Урт болон зохиолоос хамаарч үнэ тогтоно',
+            price: 'Тохиролцоно',
+            unit: 'ярилцъя',
+          },
+        ],
+      },
+    ],
+  },
+  projects: {
+    intro: {
+      label: 'Ажил',
+      eyebrow: 'Сонгосон ажил',
+      title: 'Өөрсдийн бүтээгдэхүүн',
+    },
+    specLabels: {
+      role: 'Үүрэг',
+      tech: 'Технологи',
+      year: 'Он',
+    },
+    items: [
+      {
+        index: '001',
+        name: 'Ezmath',
+        tagline: 'Математикаа бэлд. Шалгалтаа дав.',
+        description: 'Математикийн мэдлэгээ бататгах хүртэлх таны ухаалаг туслах.',
+        spec: {
+          role: 'Бүтээгдэхүүн, брэнд, хөгжүүлэлт',
+          tech: 'Next · Supabase',
+          year: '2026',
+        },
+      },
+      {
+        index: '002',
+        name: 'Ethos',
+        tagline: 'Зөв хандив. Бодит тус.',
+        description: 'Бодит сайн үйлсийг холбож, сайн дурын оролцоог дэмжинэ.',
+        spec: {
+          role: 'Бүтээгдэхүүн, хөгжүүлэлт',
+          tech: 'Next · Supabase',
+          year: '2026',
+        },
+      },
+      {
+        index: '003',
+        name: 'Olymo',
+        tagline: 'Боловсролын шинэ мэдээлэл бүхнийг нэг дороос.',
+        description:
+          'Олимпиад, боловсролын хамгийн хэрэгтэй мэдээллийг нэг дороос шуурхай хүргэнэ.',
+        spec: {
+          role: 'Бүтээгдэхүүн, эдиториал',
+          tech: 'Astro · CMS',
+          year: '2026',
+        },
+      },
+    ],
+  },
+  process: {
+    intro: {
+      label: 'Гурван үе шат',
+      eyebrow: 'Хэрхэн явагддаг',
+      title: 'Гурван үе шат',
+    },
+    items: [
+      {
+        number: '01',
+        title: 'Хэлэлцэх',
+        description:
+          'Нэг уулзалт, дараа нь тогтсон үнэ, хугацаа бүхий бичгэн санал. ' +
+          'Хэрэв бид тохирохгүй бол яг энд хэлнэ.',
+      },
+      {
+        number: '02',
+        title: 'Хийх',
+        description:
+          'Эхний долоо хоногоос амьд холбоос өгнө. Төгсгөлд нь гайхшруулахыг ' +
+          'хүлээхгүй, бүтэхийг нь харж явна.',
+      },
+      {
+        number: '03',
+        title: 'Хүлээлгэн өгөх',
+        description:
+          'Код, эх файл, заавар бүгд тань дээр очно. Юу ч бидэнд түгжигдэхгүй, ' +
+          'хүсвэл дэмжлэг үргэлжилнэ.',
+      },
+    ],
+  },
+  team: {
+    intro: {
+      label: 'Баг',
+      eyebrow: 'Баг',
+      title: 'Бид дөрвүүлээ',
+    },
+    items: [
+      {
+        name: 'Бат-Эрдэнэ',
+        role: 'Гүйцэтгэх захирал · Хөгжүүлэгч',
+        portrait: {
+          src: '/media/portrait-01.jpg',
+          poster: null,
+          alt: 'Бат-Эрдэнэ, гүйцэтгэх захирал ба хөгжүүлэгч',
+          width: 900,
+          height: 1200,
+          label: 'Хөрөг',
+          format: '01',
+        },
+      },
+      {
+        name: 'Бат-Энх',
+        role: 'UI/UX дизайнер',
+        portrait: {
+          src: '/media/portrait-02.jpg',
+          poster: null,
+          alt: 'Бат-Энх, UI/UX дизайнер',
+          width: 900,
+          height: 1200,
+          label: 'Хөрөг',
+          format: '02',
+        },
+      },
+      {
+        name: 'Баярбаясгалан',
+        role: 'Ахлах хөгжүүлэгч',
+        portrait: {
+          src: '/media/portrait-03.jpg',
+          poster: null,
+          alt: 'Баярбаясгалан, ахлах хөгжүүлэгч',
+          width: 900,
+          height: 1200,
+          label: 'Хөрөг',
+          format: '03',
+        },
+      },
+      {
+        name: 'Дэлгэрцэцэг',
+        role: 'График дизайнер',
+        portrait: {
+          src: '/media/portrait-04.jpg',
+          poster: null,
+          alt: 'Дэлгэрцэцэг, график дизайнер',
+          width: 900,
+          height: 1200,
+          label: 'Хөрөг',
+          format: '04',
+        },
+      },
+    ],
+  },
   contact: {
     eyebrow: '',
     heading: '',

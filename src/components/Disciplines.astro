@@ -1,0 +1,146 @@
+---
+import Grid from './Grid.astro';
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  Four parallel disciplines — NOT a sequence. The service code is the marker;
+  there is deliberately no 01/02/03/04, because numbering would imply an order
+  a client has to follow, and there isn't one.
+
+  Note on the codes: the Figma file sets them in --orange, but they sit on
+  --paper, where orange measures 3.21:1 and fails AA for small text. CLAUDE.md >
+  Contrast names this exact element — service codes on light take --muted, and
+  the orange returns as a rule beside them. That is what this does.
+*/
+
+const { intro, items } = site.disciplines;
+
+/** Splits a title around its italic word so one word can carry the emphasis. */
+function splitTitle(title: string, word: string) {
+  const at = title.indexOf(word);
+  if (at === -1) return { before: title, italic: '', after: '' };
+  return {
+    before: title.slice(0, at),
+    italic: word,
+    after: title.slice(at + word.length),
+  };
+}
+---
+
+<Section tone="light" id="services" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="services-title" />
+
+  <Grid cols={1}>
+    {
+      items.map((item) => {
+        const title = splitTitle(item.title, item.italicWord);
+        return (
+          <article class="block">
+            <div class="block__split">
+              <div class="block__left">
+                <p class="block__code t-mono-label">{item.code}</p>
+
+                <h3 class="block__title t-serif-display">
+                  {title.before}
+                  {title.italic && <em>{title.italic}</em>}
+                  {title.after}
+                </h3>
+
+                <ul class="chips">
+                  {item.tags.map((tag) => (
+                    <li class="chip t-mono-label">{tag}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div class="block__right">
+                <p class="block__body t-mono-spec">{item.body}</p>
+                <Plate media={item.plate} ratio="16 / 10" kind="video" />
+              </div>
+            </div>
+          </article>
+        );
+      })
+    }
+  </Grid>
+</Section>
+
+<style>
+  .block {
+    padding: clamp(1.5rem, 0.75rem + 2.5vw, 2.625rem);
+  }
+
+  .block__split {
+    display: grid;
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: clamp(1.5rem, 0.5rem + 3vw, 2.5rem);
+  }
+
+  .block__left {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.25rem;
+  }
+
+  /*
+    The code reads as --muted text with an --orange rule holding the accent.
+    Orange as a 2px mark clears the 3:1 bar for non-text graphics; orange as
+    the text itself would not.
+  */
+  .block__code {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--muted);
+  }
+
+  .block__code::before {
+    content: '';
+    width: 1.5rem;
+    height: 2px;
+    background: var(--orange);
+  }
+
+  .block__title {
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+
+  .block__title em {
+    font-style: italic;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: 0;
+  }
+
+  .chip {
+    padding: 0.2rem 0.55rem;
+    border: var(--hairline) solid var(--line);
+    color: var(--muted);
+  }
+
+  .block__right {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.25rem, 0.75rem + 2vw, 2.25rem);
+  }
+
+  .block__body {
+    max-width: 62ch;
+    color: var(--muted);
+  }
+
+  @media (max-width: 860px) {
+    .block__split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

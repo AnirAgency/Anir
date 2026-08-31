@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# The enquiry endpoint is a POST target, not a page.
+Disallow: /api/
+
+Sitemap: https://aniragency.mn/sitemap.xml

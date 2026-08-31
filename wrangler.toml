@@ -4,3 +4,15 @@
 name = "anir-site"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-08-30"
+
+# Public, and in every Supabase client — not a secret, so it lives in the repo.
+# The service_role key does NOT: set it with
+#   npx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name anir-site
+[vars]
+SUPABASE_URL = "https://tyrzajpotvtirfjmacfm.supabase.co"
+
+# Rate limiter store. Without this binding the limiter fails open — see
+# functions/api/enquiry.ts.
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "a467dd6487a3486a955039347f1958bd"

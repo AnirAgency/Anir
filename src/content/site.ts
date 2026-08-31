@@ -264,6 +264,12 @@ export interface Meta {
   description: string;
   /** 1200×630, for link previews. */
   ogImage: string | null;
+  /** Postal address, for the JSON-LD business record. */
+  locality: string;
+  country: string;
+  countryCode: string;
+  /** Year the company was founded, for the same. */
+  founded: string;
 }
 
 /* -------------------------------------------------------------------- site */
@@ -284,9 +290,15 @@ export interface Site {
 
 export const site: Site = {
   meta: {
-    title: '',
-    description: '',
-    ogImage: null,
+    title: 'Anir — Улаанбаатарын бүтээлч студи',
+    description:
+      'Вэб сайт, аппликейшн, постер, зураг авалт хийдэг дөрвөн хүний баг. ' +
+      'Ил тод үнэ, хурдан ачаалагддаг ажил.',
+    ogImage: '/og.png',
+    locality: 'Улаанбаатар',
+    country: 'Монгол Улс',
+    countryCode: 'MN',
+    founded: '2026',
   },
   chrome: {
     railTick: 'УБ',

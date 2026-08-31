@@ -17,9 +17,38 @@ interface Props {
 
 const { title, description, chrome = true } = Astro.props;
 
-// site.ts is still largely empty; fall back so the build stays valid.
-const pageTitle = title ?? site.meta.title ?? '';
-const pageDescription = description ?? site.meta.description ?? '';
+const pageTitle = title ?? site.meta.title;
+const pageDescription = description ?? site.meta.description;
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const ogImage = site.meta.ogImage ? new URL(site.meta.ogImage, Astro.site).href : null;
+
+/*
+  A business record for search engines. ProfessionalService rather than
+  LocalBusiness: there is no shopfront to walk into, and the services are the
+  point. Built from site.ts so it cannot drift from the visible copy.
+*/
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfessionalService',
+  name: 'Anir',
+  legalName: 'Анир ХХК',
+  url: Astro.site?.href,
+  ...(ogImage ? { image: ogImage, logo: ogImage } : {}),
+  description: site.meta.description,
+  email: site.contact.email,
+  foundingDate: site.meta.founded,
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: site.meta.locality,
+    addressCountry: site.meta.countryCode,
+  },
+  areaServed: site.meta.country,
+  knowsLanguage: 'mn',
+  makesOffer: site.disciplines.items.map((item) => ({
+    '@type': 'Offer',
+    itemOffered: { '@type': 'Service', name: item.title },
+  })),
+};
 ---
 
 <!doctype html>
@@ -28,8 +57,42 @@ const pageDescription = description ?? site.meta.description ?? '';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
-    {pageDescription && <meta name="description" content={pageDescription} />}
-    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).href} />
+    <meta name="description" content={pageDescription} />
+    <link rel="canonical" href={canonical} />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#08090B" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="mn_MN" />
+    <meta property="og:site_name" content="Anir" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:url" content={canonical} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImage && <meta property="og:image:width" content="1200" />}
+    {ogImage && <meta property="og:image:height" content="630" />}
+    {ogImage && <meta property="og:image:alt" content={site.hero.logoAlt} />}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={pageDescription} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+
+    {/*
+      Only the faces that render above the fold: the serif tagline, the mono
+      lede, and the Oswald product names. The other three are fetched by the
+      stylesheet when the sections below need them — preloading all six would
+      put 146 kB in front of the first paint.
+    */}
+    <link rel="preload" href="/fonts/ptserif-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrainsmono-300.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/oswald-600.woff2" as="font" type="font/woff2" crossorigin />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
     <slot name="head" />
 
     {/*

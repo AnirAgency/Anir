@@ -1,0 +1,27 @@
+{
+  "_comment": "Per-clip trim points and still dimensions for `npm run media`. Sources live in raw-media/, outputs go to public/media/.",
+
+  "video": {
+    "maxHeight": 720,
+    "fps": 24,
+    "targetKB": 240,
+    "failOverKB": 400,
+    "posterMaxKB": 40
+  },
+
+  "clips": [
+    { "name": "hero",     "source": "hero.mov",     "in": "0", "out": "4" },
+    { "name": "plate-01", "source": "plate-01.mov", "in": "0", "out": "4" },
+    { "name": "plate-02", "source": "plate-02.mov", "in": "0", "out": "4" },
+    { "name": "plate-03", "source": "plate-03.mov", "in": "0", "out": "4" },
+    { "name": "plate-04", "source": "plate-04.mov", "in": "0", "out": "4" }
+  ],
+
+  "stills": [
+    { "name": "portrait-01", "source": "portrait-01.jpg", "width": 900,  "height": 1200 },
+    { "name": "portrait-02", "source": "portrait-02.jpg", "width": 900,  "height": 1200 },
+    { "name": "portrait-03", "source": "portrait-03.jpg", "width": 900,  "height": 1200 },
+    { "name": "portrait-04", "source": "portrait-04.jpg", "width": 900,  "height": 1200 },
+    { "name": "og",          "source": "og.jpg",          "width": 1200, "height": 630 }
+  ]
+}

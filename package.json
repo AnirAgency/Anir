@@ -8,11 +8,14 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/headers.mjs",
     "preview": "astro preview",
-    "budget": "astro build && node scripts/budget.mjs",
+    "budget": "npm run build && node scripts/budget.mjs",
     "fonts": "node scripts/fonts.mjs",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "test:enquiry": "node scripts/test-enquiry.ts",
+    "media": "node scripts/media.mjs",
+    "test:media": "node scripts/test-media.mjs"
   },
   "dependencies": {
     "astro": "^5.0.0",

@@ -1,10 +1,8 @@
 ---
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import Grid from './Grid.astro';
 import Section from './Section.astro';
 import { site } from '../content/site';
+import { resolveVideo } from '../lib/media';
 
 // Inlined, not <img>, because the mark takes its colour from currentColor —
 // an external file cannot inherit --orange.
@@ -13,17 +11,12 @@ import logo from '../../public/media/logo.svg?raw';
 const { hero, chrome } = site;
 
 /*
-  The hero video is optional. Phase 08 encodes it; until then the slot renders
-  as a plate so the build never depends on an asset that has not been shot.
-  Checked on disk rather than trusted from site.ts, so a missing file is caught
-  at build time instead of becoming a 404 for a visitor in Ulaanbaatar.
+  The hero loop is optional. Until the shoot happens the slot renders as a bare
+  plate, so the build never depends on an asset that does not exist. Which
+  encodes are actually present is read off disk at build time, not trusted from
+  site.ts, so a missing file shows up here instead of as a 404 in Ulaanbaatar.
 */
-const videoPath = hero.video?.src ?? null;
-const hasVideo =
-  videoPath !== null && existsSync(fileURLToPath(new URL(`../../public${videoPath}`, import.meta.url)));
-const hasPoster =
-  hero.video?.poster != null &&
-  existsSync(fileURLToPath(new URL(`../../public${hero.video.poster}`, import.meta.url)));
+const heroVideo = hero.video ? resolveVideo(hero.video) : null;
 ---
 
 <Section tone="dark" id="hero" label={chrome.heroLabel} layout="hero" heading={false} seam>
@@ -31,19 +24,23 @@ const hasPoster =
     <div class="hero__stage">
       <div class="hero__media" aria-hidden="true">
         {
-          hasVideo && hero.video ? (
+          heroVideo?.present && hero.video ? (
             <video
               class="hero__video"
-              src={hero.video.src}
-              poster={hasPoster ? hero.video.poster : undefined}
+              poster={heroVideo.fallback ?? undefined}
               width={hero.video.width}
               height={hero.video.height}
+              aria-label={hero.video.alt}
               muted
               playsinline
               loop
               autoplay
               preload="none"
-            />
+            >
+              {heroVideo.sources.map((source) => (
+                <source src={source.src} type={source.type} />
+              ))}
+            </video>
           ) : (
             /* No label: it would sit on the wordmark at narrow widths, and a
                placeholder string must never ship. The build report says which

@@ -22,7 +22,7 @@ const { intro, items } = site.process;
   <Grid cols={3}>
     {
       items.map((step) => (
-        <article class="step">
+        <article class="step" data-reveal>
           <p class="step__number t-display-l">{step.number}</p>
           <h3 class="step__title t-serif-display">{step.title}</h3>
           <p class="step__desc t-mono-spec">{step.description}</p>

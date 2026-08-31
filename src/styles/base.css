@@ -125,9 +125,13 @@ hr {
   top: 0;
   left: 0;
   z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 0.75rem 1.25rem;
   background: var(--orange);
-  color: var(--paper);
+  /* Text on an orange fill is --ink; white on orange is 3.67:1 and fails. */
+  color: var(--ink);
   transform: translateY(-120%);
 }
 

@@ -98,6 +98,27 @@ const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: t
 const call = (method, params) => send(method, params, sessionId);
 
 await call('Page.enable');
+
+// --console surfaces browser log entries — CSP violations arrive here as
+// security errors, and they are invisible otherwise.
+const logEntries = [];
+if (rest.includes('--console')) {
+  await call('Log.enable');
+  await call('Runtime.enable');
+  socket.addEventListener('message', (event) => {
+    const message = JSON.parse(event.data);
+    if (message.method === 'Log.entryAdded') {
+      const e = message.params.entry;
+      logEntries.push(`[${e.level}/${e.source}] ${e.text}`);
+    }
+    if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
+      logEntries.push(`[error/console] ${message.params.args.map((a) => a.value ?? a.description).join(' ')}`);
+    }
+    if (message.method === 'Runtime.exceptionThrown') {
+      logEntries.push(`[error/exception] ${message.params.exceptionDetails.text}`);
+    }
+  });
+}
 await call('Emulation.setDeviceMetricsOverride', {
   width,
   height,
@@ -137,7 +158,10 @@ if (scrollArg) {
   await call('Runtime.evaluate', {
     expression: `window.scrollTo({ top: ${Number(scrollArg.split('=')[1])}, behavior: 'instant' });`,
   });
-  await sleep(400);
+  // Long enough for a scroll reveal to finish: 0.9s transition plus the
+  // stagger. Capturing sooner catches elements part-faded and every screenshot
+  // comes out subtly washed out.
+  await sleep(1500);
 }
 
 // --eval runs before any capture, so it can also set the page up for the shot
@@ -151,6 +175,45 @@ if (evalArg) {
   });
   if (result.value !== undefined) console.log(JSON.stringify(result.value, null, 2));
   await sleep(250);
+}
+
+// --press=Tab,ArrowRight sends real key events through the browser, so native
+// behaviour (radio-group arrow keys, focus order) is exercised for real rather
+// than simulated with synthetic events, which would not trigger it.
+const KEYS = {
+  Tab: { code: 'Tab', key: 'Tab', vk: 9, text: '\t' },
+  Enter: { code: 'Enter', key: 'Enter', vk: 13, text: '\r' },
+  Space: { code: 'Space', key: ' ', vk: 32, text: ' ' },
+  ArrowLeft: { code: 'ArrowLeft', key: 'ArrowLeft', vk: 37 },
+  ArrowUp: { code: 'ArrowUp', key: 'ArrowUp', vk: 38 },
+  ArrowRight: { code: 'ArrowRight', key: 'ArrowRight', vk: 39 },
+  ArrowDown: { code: 'ArrowDown', key: 'ArrowDown', vk: 40 },
+};
+
+const pressArg = rest.find((arg) => arg.startsWith('--press='));
+if (pressArg) {
+  for (const name of pressArg.slice('--press='.length).split(',')) {
+    const spec = KEYS[name.trim()];
+    if (!spec) throw new Error(`Unknown key: ${name}`);
+    const base = { key: spec.key, code: spec.code, windowsVirtualKeyCode: spec.vk, nativeVirtualKeyCode: spec.vk };
+    await call('Input.dispatchKeyEvent', { type: spec.text ? 'keyDown' : 'rawKeyDown', ...base, text: spec.text });
+    await call('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+    await sleep(60);
+  }
+  await sleep(200);
+}
+
+const afterArg = rest.find((arg) => arg.startsWith('--after='));
+if (afterArg) {
+  const { result } = await call('Runtime.evaluate', {
+    returnByValue: true,
+    expression: afterArg.slice('--after='.length),
+  });
+  console.log(JSON.stringify(result.value, null, 2));
+}
+
+if (rest.includes('--console')) {
+  console.log(JSON.stringify({ consoleEntries: logEntries.length, entries: logEntries }, null, 2));
 }
 
 if (measureOnly) {

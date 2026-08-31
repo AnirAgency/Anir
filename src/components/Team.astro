@@ -20,7 +20,7 @@ const { intro, items } = site.team;
   <Grid cols={4}>
     {
       items.map((member) => (
-        <article class="member">
+        <article class="member" data-reveal>
           <Plate media={member.portrait} ratio="3 / 4" kind="image" />
           <div class="member__text">
             <h3 class="member__name t-display-m">{member.name}</h3>

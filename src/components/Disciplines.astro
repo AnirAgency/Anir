@@ -38,7 +38,7 @@ function splitTitle(title: string, word: string) {
       items.map((item) => {
         const title = splitTitle(item.title, item.italicWord);
         return (
-          <article class="block">
+          <article class="block" data-reveal>
             <div class="block__split">
               <div class="block__left">
                 <p class="block__code t-mono-label">{item.code}</p>

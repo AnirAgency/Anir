@@ -20,11 +20,11 @@ const { intro, groups } = site.pricing;
   {
     groups.map((group) => (
       <section class="group">
-        <h3 class="group__title t-display-s">{group.title}</h3>
+        <h3 class="group__title t-display-s" data-reveal>{group.title}</h3>
 
         <ul class="rows">
           {group.rows.map((row) => (
-            <li class="row">
+            <li class="row" data-reveal>
               <span class="row__name t-display-m">{row.name}</span>
               <span class="row__desc t-mono-label">{row.description}</span>
               <span class="row__price">

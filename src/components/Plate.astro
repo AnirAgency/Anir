@@ -1,17 +1,18 @@
 ---
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
+import { resolveImage, resolveVideo } from '../lib/media';
 import type { Media } from '../content/site';
 
 /*
   A media slot that degrades honestly.
 
-  When the file exists on disk it renders the real asset; when it does not, it
-  renders a labelled plate naming what belongs there and in what format, so an
-  unshot asset reads as a deliberate gap rather than a broken image. Existence
-  is checked at build time, not trusted from site.ts, so a typo in a path shows
-  up here instead of as a 404 for a visitor.
+  It emits only the encoded variants that exist on disk, best format first, so
+  a browser takes the smallest file it understands and never requests one that
+  was never made. When nothing has been shot yet it renders a labelled plate
+  naming what belongs there and in what format, so a gap reads as deliberate
+  rather than broken.
+
+  Every asset carries explicit width and height: CLAUDE.md forbids layout shift,
+  and a plate that resizes when its video arrives is exactly that.
 */
 
 interface Props {
@@ -24,20 +25,15 @@ interface Props {
 
 const { media, ratio = '16 / 10', kind = 'video', class: className } = Astro.props;
 
-const onDisk = (path: string | null) =>
-  path != null && existsSync(fileURLToPath(new URL(`../../public${path}`, import.meta.url)));
-
-const hasAsset = onDisk(media.src);
-const hasPoster = onDisk(media.poster);
+const asset = kind === 'video' ? resolveVideo(media) : resolveImage(media);
 ---
 
 <div class:list={['plate', className]} style={`--plate-ratio: ${ratio};`}>
   {
-    hasAsset && media.src && kind === 'video' && (
+    kind === 'video' && asset.present && (
       <video
         class="plate__asset"
-        src={media.src}
-        poster={hasPoster && media.poster ? media.poster : undefined}
+        poster={asset.fallback ?? undefined}
         width={media.width}
         height={media.height}
         aria-label={media.alt}
@@ -46,18 +42,35 @@ const hasPoster = onDisk(media.poster);
         loop
         autoplay
         preload="none"
-      />
+      >
+        {asset.sources.map((source) => (
+          <source src={source.src} type={source.type} />
+        ))}
+      </video>
     )
   }
 
   {
-    hasAsset && media.src && kind === 'image' && (
-      <img class="plate__asset" src={media.src} alt={media.alt} width={media.width} height={media.height} loading="lazy" decoding="async" />
+    kind === 'image' && asset.present && (
+      <picture>
+        {asset.sources.map((source) => (
+          <source srcset={source.src} type={source.type} />
+        ))}
+        <img
+          class="plate__asset"
+          src={asset.fallback ?? undefined}
+          alt={media.alt}
+          width={media.width}
+          height={media.height}
+          loading="lazy"
+          decoding="async"
+        />
+      </picture>
     )
   }
 
   {
-    !hasAsset && (
+    !asset.present && (
       <div class="plate__pending">
         {media.label && <span class="plate__label t-mono-label">{media.label}</span>}
         {media.format && <span class="plate__format t-mono-label">{media.format}</span>}
@@ -72,6 +85,12 @@ const hasPoster = onDisk(media.poster);
     aspect-ratio: var(--plate-ratio);
     background: var(--plate);
     overflow: hidden;
+  }
+
+  .plate :global(picture) {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .plate__asset {

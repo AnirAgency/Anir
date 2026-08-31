@@ -2,6 +2,7 @@
 import '../styles/fonts.css';
 import '../styles/tokens.css';
 import '../styles/base.css';
+import '../styles/motion.css';
 
 import Header from '../components/Header.astro';
 import Rail from '../components/Rail.astro';
@@ -30,6 +31,18 @@ const pageDescription = description ?? site.meta.description ?? '';
     {pageDescription && <meta name="description" content={pageDescription} />}
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site).href} />
     <slot name="head" />
+
+    {/*
+      Runs before the body paints, so [data-reveal] is hidden before it can
+      flash. Inline and tiny on purpose: as an external file it would race the
+      first paint. Adds nothing when the visitor asked for reduced motion, which
+      is what keeps that page completely static.
+    */}
+    <script is:inline>
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.documentElement.classList.add('motion');
+      }
+    </script>
   </head>
   <body id="top">
     <a class="skip-link t-mono-label" href="#main">{site.chrome.skipToContent}</a>
@@ -40,5 +53,9 @@ const pageDescription = description ?? site.meta.description ?? '';
     <main id="main">
       <slot />
     </main>
+
+    <script>
+      import '../scripts/motion.ts';
+    </script>
   </body>
 </html>

@@ -69,7 +69,7 @@ const cta = site.nav.links.find((link) => link.accent);
     position: fixed;
     top: 0;
     z-index: 40;
-    padding-block: 1.375rem;
+    padding-block: 0.625rem;
     /* The bar spans the viewport; only its links should catch the pointer. */
     pointer-events: none;
   }
@@ -88,6 +88,13 @@ const cta = site.nav.links.find((link) => link.accent);
   }
 
   .header__mark {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    /* Widen the hit area to 44px without moving the wordmark off the inset. */
+    min-width: 44px;
+    padding-inline: 3px;
+    margin-inline: -3px;
     pointer-events: auto;
     letter-spacing: 0.14em;
   }
@@ -106,12 +113,18 @@ const cta = site.nav.links.find((link) => link.accent);
   }
 
   .header__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    /* "Үнэ" is only 21px of text — under even the 24px AA target minimum. */
+    min-width: 44px;
     pointer-events: auto;
-    transition: opacity 0.3s ease;
+    transition: color 0.3s ease;
   }
 
   .header__link:hover {
-    opacity: 0.55;
+    color: var(--dim);
   }
 
   /* Holds the CTA's width open in the blended layer. Never seen, never read. */
@@ -122,13 +135,16 @@ const cta = site.nav.links.find((link) => link.accent);
   .header__cta {
     right: var(--inset-right);
     z-index: 41;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
     pointer-events: auto;
     color: var(--orange);
-    transition: opacity 0.3s ease;
+    transition: color 0.3s ease;
   }
 
   .header__cta:hover {
-    opacity: 0.7;
+    color: var(--paper);
   }
 
   @media (max-width: 860px) {
@@ -142,12 +158,28 @@ const cta = site.nav.links.find((link) => link.accent);
     }
 
     /*
-      Wordmark plus the CTA only. Phase 09 decides what the mobile nav actually
-      becomes — two links or a disclosure — so this is a holding position, not
-      the answer.
+      Wordmark, the first two nav links, and the CTA. Four links plus a CTA will
+      not fit beside the wordmark at 375 — measured, not guessed — and the two
+      that survive are the two a prospect wants first: what we do, and what it
+      costs. No hamburger: one tap to reach a section beats two.
     */
+    .header__nav,
     .header__list {
+      gap: 0.5rem;
+    }
+
+    .header__list li:nth-child(n + 3) {
       display: none;
+    }
+
+    .header__mark {
+      letter-spacing: 0.08em;
+    }
+
+    .header__link,
+    .header__cta,
+    .header__ghost {
+      letter-spacing: 0.1em;
     }
   }
 </style>

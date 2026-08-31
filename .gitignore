@@ -15,8 +15,10 @@ node_modules/
 tools/.venv/
 tools/fonts-src/
 
-# raw media, before `npm run media` (Phase 08)
-raw-media/
+# raw media, before `npm run media` (Phase 08). Camera originals never ship;
+# only the processed output in public/media/ does.
+raw-media/*
+!raw-media/README.md
 
 # os
 .DS_Store

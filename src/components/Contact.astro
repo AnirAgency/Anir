@@ -1,0 +1,363 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The enquiry form. A real form, not a decoration.
+
+  It posts to /api/enquiry with a plain method="post" action, so it works with
+  JavaScript switched off — the Function answers a browser post with an HTML
+  page and a fetch with JSON. The script below is enhancement only: it swaps a
+  full page navigation for an inline status message.
+
+  The chip groups are native radios. That is not a shortcut — a radio group
+  already gives arrow-key navigation, roving focus, and a real accessible name
+  from its <legend>, all of which would have to be rebuilt by hand with
+  buttons and would be worse.
+*/
+
+const { intro, email, address, form } = site.contact;
+const { fields, honeypot } = form;
+---
+
+<Section tone="dark" id="contact" label={intro.label} heading={false}>
+  <div class="contact">
+    <div class="contact__left">
+      <p class="contact__eyebrow t-mono-label" data-reveal>{intro.eyebrow}</p>
+      <h2 id="contact-title" class="contact__heading t-display-xl" data-reveal>{intro.title}</h2>
+
+      <a class="contact__email t-display-m" href={`mailto:${email}`} data-reveal>{email}</a>
+
+      <address class="contact__address t-mono-spec" data-reveal>
+        {address.map((line) => <span>{line}</span>)}
+      </address>
+    </div>
+
+    <form
+      class="form"
+      method="post"
+      action="/api/enquiry"
+      data-enquiry
+      data-error-message={form.messages.error}
+      aria-describedby="form-status"
+    >
+      {
+        form.groups.map((group) => (
+          <fieldset class="group">
+            <legend class="group__legend t-mono-label">{group.legend}</legend>
+            <div class="group__chips">
+              {group.options.map((option) => (
+                <label class="chip">
+                  <input class="chip__input" type="radio" name={group.name} value={option.value} required />
+                  <span class="chip__face t-mono-label">{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ))
+      }
+
+      <div class="field">
+        <label class="field__label t-mono-label" for="f-name">{fields.name.label}</label>
+        <input
+          class="field__input t-mono-spec"
+          id="f-name"
+          name={fields.name.name}
+          type="text"
+          placeholder={fields.name.placeholder}
+          maxlength="100"
+          autocomplete="name"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label t-mono-label" for="f-contact">{fields.contact.label}</label>
+        <input
+          class="field__input t-mono-spec"
+          id="f-contact"
+          name={fields.contact.name}
+          type="text"
+          placeholder={fields.contact.placeholder}
+          maxlength="120"
+          autocomplete="email"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label t-mono-label" for="f-message">{fields.message.label}</label>
+        <textarea
+          class="field__input field__textarea t-mono-spec"
+          id="f-message"
+          name={fields.message.name}
+          placeholder={fields.message.placeholder}
+          maxlength="2000"
+          rows="4"></textarea>
+      </div>
+
+      {/* Only a bot fills this in. Off-screen rather than display:none, which
+          some bots skip, and taken out of the tab order. */}
+      <div class="honeypot" aria-hidden="true">
+        <label for="f-website">{honeypot.label}</label>
+        <input id="f-website" name={honeypot.name} type="text" tabindex="-1" autocomplete="off" />
+      </div>
+
+      <button class="submit t-mono-label" type="submit" data-submit data-sending={form.sending}>
+        {form.submit}
+      </button>
+
+      <p class="status t-mono-spec" id="form-status" role="status" aria-live="polite" data-status></p>
+    </form>
+  </div>
+</Section>
+
+<style>
+  .contact {
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: clamp(2rem, 1rem + 4vw, 4.5rem);
+  }
+
+  .contact__eyebrow {
+    display: inline-block;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  .contact__heading {
+    max-width: 14ch;
+    margin-top: 1.5rem;
+    text-wrap: balance;
+  }
+
+  .contact__email {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-top: clamp(1.75rem, 1rem + 2vw, 2.75rem);
+    color: var(--orange);
+    text-decoration: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .contact__email:hover {
+    opacity: 0.72;
+  }
+
+  .contact__address {
+    display: flex;
+    flex-direction: column;
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-style: normal;
+  }
+
+  /* ---------------------------------------------------------------- form */
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .group {
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+
+  .group__legend {
+    padding: 0;
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+  }
+
+  .group__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .chip {
+    display: inline-flex;
+  }
+
+  /* The input stays in the accessibility tree and keeps arrow-key behaviour;
+     only its rendering is replaced by the face beside it. */
+  .chip__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chip__face {
+    display: inline-flex;
+    align-items: center;
+    /* 44px minimum touch target (CLAUDE.md > Phase 09 and WCAG). */
+    min-height: 44px;
+    padding: 0 0.9rem;
+    border: var(--hairline) solid var(--line);
+    color: var(--muted);
+    cursor: pointer;
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .chip:hover .chip__face {
+    color: var(--fg);
+    border-color: var(--muted);
+  }
+
+  /* Text on an orange fill is --ink, never white — white on orange is 3.67:1
+     and fails (CLAUDE.md > Contrast). */
+  .chip__input:checked + .chip__face {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: var(--ink);
+  }
+
+  .chip__input:focus-visible + .chip__face {
+    outline: 2px solid var(--orange);
+    outline-offset: 3px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .field__label {
+    color: var(--muted);
+  }
+
+  .field__input {
+    min-height: 44px;
+    padding: 0.6rem 0.85rem;
+    background: transparent;
+    border: var(--hairline) solid var(--line);
+    color: var(--fg);
+    transition: border-color 0.3s ease;
+  }
+
+  .field__input::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  .field__input:hover {
+    border-color: var(--muted);
+  }
+
+  .field__textarea {
+    resize: vertical;
+    min-height: 7rem;
+  }
+
+  /* Native invalid styling only after the browser has actually tried to
+     validate, so an untouched form is not painted red. */
+  .field__input:user-invalid {
+    border-color: var(--orange);
+  }
+
+  .honeypot {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .submit {
+    align-self: start;
+    min-height: 44px;
+    padding: 0 1.5rem;
+    background: var(--orange);
+    color: var(--ink);
+    border: var(--hairline) solid var(--orange);
+    cursor: pointer;
+    transition:
+      background 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .submit:hover {
+    background: transparent;
+    color: var(--orange);
+  }
+
+  .submit[disabled] {
+    opacity: 0.6;
+    cursor: progress;
+  }
+
+  .status {
+    margin: 0;
+    color: var(--muted);
+    min-height: 1.5rem;
+  }
+
+  .status[data-state='ok'] {
+    color: var(--orange);
+  }
+
+  @media (max-width: 860px) {
+    .contact {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>
+
+<script>
+  /*
+    Enhancement only. Without this the form still posts and the Function
+    answers with an HTML page; this just keeps the visitor on the page.
+  */
+  const form = document.querySelector<HTMLFormElement>('[data-enquiry]');
+  const status = document.querySelector<HTMLElement>('[data-status]');
+  const button = document.querySelector<HTMLButtonElement>('[data-submit]');
+
+  if (form && status && button) {
+    const idle = button.textContent ?? '';
+    const sending = button.dataset.sending ?? '';
+
+    form.addEventListener('submit', async (event) => {
+      // Let the browser show its own messages, and let it post normally if
+      // anything below throws before we call preventDefault.
+      if (!form.reportValidity()) return;
+      event.preventDefault();
+
+      button.disabled = true;
+      status.removeAttribute('data-state');
+      status.textContent = sending;
+
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: new FormData(form),
+        });
+        const result = (await response.json()) as { ok?: boolean; message?: string };
+
+        status.textContent = result.message ?? '';
+        if (result.ok) {
+          status.setAttribute('data-state', 'ok');
+          form.reset();
+        }
+      } catch {
+        status.textContent = form.dataset.errorMessage ?? '';
+      } finally {
+        button.disabled = false;
+        button.textContent = idle;
+      }
+    });
+  }
+</script>

@@ -18,8 +18,8 @@ const { intro, id } = Astro.props;
 ---
 
 <header class="head">
-  <p class="head__eyebrow t-mono-label">{intro.eyebrow}</p>
-  <h2 id={id} class="head__title t-display-xl">{intro.title}</h2>
+  <p class="head__eyebrow t-mono-label" data-reveal>{intro.eyebrow}</p>
+  <h2 id={id} class="head__title t-display-xl" data-reveal>{intro.title}</h2>
 </header>
 
 <style>

@@ -24,7 +24,7 @@ const { intro, specLabels, items } = site.projects;
       items.map((project) => {
         const Row = project.href ? 'a' : 'div';
         return (
-          <Row class="row" href={project.href}>
+          <Row class="row" href={project.href} data-reveal>
             <p class="row__index t-mono-label">{project.index}</p>
 
             <div class="row__body">

@@ -192,6 +192,81 @@ if (inline.js || inline.css) {
   if (inline.css) console.log(`    <style>   ${kb(inline.css)}`);
 }
 
+// ------------------------------------------------------------- by section
+
+/**
+ * Splits index.html at its top-level <section> boundaries and attributes each
+ * slice's own bytes plus the assets it references to that section, so it is
+ * obvious which part of the page is expensive. Counts nesting, because the
+ * pricing groups are <section>s inside a <section>.
+ */
+function sliceSections(html) {
+  const slices = [];
+  const open = /<section\b[^>]*>/gi;
+  let match;
+
+  while ((match = open.exec(html))) {
+    const id = /\bid="([^"]+)"/.exec(match[0])?.[1];
+    if (!id) continue; // a nested, unnamed section — its bytes belong to its parent
+
+    let depth = 1;
+    const scan = /<section\b[^>]*>|<\/section>/gi;
+    scan.lastIndex = open.lastIndex;
+    let end = html.length;
+    let inner;
+    while ((inner = scan.exec(html))) {
+      depth += inner[0].startsWith('</') ? -1 : 1;
+      if (depth === 0) {
+        end = scan.lastIndex;
+        break;
+      }
+    }
+
+    slices.push({ id, html: html.slice(match.index, end) });
+    open.lastIndex = end; // don't re-enter this section's children
+  }
+  return slices;
+}
+
+const entryHtml = readFileSync(entry, 'utf8');
+const sections = sliceSections(entryHtml);
+const sizeOf = (file) => seen.get(file) ?? 0;
+
+const sectionRows = [];
+const claimed = new Set();
+
+for (const section of sections) {
+  let assetBytes = 0;
+  const refs = new Set([...refsInHtml(section.html), ...refsInCss(section.html)]);
+  for (const ref of refs) {
+    const target = resolveRef(ref, entry);
+    if (!target || claimed.has(target)) continue;
+    claimed.add(target);
+    assetBytes += sizeOf(target);
+  }
+  const markup = Buffer.byteLength(section.html, 'utf8');
+  sectionRows.push({ id: section.id, markup, assets: assetBytes, total: markup + assetBytes });
+}
+
+const sectionMarkup = sectionRows.reduce((sum, row) => sum + row.markup, 0);
+const sharedBytes = total - sectionRows.reduce((sum, row) => sum + row.total, 0);
+
+sectionRows.sort((a, b) => b.total - a.total);
+
+console.log('\n  BY SECTION\n');
+const idWidth = Math.max(...sectionRows.map((row) => row.id.length), 8);
+console.log(`  ${'section'.padEnd(idWidth)}  ${'markup'.padStart(11)}  ${'media'.padStart(11)}  ${'total'.padStart(11)}`);
+console.log(`  ${'-'.repeat(idWidth)}  ${'-'.repeat(11)}  ${'-'.repeat(11)}  ${'-'.repeat(11)}`);
+for (const row of sectionRows) {
+  console.log(`  ${row.id.padEnd(idWidth)}  ${kb(row.markup)}  ${kb(row.assets)}  ${kb(row.total)}`);
+}
+console.log(
+  `  ${'shared'.padEnd(idWidth)}  ${''.padStart(11)}  ${''.padStart(11)}  ${kb(sharedBytes)}` +
+    `   fonts, css, js, chrome`
+);
+console.log(`\n  heaviest: ${sectionRows[0]?.id ?? '—'} at ${kb(sectionRows[0]?.total ?? 0).trim()}`);
+console.log(`  page markup inside sections: ${kb(sectionMarkup).trim()}`);
+
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;
 

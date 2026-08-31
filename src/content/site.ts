@@ -16,10 +16,13 @@
 /** Any image or video plate. Dimensions are required — CLAUDE.md forbids
  *  layout shift, so nothing renders without an intrinsic box. */
 export interface Media {
-  /** Path under /media, or null while the asset is still being shot. */
-  src: string | null;
-  /** Poster frame for video. Required whenever `src` is a video. */
-  poster: string | null;
+  /**
+   * Basename under /media with no extension — 'hero', 'plate-01'. The media
+   * pipeline writes the encoded variants beside it (.av1.webm, .vp9.webm and a
+   * poster .jpg for clips; .avif, .webp, .jpg for stills) and the component
+   * emits whichever exist. null while the asset is still unshot.
+   */
+  name: string | null;
   /** Mongolian alt text. */
   alt: string;
   width: number;
@@ -211,8 +214,7 @@ export interface FormField {
 }
 
 export interface Contact {
-  eyebrow: string;
-  heading: string;
+  intro: SectionIntro;
   email: string;
   /** One line per element, rendered as an address block. */
   address: string[];
@@ -224,12 +226,18 @@ export interface Contact {
       message: FormField;
     };
     submit: string;
+    /** Shown while the request is in flight. */
+    sending: string;
     messages: {
       success: string;
       error: string;
       /** Shown when a required field is empty or malformed. */
       invalid: string;
+      /** Shown when the IP rate limit trips. */
+      tooMany: string;
     };
+    /** Invisible field that only a bot fills in. Its label is never seen. */
+    honeypot: FormField;
   };
 }
 
@@ -307,8 +315,7 @@ export const site: Site = {
       'Вэб сайт, аппликейшн, постер, зураг авалт хийдэг дөрвөн хүний баг. ' +
       'Багаа зориудаар жижиг байлгадаг — таны уулзсан хүн ажлыг чинь өөрөө хийнэ.',
     video: {
-      src: '/media/hero.webm',
-      poster: '/media/hero.jpg',
+      name: 'hero',
       alt: 'Анир багийн ажлын давталт',
       width: 1280,
       height: 720,
@@ -356,8 +363,7 @@ export const site: Site = {
           'Статик болгож бэлдээд ирмэг сүлжээнээс түгээдэг. Учир нь зочдын ихэнх нь ' +
           'монголын мобайл холболт дээр байдаг. Эхний ачаалалт нэг мегабайтаас доош.',
         plate: {
-          src: '/media/plate-01.webm',
-          poster: '/media/plate-01.jpg',
+          name: 'plate-01',
           alt: 'Вэб төслийн дэлгэцийн бичлэг',
           width: 1280,
           height: 800,
@@ -374,8 +380,7 @@ export const site: Site = {
           'Эхлээд үсгийн урлаг. Арга хэмжээ, шинэ бүтээгдэхүүн, кампанит ажлын постер — ' +
           'хэвлэхэд бэлэн, өнгө нь ялгагдсан файлаар хүлээлгэн өгнө.',
         plate: {
-          src: '/media/plate-02.webm',
-          poster: '/media/plate-02.jpg',
+          name: 'plate-02',
           alt: 'Хөдөлгөөнт постерын давталт',
           width: 1280,
           height: 800,
@@ -392,8 +397,7 @@ export const site: Site = {
           'Эхлээд вэбд зориулж буудна. Багц бүр хөдөлгөөнгүй зураг, богино шахагдсан ' +
           'давталт хоёулаа болж ирнэ — хуудсанд тавихад хагас мегабайт идэхгүй.',
         plate: {
-          src: '/media/plate-03.webm',
-          poster: '/media/plate-03.jpg',
+          name: 'plate-03',
           alt: 'Бүтээгдэхүүний зураг авалтын давталт',
           width: 1280,
           height: 800,
@@ -410,8 +414,7 @@ export const site: Site = {
           'Бид өөрсдийн гурван бүтээгдэхүүнийг гаргаад одоо ажиллуулж байна. Тань дээр ' +
           'ажиллахдаа дараа нь засварлаж арчлах талд нь суугаад ажилладаг.',
         plate: {
-          src: '/media/plate-04.webm',
-          poster: '/media/plate-04.jpg',
+          name: 'plate-04',
           alt: 'Аппликейшны дэлгэцийн бичлэг',
           width: 1280,
           height: 800,
@@ -577,8 +580,7 @@ export const site: Site = {
         name: 'Бат-Эрдэнэ',
         role: 'Гүйцэтгэх захирал · Хөгжүүлэгч',
         portrait: {
-          src: '/media/portrait-01.jpg',
-          poster: null,
+          name: 'portrait-01',
           alt: 'Бат-Эрдэнэ, гүйцэтгэх захирал ба хөгжүүлэгч',
           width: 900,
           height: 1200,
@@ -590,8 +592,7 @@ export const site: Site = {
         name: 'Бат-Энх',
         role: 'UI/UX дизайнер',
         portrait: {
-          src: '/media/portrait-02.jpg',
-          poster: null,
+          name: 'portrait-02',
           alt: 'Бат-Энх, UI/UX дизайнер',
           width: 900,
           height: 1200,
@@ -603,8 +604,7 @@ export const site: Site = {
         name: 'Баярбаясгалан',
         role: 'Ахлах хөгжүүлэгч',
         portrait: {
-          src: '/media/portrait-03.jpg',
-          poster: null,
+          name: 'portrait-03',
           alt: 'Баярбаясгалан, ахлах хөгжүүлэгч',
           width: 900,
           height: 1200,
@@ -616,8 +616,7 @@ export const site: Site = {
         name: 'Дэлгэрцэцэг',
         role: 'График дизайнер',
         portrait: {
-          src: '/media/portrait-04.jpg',
-          poster: null,
+          name: 'portrait-04',
           alt: 'Дэлгэрцэцэг, график дизайнер',
           width: 900,
           height: 1200,
@@ -628,22 +627,80 @@ export const site: Site = {
     ],
   },
   contact: {
-    eyebrow: '',
-    heading: '',
-    email: '',
-    address: [],
+    intro: {
+      label: 'Холбоо барих',
+      eyebrow: 'Хүсэлт',
+      title: 'Юу хэрэгтэй байгааг хэлээрэй',
+    },
+    email: 'hello@aniragency.mn',
+    address: [
+      'Улаанбаатар, Монгол Улс',
+      'Анир ХХК · 2026 онд байгуулагдсан',
+      'aniragency.mn',
+    ],
     form: {
-      groups: [],
+      groups: [
+        {
+          name: 'service',
+          legend: 'Юу вэ',
+          options: [
+            { value: 'web', label: 'Вэб сайт' },
+            { value: 'app', label: 'Аппликейшн' },
+            { value: 'poster', label: 'Постер' },
+            { value: 'photo', label: 'Зураг авалт' },
+          ],
+        },
+        {
+          name: 'budget',
+          legend: 'Төсөв',
+          options: [
+            { value: 'under-1m', label: '1 саяас доош' },
+            { value: '1-3m', label: '1–3 сая' },
+            { value: '3-5m', label: '3–5 сая' },
+            { value: 'over-5m', label: '5 саяас дээш' },
+          ],
+        },
+        {
+          name: 'timing',
+          legend: 'Хугацаа',
+          options: [
+            { value: 'this-month', label: 'Энэ сард' },
+            { value: 'this-quarter', label: 'Энэ улиралд' },
+            { value: 'exploring', label: 'Судалж байна' },
+          ],
+        },
+      ],
       fields: {
-        name: { name: 'name', label: '', placeholder: '' },
-        contact: { name: 'contact', label: '', placeholder: '' },
-        message: { name: 'message', label: '', placeholder: '' },
+        name: {
+          name: 'name',
+          label: 'Нэр',
+          placeholder: 'Таны нэр',
+        },
+        contact: {
+          name: 'contact',
+          label: 'И-мэйл эсвэл утас',
+          placeholder: 'hello@example.com эсвэл 99112233',
+        },
+        message: {
+          name: 'message',
+          label: 'Товч тайлбар',
+          placeholder: 'Юу хийлгэхийг хүсэж байна вэ?',
+        },
       },
-      submit: '',
+      submit: 'Илгээх',
+      sending: 'Илгээж байна…',
       messages: {
-        success: '',
-        error: '',
-        invalid: '',
+        success:
+          'Баярлалаа — хүсэлт хүлээн авлаа. Нэг ажлын өдрийн дотор хариу бичнэ.',
+        error:
+          'Уучлаарай, илгээхэд алдаа гарлаа. Дахин оролдоно уу, эсвэл hello@aniragency.mn руу шууд бичээрэй.',
+        invalid: 'Талбаруудаа шалгана уу — нэр, холбоо барих мэдээлэл, сонголтууд шаардлагатай.',
+        tooMany: 'Хэт олон хүсэлт илгээлээ. Хэсэг хүлээгээд дахин оролдоно уу.',
+      },
+      honeypot: {
+        name: 'website',
+        label: 'Энэ талбарыг хоосон орхино уу',
+        placeholder: '',
       },
     },
   },

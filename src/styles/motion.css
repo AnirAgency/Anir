@@ -1,0 +1,30 @@
+/*
+  Reveal states.
+
+  The hidden state is gated behind .motion, which a tiny inline script in the
+  head adds only when JS is running AND prefers-reduced-motion is not set. That
+  ordering matters: if the hiding lived in plain CSS, a visitor with JS off — or
+  one who asked for no motion — would get a page of invisible content. Here they
+  get a fully static page instead, which is the honest fallback.
+
+  The ease and the distance come from CLAUDE.md's motion spec, not from taste.
+*/
+
+.motion [data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.motion [data-reveal].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* The rail's section name crossfades rather than snapping between labels. */
+.rail__label {
+  transition: opacity 0.25s ease;
+}

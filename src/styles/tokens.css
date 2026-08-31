@@ -101,7 +101,15 @@
 .t-display-xl {
   font-weight: 600;
   font-size: var(--size-display-xl);
-  line-height: 0.96;
+  /*
+    Figma says 96%. It is 1.02 here, and only here, because at 96% the breve on
+    Й overlaps the line above it — "Юу хэрэгтэй байгааг хэлээрэй" wraps to three
+    lines on a phone and two of them start with Й. 1.02 is the smallest value
+    that clears the diacritic; anything tighter is a rendering bug in the one
+    language this site is written in. The other display styles keep their Figma
+    line-heights: none of them wraps onto a Й.
+  */
+  line-height: 1.02;
   letter-spacing: 0.005em;
 }
 

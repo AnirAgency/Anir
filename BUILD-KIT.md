@@ -118,37 +118,37 @@ Report back: a screenshot of /styleguide at 1440 and at 390, and `npm run budget
 
 ---
 
-## Phase 03 — Hero and marquee
+   ## Phase 03 — Hero and marquee
 
-```
-Read CLAUDE.md first. The Figma file page `01 · Desktop` is the reference.
+   ```
+   Read CLAUDE.md first. The Figma file page `01 · Desktop` is the reference.
 
-Build the hero and the marquee strip.
+   Build the hero and the marquee strip.
 
-Hero (dark, min-height 100svh, contents vertically centred):
-- The ANIR AGENCY logo as inline SVG, fill currentColor set to --orange, max-width
-  min(78vw, 660px). Use public/media/logo.svg — if it isn't there yet, use a
-  placeholder and tell me.
-- Serif tagline, centred, two lines: "Улаанбаатараас —" then the second line in italic.
-- Mono lede paragraph, centred, max 60ch, uppercase, --dim.
-- Three product cards in a hairline Grid: Ezmath, Ethos, Olymo. Each has an eyebrow,
-  an Oswald name, a one-line Mongolian tagline, and a "Үзэх +" row. Hover fills the
-  card with --plate and turns the text --orange.
-- A slot for the hero video loop behind the logo: <video> with poster, muted,
-  playsinline, loop, preload="none". If public/media/hero.webm is absent, render
-  the poster-less plate placeholder instead and do not break the build.
+   Hero (dark, min-height 100svh, contents vertically centred):
+   - The ANIR AGENCY logo as inline SVG, fill currentColor set to --orange, max-width
+   min(78vw, 660px). Use public/media/logo.svg — if it isn't there yet, use a
+   placeholder and tell me.
+   - Serif tagline, centred, two lines: "Улаанбаатараас —" then the second line in italic.
+   - Mono lede paragraph, centred, max 60ch, uppercase, --dim.
+   - Three product cards in a hairline Grid: Ezmath, Ethos, Olymo. Each has an eyebrow,
+   an Oswald name, a one-line Mongolian tagline, and a "Үзэх +" row. Hover fills the
+   card with --plate and turns the text --orange.
+   - A slot for the hero video loop behind the logo: <video> with poster, muted,
+   playsinline, loop, preload="none". If public/media/hero.webm is absent, render
+   the poster-less plate placeholder instead and do not break the build.
 
-Marquee (dark, thin): "ЖИЖИГ БАГ — БҮТЭН АНХААРАЛ —" repeating, Oswald 500, 45%
-opacity, the em-dashes in --orange. CSS animation, duplicated track for a seamless
-loop, paused under reduced-motion.
+   Marquee (dark, thin): "ЖИЖИГ БАГ — БҮТЭН АНХААРАЛ —" repeating, Oswald 500, 45%
+   opacity, the em-dashes in --orange. CSS animation, duplicated track for a seamless
+   loop, paused under reduced-motion.
 
-All copy comes from src/content/site.ts. Nothing hardcoded in the component.
+   All copy comes from src/content/site.ts. Nothing hardcoded in the component.
 
-Report back: screenshots at 1440 and 390, `npm run budget`, and confirmation the
-page still renders with JS disabled.
-```
+   Report back: screenshots at 1440 and 390, `npm run budget`, and confirmation the
+   page still renders with JS disabled.
+   ```
 
----
+   ---
 
 ## Phase 04 — Disciplines and pricing
 

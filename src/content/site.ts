@@ -42,7 +42,7 @@ export interface Link {
 export interface SectionIntro {
   /** Short name — the rail marker and the section's accessible name. */
   label: string;
-  /** The pill above the heading. */
+  /** The pill above the heading. Leave empty ('') to omit the pill. */
   eyebrow: string;
   /** The visible heading. */
   title: string;
@@ -311,9 +311,7 @@ export const site: Site = {
     wordmark: 'ANIR',
     links: [
       { label: 'Үйлчилгээ', href: '#services' },
-      { label: 'Үнэ', href: '#pricing' },
       { label: 'Ажил', href: '#work' },
-      { label: 'Баг', href: '#team' },
       { label: 'Холбоо +', href: '#contact', accent: true },
     ],
   },
@@ -357,12 +355,12 @@ export const site: Site = {
     ],
   },
   marquee: {
-    text: 'Жижиг баг — Бүтэн анхаарал —',
+    text: 'Warning!!! — Anir agency —',
   },
   disciplines: {
     intro: {
       label: 'Үйлчилгээ',
-      eyebrow: 'Дөрвөн чиглэл',
+      eyebrow: '',
       title: 'Бидний хийдэг зүйл',
     },
     items: [

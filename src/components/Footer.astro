@@ -1,0 +1,47 @@
+---
+import { site } from '../content/site';
+
+// Same inline mark as the hero, so it takes its colour from currentColor.
+import logo from '../../public/media/logo.svg?raw';
+
+/*
+  The closing band: the wordmark set edge to edge and cut off by the bottom of
+  the page, so it reads as bigger than the screen rather than as a badge.
+
+  Decorative — the name is already the page's h1 — so the mark is hidden from
+  assistive tech and the landmark carries the name instead.
+*/
+---
+
+<footer class="footer" aria-label={site.hero.logoAlt}>
+  <div class="footer__mark" aria-hidden="true">
+    <Fragment set:html={logo} />
+  </div>
+</footer>
+
+<style>
+  .footer {
+    --bg: var(--ink);
+    --fg: var(--paper);
+    --line: var(--line-dark);
+
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    border-top: var(--hairline) solid var(--line);
+    /* Tall enough for the top ~72% of the mark; the rest falls off the page. */
+    padding-top: clamp(3rem, 1.5rem + 6vw, 7rem);
+    padding-inline: clamp(0.75rem, 0.25rem + 1.5vw, 1.75rem);
+  }
+
+  .footer__mark {
+    /* Bleeds below the band: the bottom of the letters is cropped. */
+    margin-bottom: -10%;
+  }
+
+  .footer__mark :global(svg) {
+    width: 100%;
+    height: auto;
+  }
+</style>

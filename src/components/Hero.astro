@@ -133,11 +133,13 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
     object-fit: cover;
   }
 
+  /* Until the loop exists, the slot is the section ground itself — no grey
+     box behind the mark. */
   .hero__plate {
     position: relative;
     width: 100%;
     height: 100%;
-    background: var(--plate);
+    background: var(--bg);
   }
 
   .hero__tagline {

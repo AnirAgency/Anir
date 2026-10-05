@@ -172,3 +172,56 @@ hr {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+  Old-TV screen over every section: fine scanlines, film grain and a soft
+  vignette, drawn once as a fixed layer above the page and below the header
+  (z-index 40). CSS only — no image request, works with JS off, and the grain
+  only moves when motion is allowed.
+
+  The grain is an inline SVG turbulence tile (~0.4 kB). Colours are derived
+  from --ink, so no new hex values enter the palette.
+*/
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  z-index: 35;
+}
+
+/* Scanlines + vignette. */
+body::before {
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, color-mix(in srgb, var(--ink) 45%, transparent) 100%),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2px,
+      color-mix(in srgb, var(--ink) 14%, transparent) 2px,
+      color-mix(in srgb, var(--ink) 14%, transparent) 3px
+    );
+}
+
+/* Grain. Oversized so it can jitter without showing an edge. */
+body::after {
+  inset: -50%;
+  opacity: 0.09;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.2 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body::after {
+    animation: tv-grain 0.8s steps(1) infinite;
+  }
+
+  @keyframes tv-grain {
+    0% { transform: translate(0, 0); }
+    20% { transform: translate(-3%, 2%); }
+    40% { transform: translate(2%, -3%); }
+    60% { transform: translate(-2%, -1%); }
+    80% { transform: translate(3%, 3%); }
+  }
+}

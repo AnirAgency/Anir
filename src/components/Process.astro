@@ -9,14 +9,16 @@ import { site } from '../content/site';
 
   Unlike the disciplines, this IS a sequence, so the numerals are real
   information rather than decoration — and CLAUDE.md's orange rule lists step
-  numbers among the things orange is allowed to mark. The section is --ink, so
-  orange clears AA here anyway.
+  numbers among the things orange is allowed to mark. The section is now --paper:
+  orange there is 3.21:1, which fails for small text but passes AA's 3:1 bar
+  for large text, and Display/L (32–56px) is large text. Keep the numerals at
+  Display/L or bigger, or move them to --muted.
 */
 
 const { intro, items } = site.process;
 ---
 
-<Section tone="dark" id="process" label={intro.label} heading={false}>
+<Section tone="light" id="process" label={intro.label} heading={false}>
   <SectionHead intro={intro} id="process-title" />
 
   <Grid cols={3}>

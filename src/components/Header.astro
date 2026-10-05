@@ -132,7 +132,13 @@ const cta = site.nav.links.find((link) => link.accent);
     visibility: hidden;
   }
 
+  /*
+    The CTA has no bar around it, so the bar's 0.625rem block padding becomes
+    an offset instead: same 44px box, same vertical centre as the links.
+  */
   .header__cta {
+    top: 0.625rem;
+    padding-block: 0;
     right: var(--inset-right);
     z-index: 41;
     display: inline-flex;

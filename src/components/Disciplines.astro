@@ -114,17 +114,27 @@ function splitTitle(title: string, word: string) {
     font-style: italic;
   }
 
+  /* Tags run as a vertical list, each led by a short rule echoing the code's. */
   .chips {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
+    flex-direction: column;
+    gap: 0.25rem;
     margin: 0;
   }
 
   .chip {
-    padding: 0.2rem 0.55rem;
-    border: var(--hairline) solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     color: var(--muted);
+  }
+
+  .chip::before {
+    content: '';
+    flex: none;
+    width: 0.75rem;
+    height: var(--hairline);
+    background: currentColor;
   }
 
   .block__right {

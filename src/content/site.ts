@@ -434,6 +434,11 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    Retained deliberately — NOT dead code, do not delete. Not rendered: the
+    Pricing section was taken off the page in October 2026. Pricing.astro still
+    reads this, so the section can return by adding it back to index.astro.
+  */
   pricing: {
     intro: {
       label: 'Үнэ',
@@ -579,6 +584,11 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    Retained deliberately — NOT dead code, do not delete. Not rendered: the
+    Team section was taken off the page in October 2026. Team.astro still reads
+    this, so the section can return by adding it back to index.astro.
+  */
   team: {
     intro: {
       label: 'Баг',

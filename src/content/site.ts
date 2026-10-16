@@ -355,7 +355,7 @@ export const site: Site = {
     ],
   },
   marquee: {
-    text: 'Warning!!! — Anir agency —',
+    text: 'Жижиг баг — Бүтэн анхаарал —',
   },
   disciplines: {
     intro: {

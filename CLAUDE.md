@@ -86,10 +86,11 @@ Three rules follow:
 1. **`--muted` is tone-split.** One grey cannot serve both grounds — a grey dark
    enough for `--paper` fails on `--ink`. Section sets `#767C85` on dark and
    `#656B75` on light.
-2. **On light sections, orange is a mark, not a text colour.** 3.21:1 clears the
-   3:1 bar for non-text graphical objects but not the 4.5:1 bar for small text.
-   Service codes and other small labels on `--paper` take `--muted`; the orange
-   returns as a 2px rule or dot beside them. Orange text on `--ink` is fine.
+2. On light sections, orange fails the 4.5:1 small-text bar (3.21:1) but
+   passes the 3:1 large-text bar. It may be used as text only at >=24px
+   regular or >=18.66px bold — the Гурван үе шат step numbers at 56px
+   qualify. Below that it is a mark, not a text colour: use --muted and
+   return the orange as a 2px rule or dot.
 3. **Text on an orange fill is `--ink`, never white.** White on orange fails.
 
 The Figma `Anir / Colour` collection must carry the same split, or the design

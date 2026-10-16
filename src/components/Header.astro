@@ -119,7 +119,6 @@ const cta = site.nav.links.find((link) => link.accent);
     align-items: center;
     justify-content: center;
     min-height: 44px;
-    /* "Үнэ" is only 21px of text — under even the 24px AA target minimum. */
     min-width: 44px;
     pointer-events: auto;
     transition: color 0.3s ease;
@@ -189,12 +188,6 @@ const cta = site.nav.links.find((link) => link.accent);
       right: var(--inset-mobile);
     }
 
-    /*
-      Wordmark, the first two nav links, and the CTA. Four links plus a CTA will
-      not fit beside the wordmark at 375 — measured, not guessed — and the two
-      that survive are the two a prospect wants first: what we do, and what it
-      costs. No hamburger: one tap to reach a section beats two.
-    */
     .header__nav,
     .header__list {
       gap: 0.5rem;

@@ -292,8 +292,8 @@ export const site: Site = {
   meta: {
     title: 'Anir — Улаанбаатарын бүтээлч студи',
     description:
-      'Вэб сайт, аппликейшн, постер, зураг авалт хийдэг дөрвөн хүний баг. ' +
-      'Ил тод үнэ, хурдан ачаалагддаг ажил.',
+      'Вэб сайт, аппликейшн, постер, зураг авалт хийдэг Улаанбаатарын дөрвөн хүний бүтээлч студи. ' +
+      'Таны уулзсан хүн ажлыг чинь өөрөө хийнэ.',
     ogImage: '/og.png',
     locality: 'Улаанбаатар',
     country: 'Монгол Улс',
@@ -355,7 +355,7 @@ export const site: Site = {
     ],
   },
   marquee: {
-    text: 'Warning!!! — Anir agency —',
+    text: 'Жижиг баг — Бүтэн анхаарал —',
   },
   disciplines: {
     intro: {
@@ -434,6 +434,11 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    Retained deliberately — NOT dead code, do not delete. Not rendered: the
+    Pricing section was taken off the page in October 2026. Pricing.astro still
+    reads this, so the section can return by adding it back to index.astro.
+  */
   pricing: {
     intro: {
       label: 'Үнэ',
@@ -579,6 +584,11 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    Retained deliberately — NOT dead code, do not delete. Not rendered: the
+    Team section was taken off the page in October 2026. Team.astro still reads
+    this, so the section can return by adding it back to index.astro.
+  */
   team: {
     intro: {
       label: 'Баг',

@@ -11,8 +11,11 @@ import { site } from '../content/site';
   The catch: difference would also eat the --orange CTA. Orange over --ink stays
   orange, but orange over --paper comes out cyan (#11BDF3), which breaks the
   orange rule exactly where it matters — the one link that converts. So the bar
-  is two fixed layers: the blended one carries the wordmark and the four plain
-  links, and the CTA is a separate unblended fixed element in true --orange.
+  is two fixed layers: the blended one carries the wordmark and the two plain
+  links, and the CTA — the third nav link — is a separate unblended fixed
+  element in true --orange —
+  over dark sections. Over light ones orange is 3.21:1, which fails AA at the
+  CTA's 10px, so a script below tells it the tone and it takes --muted there.
   A hidden ghost of the CTA's label holds its width open in the blended bar so
   the two layers line up without either knowing the other's measurements.
 
@@ -48,7 +51,7 @@ const cta = site.nav.links.find((link) => link.accent);
 
   {
     cta && (
-      <a class="header__cta t-mono-label" href={cta.href}>
+      <a class="header__cta t-mono-label" href={cta.href} data-header-cta>
         {cta.label}
       </a>
     )
@@ -117,7 +120,6 @@ const cta = site.nav.links.find((link) => link.accent);
     align-items: center;
     justify-content: center;
     min-height: 44px;
-    /* "Үнэ" is only 21px of text — under even the 24px AA target minimum. */
     min-width: 44px;
     pointer-events: auto;
     transition: color 0.3s ease;
@@ -153,6 +155,30 @@ const cta = site.nav.links.find((link) => link.accent);
     color: var(--paper);
   }
 
+  /*
+    Over a light section: that tone's --muted, hovering to its --fg. This is
+    Section.astro's light mapping restated, because the CTA sits outside every
+    section and cannot inherit it.
+  */
+  .header__cta[data-tone='light'] {
+    --muted: var(--dim-2);
+    color: var(--muted);
+  }
+
+  .header__cta[data-tone='light']:hover {
+    color: var(--ink);
+  }
+
+  /*
+    Without JS nothing can tell the CTA which ground it is over, and no single
+    colour clears 4.5:1 on both --ink and --paper. So it falls back to the
+    blended bar's own treatment — --paper under difference — which reads on both.
+  */
+  :global(html:not(.js)) .header__cta {
+    color: var(--paper);
+    mix-blend-mode: difference;
+  }
+
   @media (max-width: 860px) {
     .header__blend {
       padding-left: var(--inset-mobile);
@@ -163,17 +189,16 @@ const cta = site.nav.links.find((link) => link.accent);
       right: var(--inset-mobile);
     }
 
-    /*
-      Wordmark, the first two nav links, and the CTA. Four links plus a CTA will
-      not fit beside the wordmark at 375 — measured, not guessed — and the two
-      that survive are the two a prospect wants first: what we do, and what it
-      costs. No hamburger: one tap to reach a section beats two.
-    */
     .header__nav,
     .header__list {
       gap: 0.5rem;
     }
 
+    /*
+      Two plain links fit beside the wordmark and the CTA at 375: the first two
+      in site.ts, Үйлчилгээ and Ажил. Any further link is dropped here rather
+      than wrapping the bar.
+    */
     .header__list li:nth-child(n + 3) {
       display: none;
     }
@@ -189,3 +214,43 @@ const cta = site.nav.links.find((link) => link.accent);
     }
   }
 </style>
+
+<script>
+  /*
+    Tells the CTA which tone it is over. The blended layer gets this for free
+    from mix-blend-mode; the CTA is unblended so it can stay true orange, which
+    means it has to be told. The ground is whichever section spans the CTA's
+    vertical centre. Anything that is not a light section — the footer
+    included — is dark.
+
+    Same pattern as the rail: the scroll handler only raises a flag, and the
+    reads happen once per frame.
+  */
+  const cta = document.querySelector<HTMLElement>('[data-header-cta]');
+  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
+
+  if (cta) {
+    let queued = false;
+
+    const render = () => {
+      queued = false;
+      const box = cta.getBoundingClientRect();
+      const line = box.top + box.height / 2;
+      const ground = sections.find((section) => {
+        const rect = section.getBoundingClientRect();
+        return rect.top <= line && rect.bottom > line;
+      });
+      cta.dataset.tone = ground?.dataset.tone === 'light' ? 'light' : 'dark';
+    };
+
+    const request = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(render);
+    };
+
+    render();
+    window.addEventListener('scroll', request, { passive: true });
+    window.addEventListener('resize', request, { passive: true });
+  }
+</script>

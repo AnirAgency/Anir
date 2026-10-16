@@ -102,12 +102,11 @@
   font-weight: 600;
   font-size: var(--size-display-xl);
   /*
-    Figma says 96%. It is 1.02 here, and only here, because at 96% the breve on
-    Й overlaps the line above it — "Юу хэрэгтэй байгааг хэлээрэй" wraps to three
-    lines on a phone and two of them start with Й. 1.02 is the smallest value
-    that clears the diacritic; anything tighter is a rendering bug in the one
-    language this site is written in. The other display styles keep their Figma
-    line-heights: none of them wraps onto a Й.
+    Figma says 96%. It is 1.02 here because at 96% the breve on Й overlaps the
+    line above it — "Юу хэрэгтэй байгааг хэлээрэй" wraps to three lines on a
+    phone and two of them start with Й. 1.02 is the smallest value that clears
+    the diacritic; anything tighter is a rendering bug in the one language this
+    site is written in. Display/L and Display/M share the same floor.
   */
   line-height: 1.02;
   letter-spacing: 0.005em;
@@ -116,13 +115,13 @@
 .t-display-l {
   font-weight: 600;
   font-size: var(--size-display-l);
-  line-height: 0.98;
+  line-height: 1.02; /* Figma 98% — raised to the Й floor, see Display/XL */
 }
 
 .t-display-m {
   font-weight: 600;
   font-size: var(--size-display-m);
-  line-height: 1;
+  line-height: 1.02; /* Figma 100% — raised to the Й floor, see Display/XL */
 }
 
 .t-display-s {

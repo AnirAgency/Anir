@@ -98,10 +98,12 @@ const jsonLd = {
     {/*
       Runs before the body paints, so [data-reveal] is hidden before it can
       flash. Inline and tiny on purpose: as an external file it would race the
-      first paint. Adds nothing when the visitor asked for reduced motion, which
-      is what keeps that page completely static.
+      first paint. `js` says only that scripts run — the header CTA keys its
+      no-JS fallback off it. `motion` is added only when the visitor has not
+      asked for reduced motion, which is what keeps that page completely static.
     */}
     <script is:inline>
+      document.documentElement.classList.add('js');
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion');
       }

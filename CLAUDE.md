@@ -74,8 +74,8 @@ these are the real numbers.
 
 | Pair | Ratio | Verdict |
 |---|---|---|
-| `--dim` on `--ink` | 4.8 : 1 | passes AA |
-| `--dim` on `--paper` | 3.64 : 1 | **fails** |
+| `--dim` on `--ink` | 4.74 : 1 | passes AA |
+| `--dim` on `--paper` | 3.68 : 1 | **fails** |
 | `--orange` on `--ink` | 5.43 : 1 | passes AA |
 | `--orange` on `--paper` | 3.21 : 1 | **fails** for text |
 | `--ink` on `--orange` | 5.43 : 1 | passes AA |
@@ -127,12 +127,15 @@ because broad minority-language coverage is the reason we chose that face.
 Fonts are the single largest fixed cost on this site. Any change to the font
 files must be followed by `npm run budget`, and the number reported.
 
-Scale (matches the Figma text styles exactly — do not invent sizes):
+Scale (sizes match the Figma text styles exactly — do not invent sizes).
+Display/XL, L and M are set at 102% leading, not Figma's 96 / 98 / 100%: below
+1.02 the breve on Й collides with the line above. The Figma text styles must
+carry the same values, or the design file and the build disagree.
 
 ```
-Display/XL     Oswald 600   92px / 96%  / +0.5% / uppercase
-Display/L      Oswald 600   56px / 98%  / uppercase
-Display/M      Oswald 600   34px / 100% / uppercase
+Display/XL     Oswald 600   92px / 102% / +0.5% / uppercase
+Display/L      Oswald 600   56px / 102% / uppercase
+Display/M      Oswald 600   34px / 102% / uppercase
 Display/S      Oswald 500   22px / 110% / +8%  / uppercase
 Serif/Display  PT Serif 400 44px / 120%
 Serif/Italic   PT Serif 400i 21px / 135%
@@ -157,7 +160,10 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 - **Astro** — static output. Chosen because it ships zero JS by default, which
   solves the bandwidth constraint at the architecture level instead of forcing
   us to optimise our way out later.
-- **GSAP + ScrollTrigger** — scroll reveals. Import only what is used.
+- **No animation library** — scroll reveals are IntersectionObserver plus a CSS
+  transition, ~1 kB (`src/scripts/motion.ts`), against ~115 kB for GSAP +
+  ScrollTrigger. Do not reintroduce GSAP without a real timeline need —
+  scrubbing, pinning, sequenced timelines — and none of those is on this site.
 - **Lenis** — smooth scroll. Must no-op under reduced-motion.
 - **Cloudflare Pages** — hosting. **Pages Functions** for the one contact endpoint.
 - **Supabase** — stores contact submissions. Anir already runs Supabase for

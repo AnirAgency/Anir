@@ -46,6 +46,7 @@ const showHeading = heading && Boolean(label);
   id={id}
   class:list={['section', `section--${tone}`, `section--${layout}`, { 'section--seam': seam }, className]}
   data-section
+  data-tone={tone}
   data-label={label}
   aria-labelledby={showHeading ? `${id}-label` : undefined}
   aria-label={!showHeading && label ? label : undefined}

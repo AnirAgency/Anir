@@ -11,8 +11,9 @@ import { site } from '../content/site';
   The catch: difference would also eat the --orange CTA. Orange over --ink stays
   orange, but orange over --paper comes out cyan (#11BDF3), which breaks the
   orange rule exactly where it matters — the one link that converts. So the bar
-  is two fixed layers: the blended one carries the wordmark and the four plain
-  links, and the CTA is a separate unblended fixed element in true --orange —
+  is two fixed layers: the blended one carries the wordmark and the two plain
+  links, and the CTA — the third nav link — is a separate unblended fixed
+  element in true --orange —
   over dark sections. Over light ones orange is 3.21:1, which fails AA at the
   CTA's 10px, so a script below tells it the tone and it takes --muted there.
   A hidden ghost of the CTA's label holds its width open in the blended bar so
@@ -193,6 +194,11 @@ const cta = site.nav.links.find((link) => link.accent);
       gap: 0.5rem;
     }
 
+    /*
+      Two plain links fit beside the wordmark and the CTA at 375: the first two
+      in site.ts, Үйлчилгээ and Ажил. Any further link is dropped here rather
+      than wrapping the bar.
+    */
     .header__list li:nth-child(n + 3) {
       display: none;
     }

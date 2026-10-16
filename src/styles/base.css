@@ -152,7 +152,7 @@ hr {
 
 /*
   Reduced motion is a hard constraint, not a courtesy: everything stops. Lenis
-  and GSAP get switched off in JS separately (Phase 07) — this block is the
+  and the reveals get switched off in JS separately (motion.ts) — this block is the
   backstop that catches anything CSS-driven, including a marquee someone adds
   later without thinking about it.
 */

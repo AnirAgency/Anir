@@ -9,8 +9,8 @@
  *   - a plain browser form POST with JS disabled, which gets an HTML page back
  *
  * Talks to Supabase over its REST endpoint with fetch rather than the JS SDK:
- * the worker stays a few kB and the project keeps its "gsap and lenis, nothing
- * else" dependency list.
+ * the worker stays a few kB and the project keeps its "lenis, nothing else"
+ * runtime dependency list.
  */
 
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type

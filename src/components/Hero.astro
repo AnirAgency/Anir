@@ -2,7 +2,7 @@
 import Grid from './Grid.astro';
 import Section from './Section.astro';
 import { site } from '../content/site';
-import { resolveVideo } from '../lib/media';
+import { resolveMark, resolveVideo } from '../lib/media';
 
 // Inlined, not <img>, because the mark takes its colour from currentColor —
 // an external file cannot inherit --orange.
@@ -17,51 +17,66 @@ const { hero, chrome } = site;
   site.ts, so a missing file shows up here instead of as a 404 in Ulaanbaatar.
 */
 const heroVideo = hero.video ? resolveVideo(hero.video) : null;
+
+/*
+  The 3D N. What renders here is the still — the centre frame — as a plain
+  background, so it paints with no JavaScript, and phones, crawlers and
+  reduced-motion visitors never get anything else. The box is reserved by
+  aspect-ratio, taken from the sheet's own cell size, so nothing shifts later.
+*/
+const mark = hero.mark ? resolveMark(hero.mark.name) : null;
+const markStyle = mark
+  ? `background-image: url(${mark.still}); --mark-ratio: ${mark.grid.cell[0]} / ${mark.grid.cell[1]};`
+  : undefined;
 ---
 
 <Section tone="dark" id="hero" label={chrome.heroLabel} layout="hero" heading={false} seam>
   <div class="hero">
-    <div class="hero__stage">
-      <div class="hero__media" aria-hidden="true">
-        {
-          heroVideo?.present && hero.video ? (
-            <video
-              class="hero__video"
-              poster={heroVideo.fallback ?? undefined}
-              width={hero.video.width}
-              height={hero.video.height}
-              aria-label={hero.video.alt}
-              muted
-              playsinline
-              loop
-              autoplay
-              preload="none"
-            >
-              {heroVideo.sources.map((source) => (
-                <source src={source.src} type={source.type} />
-              ))}
-            </video>
-          ) : (
-            /* No label: it would sit on the wordmark at narrow widths, and a
-               placeholder string must never ship. The build report says which
-               asset is missing. */
-            <div class="hero__plate" />
-          )
-        }
+    <div class="hero__top">
+      <div class="hero__stage">
+        <div class="hero__media" aria-hidden="true">
+          {
+            heroVideo?.present && hero.video ? (
+              <video
+                class="hero__video"
+                poster={heroVideo.fallback ?? undefined}
+                width={hero.video.width}
+                height={hero.video.height}
+                aria-label={hero.video.alt}
+                muted
+                playsinline
+                loop
+                autoplay
+                preload="none"
+              >
+                {heroVideo.sources.map((source) => (
+                  <source src={source.src} type={source.type} />
+                ))}
+              </video>
+            ) : (
+              /* No label: it would sit on the wordmark at narrow widths, and a
+                 placeholder string must never ship. The build report says which
+                 asset is missing. */
+              <div class="hero__plate" />
+            )
+          }
+        </div>
+
+        <h1 class="hero__logo">
+          <span class="visually-hidden">{hero.logoAlt}</span>
+          <Fragment set:html={logo} />
+        </h1>
       </div>
 
-      <h1 class="hero__logo">
-        <span class="visually-hidden">{hero.logoAlt}</span>
-        <Fragment set:html={logo} />
-      </h1>
+      {mark && hero.mark && <div class="hero__mark" role="img" aria-label={hero.mark.label} style={markStyle} />}
+
+      <p class="hero__tagline t-serif-display">
+        {hero.tagline.line}
+        <em class="hero__tagline-italic">{hero.tagline.lineItalic}</em>
+      </p>
+
+      <p class="hero__lede t-mono-body">{hero.lede}</p>
     </div>
-
-    <p class="hero__tagline t-serif-display">
-      {hero.tagline.line}
-      <em class="hero__tagline-italic">{hero.tagline.lineItalic}</em>
-    </p>
-
-    <p class="hero__lede t-mono-body">{hero.lede}</p>
 
     <div class="hero__products">
       <Grid cols={3}>
@@ -89,14 +104,48 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   /*
+    Two columns: the wordmark, tagline and lede on the left, the 3D N on the
+    right; the product cards run full width below. One rule sets the layout:
+    the bottom of the N sits level with the bottom of the AGENCY line. Both
+    are in the first row and the row aligns to its end. The N is taller than
+    the wordmark, so its top rises above it — that lift is what keeps it from
+    reading as a bullet beside the type, and it falls out of the alignment.
+
+    The N never scales past 300px: the sheet's cells are 300px native, and
+    soft glass edges are exactly what gives a pre-rendered mark away.
+  */
+  .hero__top {
+    --mark-w: clamp(190px, 20vw, 300px);
+
+    display: grid;
+    grid-template-columns: minmax(0, 660px) minmax(var(--mark-w), 1fr);
+    align-items: end;
+    column-gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+    row-gap: clamp(1.75rem, 1rem + 3vw, 3rem);
+    width: 100%;
+  }
+
+  /*
     Holds the logo and the footage behind it in one stacking box. The stage is
     sized to the wordmark, not to the section, so the media's bleed is measured
     against the mark — sized to the section it overran the page by 56px.
   */
   .hero__stage {
+    grid-column: 1;
+    grid-row: 1;
     position: relative;
-    width: min(78vw, 660px);
-    max-width: 100%;
+  }
+
+  .hero__mark {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    width: var(--mark-w);
+    aspect-ratio: var(--mark-ratio);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    /* The centre cell, in both the still and the sheet. */
+    background-position: 50% 50%;
   }
 
   .hero__logo {
@@ -143,7 +192,7 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   .hero__tagline {
-    text-align: center;
+    grid-column: 1;
     text-wrap: balance;
   }
 
@@ -153,8 +202,8 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   .hero__lede {
+    grid-column: 1;
     max-width: 60ch;
-    text-align: center;
     color: var(--muted);
   }
 
@@ -204,7 +253,27 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
     color: var(--orange);
   }
 
+  /*
+    One column, centred, with the N above the wordmark. At this width it is
+    always the still — the sheet is never requested below 860px.
+  */
   @media (max-width: 860px) {
+    .hero__top {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+      text-align: center;
+    }
+
+    .hero__mark {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .hero__stage {
+      grid-row: 2;
+      width: min(78vw, 660px);
+    }
+
     .card {
       padding: 1.125rem;
     }

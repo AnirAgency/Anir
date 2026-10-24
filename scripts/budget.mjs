@@ -3,6 +3,10 @@
  * pulls — including fonts, which are only reachable through the CSS — and
  * exits non-zero if the page breaks the CLAUDE.md ceilings.
  *
+ * Two budgets, checked separately (CLAUDE.md > Budget): the first load, which
+ * everyone pays, and the lazy budget — at most one asset requested after first
+ * paint on capable desktops. Breaking either one fails the run.
+ *
  * Budgets are decimal bytes, because the constraint they encode is bandwidth
  * (17 Mbps mobile) and link speed is measured decimally.
  *
@@ -19,6 +23,8 @@ const entry = join(dist, 'index.html');
 
 const TOTAL_MAX = 1_000_000; // 1 MB first load
 const JS_MAX = 200_000; //     200 kB JS
+const LAZY_MAX = 500_000; //   500 kB after first paint, desktop only
+const LAZY_MAX_COUNT = 1; //   CLAUDE.md allows one lazy asset
 
 const TYPES = {
   '.html': 'html',
@@ -97,17 +103,24 @@ function refsInCss(css) {
   return found;
 }
 
+/** Bodies of inline <script>s that run as code — not external, not JSON data. */
+function scriptBodies(html) {
+  const bodies = [];
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    const [, attrs, body] = match;
+    if (/\bsrc\s*=/i.test(attrs)) continue;
+    if (/\btype\s*=\s*["']?(application\/(ld\+)?json|importmap)/i.test(attrs)) continue;
+    bodies.push(body);
+  }
+  return bodies;
+}
+
 /** Inline <script> and <style> bodies. Already inside the HTML byte count, but
  *  the JS ceiling has to see them or inlining would hide a breach. */
 function inlineBytes(html) {
   let js = 0;
   let css = 0;
-  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    const [, attrs, body] = match;
-    if (/\bsrc\s*=/i.test(attrs)) continue;
-    if (/\btype\s*=\s*["']?(application\/(ld\+)?json|importmap)/i.test(attrs)) continue;
-    js += Buffer.byteLength(body, 'utf8');
-  }
+  for (const body of scriptBodies(html)) js += Buffer.byteLength(body, 'utf8');
   for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
     css += Buffer.byteLength(match[1], 'utf8');
   }
@@ -138,6 +151,51 @@ while (queue.length) {
 }
 
 const inline = inlineBytes(readFileSync(entry, 'utf8'));
+
+// ---------------------------------------------------------------------- lazy
+
+/*
+  The lazy budget. A page declares its post-paint asset on the element that
+  uses it, as data-lazy="/media/…" — deliberately not data-lazy-src, which the
+  first-load scan above would match as a src and count twice.
+
+  Shipped JS is also swept for media paths written as string literals. That is
+  the backstop: a script that requests a file directly is caught here even
+  though nothing declared it, so no asset can slip past both budgets.
+*/
+const LAZY_EXT = /\.(avif|webp|png|jpe?g|gif|svg|webm|mp4|json)$/i;
+const pageHtml = readFileSync(entry, 'utf8');
+
+const declaredLazy = [...pageHtml.matchAll(/\bdata-lazy\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)].map((m) => clean(m[1]));
+
+const scriptSources = [
+  ...[...seen.keys()].filter((file) => typeOf(file) === 'js').map((file) => readFileSync(file, 'utf8')),
+  ...scriptBodies(pageHtml),
+];
+const literalLazy = new Set();
+for (const source of scriptSources) {
+  for (const match of source.matchAll(/["'`](\/[^"'`\s]+)["'`]/g)) {
+    const ref = clean(match[1]);
+    if (LAZY_EXT.test(ref)) literalLazy.add(ref);
+  }
+}
+
+const lazy = new Map(); // absolute path -> declared?
+const lazyProblems = [];
+
+for (const ref of declaredLazy) {
+  const target = resolveRef(ref, entry);
+  if (!target) lazyProblems.push(`data-lazy="${ref}" does not resolve to a file in dist/.`);
+  else if (seen.has(target)) lazyProblems.push(`${ref} is declared lazy but is also loaded on first paint.`);
+  else lazy.set(target, true);
+}
+
+for (const ref of literalLazy) {
+  const target = resolveRef(ref, entry);
+  if (!target || seen.has(target) || lazy.has(target)) continue;
+  lazy.set(target, false);
+  lazyProblems.push(`${ref} is requested from JS without a data-lazy declaration.`);
+}
 
 // -------------------------------------------------------------------- report
 
@@ -267,17 +325,40 @@ console.log(
 console.log(`\n  heaviest: ${sectionRows[0]?.id ?? '—'} at ${kb(sectionRows[0]?.total ?? 0).trim()}`);
 console.log(`  page markup inside sections: ${kb(sectionMarkup).trim()}`);
 
+const lazyFiles = [...lazy.entries()].map(([file, declared]) => ({
+  path: relative(dist, file).split(sep).join(posix.sep),
+  bytes: statSync(file).size,
+  brotli: brotliCompressSync(readFileSync(file), { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }).length,
+  declared,
+}));
+const lazyTotal = lazyFiles.reduce((sum, f) => sum + f.bytes, 0);
+
+console.log('\n  LAZY - requested after first paint, capable desktops only; not part of the first load\n');
+if (lazyFiles.length === 0) console.log('  none');
+for (const file of lazyFiles) {
+  console.log(`  ${file.path.padEnd(width)}  ${kb(file.bytes)}  ${kb(file.brotli)}  ${file.declared ? 'data-lazy' : 'UNDECLARED'}`);
+}
+
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;
+const overLazy = lazyTotal > LAZY_MAX;
+const tooManyLazy = lazyFiles.length > LAZY_MAX_COUNT;
 
 console.log('\n  BUDGET\n');
 console.log(`  total   ${kb(total)} of ${kb(TOTAL_MAX)}   ${pct(total, TOTAL_MAX).padStart(6)}  ${overTotal ? 'OVER' : 'ok'}`);
 console.log(`  js      ${kb(jsTotal)} of ${kb(JS_MAX)}   ${pct(jsTotal, JS_MAX).padStart(6)}  ${overJs ? 'OVER' : 'ok'}`);
+console.log(
+  `  lazy    ${kb(lazyTotal)} of ${kb(LAZY_MAX)}   ${pct(lazyTotal, LAZY_MAX).padStart(6)}  ${overLazy ? 'OVER' : 'ok'}` +
+    `   ${lazyFiles.length} of ${LAZY_MAX_COUNT} asset${tooManyLazy ? '  OVER' : ''}`
+);
 console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the budget is enforced on raw bytes)\n`);
 
-if (overTotal || overJs) {
+if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0) {
   if (overTotal) console.error(`  FAIL  total is ${kb(total - TOTAL_MAX).trim()} over the 1 MB first-load budget.`);
   if (overJs) console.error(`  FAIL  JS is ${kb(jsTotal - JS_MAX).trim()} over the 200 kB budget.`);
+  if (overLazy) console.error(`  FAIL  lazy is ${kb(lazyTotal - LAZY_MAX).trim()} over the 500 kB lazy budget.`);
+  if (tooManyLazy) console.error(`  FAIL  ${lazyFiles.length} lazy assets; CLAUDE.md allows ${LAZY_MAX_COUNT}.`);
+  for (const problem of lazyProblems) console.error(`  FAIL  ${problem}`);
   console.error('');
   process.exit(1);
 }

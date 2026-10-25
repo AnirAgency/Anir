@@ -70,7 +70,11 @@ export interface ProductCard {
   href: string;
 }
 
-/** The pre-rendered 3D N beside the wordmark. */
+/**
+ * The pre-rendered 3D N beside the wordmark. It carries no text: the h1 beside
+ * it already names the brand, so the mark is hidden from assistive tech rather
+ * than announced twice.
+ */
 export interface HeroMark {
   /**
    * Basename under /media. The render pipeline ships three files beside it:
@@ -79,8 +83,6 @@ export interface HeroMark {
    * `${name}.json`, the sheet's grid and the angle of every row and column.
    */
   name: string;
-  /** Mongolian aria-label. The mark is the brand, so it gets a name. */
-  label: string;
 }
 
 export interface Hero {
@@ -333,7 +335,6 @@ export const site: Site = {
     logoAlt: 'Анир агентлаг',
     mark: {
       name: 'mark-3d',
-      label: 'Анирын тэмдэг',
     },
     tagline: {
       line: 'Улаанбаатараас —',

@@ -107,6 +107,25 @@ const showHeading = heading && Boolean(label);
     justify-content: center;
   }
 
+  /*
+    Two-column hero. The top padding is set by two things, measured across
+    common desktop viewports from 1024 × 768 to 2560 × 1440:
+
+    - The 3D N's glass must clear the nav labels by at least 64px, in every
+      frame of the tilt. 10rem gives 121px. The section rhythm is not enough:
+      it shrinks to ~90px of padding at 1024–1280 wide.
+    - The product-card row is cut wherever that lands — a cut row is the
+      scroll signal, not a defect — but never by a few pixels either way, a
+      sliver that reads as a mistake. At 10rem it is cut 56% at 1440 × 900 and
+      34% at 1360 × 932, and everywhere else it is clearly cut, wholly in view
+      or wholly below the fold. 9.5rem leaves 7px of it showing at 1280 × 800.
+  */
+  @media (min-width: 861px) {
+    .section--hero {
+      padding-top: 10rem;
+    }
+  }
+
   .section--strip {
     padding-block: 0;
     padding-inline: 0;

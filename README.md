@@ -22,7 +22,7 @@ npm run dev          # http://localhost:4321
 | `npm run build` | Static build into `dist/` |
 | `npm run preview` | Serves the built `dist/` locally |
 | `npm run budget` | Builds, then enforces the weight budget and the contrast table. **Exits non-zero if the page is over or a pair fails.** |
-| `npm run contrast` | Measures the CLAUDE.md contrast table, film grain included, from `tokens.css` |
+| `npm run contrast` | Measures the CLAUDE.md contrast table under the film grain, from `tokens.css` and the shipped tile |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
 

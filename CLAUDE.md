@@ -117,40 +117,48 @@ palette into a fast-food one within a week.
 ### Contrast — measured, not assumed
 
 Measured in Phase 02; re-measured in Phase 16 with the film grain in place.
-The grain lies over the whole page under the nav, so it moves text and ground
-alike. Each "with grain" figure is the **worst case**: a text pixel and the
-ground pixel beside it under opposite extremes of grain (black and white),
-whichever pairing compresses the contrast most, at the grain's 4% opacity.
-Every verdict holds anywhere in its 3.5–5% range.
+The grain — sparse white specks at 11% — lies over the whole page under the
+nav, so it moves text and ground alike. A single speck does not change how
+readable a letter is; the eye integrates over the stroke. So the grain is read
+as a local average over a stroke-sized box, 3 × 3 at body size, at every
+position of the tile, and each "with grain" figure is the **worst** pairing:
+the text under the box that moves it most against the ground under the box
+that moves it most the other way. The average box gives the same lift as dense
+noise (about 5 levels on `--ink`); the brightest box lifts `--ink` by 21, and
+that is what the table gates on.
 
 | Pair | Flat | With grain | Verdict |
 |---|---|---|---|
-| `--dim` on `--ink` | 5.43 : 1 | 4.72 : 1 | passes AA |
-| `--dim` on `--paper` | 3.48 : 1 | 2.99 : 1 | **fails** |
-| `--dim-2` on `--paper` | 5.65 : 1 | 4.71 : 1 | passes AA |
-| `--dim-2` on `--ink` | 3.34 : 1 | 2.94 : 1 | **fails** |
-| `--orange` on `--ink` | 5.43 : 1 | 4.71 : 1 | passes AA |
-| `--orange` on `--paper` | 3.48 : 1 | 3.10 : 1 | **fails** for text below large size |
-| `--ink` on `--orange` | 5.43 : 1 | 4.71 : 1 | passes AA |
-| white on `--orange` | 3.67 : 1 | 3.27 : 1 | **fails** |
+| `--dim` on `--ink` | 5.43 : 1 | 4.54 : 1 | passes AA |
+| `--dim` on `--paper` | 3.48 : 1 | 3.03 : 1 | **fails** |
+| `--dim-2` on `--paper` | 5.65 : 1 | 4.64 : 1 | passes AA |
+| `--dim-2` on `--ink` | 3.34 : 1 | 2.80 : 1 | **fails** |
+| `--orange` on `--ink` | 5.43 : 1 | 4.55 : 1 | passes AA |
+| `--orange` on `--paper` | 3.48 : 1 | 3.26 : 1 | **fails** for text below large size |
+| `--ink` on `--orange` | 5.43 : 1 | 4.55 : 1 | passes AA |
+| white on `--orange` | 3.67 : 1 | 3.44 : 1 | **fails** |
 
-With the Phase 02 values the grain pushed three pairs under their bars at 5%
-(`--dim` on `--ink` to 3.97, `#656B75` on `--paper` to 3.78, `--orange` on
-`--paper` to 2.78; `--orange` on `--ink` held at 4.52). Phase 16 moved the
-tokens, not the grain: `--paper` #EEF0F3 → #F7F9FC, `--dim` #767C85 →
-#80868F, `--dim-2` #656B75 → #5E646E. `--orange` stays: the logo fixes it.
-Under the grain the new `--paper` reads about where the old one did.
+Phase 16 moved three tokens so the table holds under the grain: `--paper`
+#EEF0F3 → #F7F9FC, `--dim` #767C85 → #80868F, `--dim-2` #656B75 → #5E646E.
+Each one is still needed: put any one back and a pair fails (`--dim` on
+`--ink` 3.96; `--dim-2` on `--paper` 4.23, or 4.29 with the old `--paper`).
+`--orange` stays: the logo fixes it.
 
-`npm run contrast` measures this table from `tokens.css` and fails if a pair
-that must pass does not. `npm run budget` runs it. If it fails after a change
-to the grain or a token, fix the token, not the grain opacity.
+The tile matters as much as the opacity. A coarser cut — 12% coverage at 17%
+— has the same average lift, but its brightest stroke-sized clusters take
+`--dim` on `--ink` to 4.19, so it does not ship without moving tokens again.
+
+`npm run contrast` measures this table from `tokens.css` and the shipped tile,
+and fails if a pair that must pass does not. `npm run budget` runs it. If it
+fails after a change to the grain or a token, fix the token or the tile, not
+the opacity alone.
 
 Three rules follow:
 
 1. **`--muted` is tone-split.** One grey cannot serve both grounds — a grey dark
    enough for `--paper` fails on `--ink`. Section sets `--dim` on dark and
    `--dim-2` on light.
-2. On light sections, orange fails the 4.5:1 small-text bar (3.10:1 with the
+2. On light sections, orange fails the 4.5:1 small-text bar (3.26:1 with the
    grain) but passes the 3:1 large-text bar. It may be used as text only at >=24px
    regular or >=18.66px bold — the enquiry email at Display/M (26–34px)
    qualifies. Below that it is a mark, not a text colour: use --muted and

@@ -1,25 +1,31 @@
 /**
  * Contrast check for the CLAUDE.md table, with the film grain in place.
  *
- * The grain (base.css > body::after) is grey noise at a few percent opacity
- * over the whole page, so it moves the text and the ground alike. Each pair is
- * measured at its worst: a text pixel and a ground pixel under opposite
- * extremes of grain, black and white, whichever pairing compresses the
- * contrast most. Levels 0 and 255 bound any tile, so swapping the grain asset
- * cannot invalidate the result. It is checked at the declared opacity and at
- * 5%, the top of the range the designer may pick from.
+ * The grain (base.css > body::after) lies over the whole page, so it moves the
+ * text and the ground alike. A single 1px speck does not change how readable a
+ * letter is — the eye integrates over the stroke — so the grain is read as a
+ * local average over a stroke-sized box, 3 × 3 at body size, at every position
+ * of the actual tile (wrapping, since it tiles). Each pair is then measured at
+ * its worst: the text under the box that moves it most against the ground
+ * under the box that moves it most the other way. The mean box is printed
+ * beside it, so the gap between the average and the worst stays visible.
  *
- * Token values and the opacity are read from src/styles/tokens.css, so this
- * measures what ships. Exits non-zero if a pair that must pass does not.
+ * Token values, the tile and its opacity are read from what ships —
+ * src/styles/tokens.css and src/assets/grain.webp. Exits non-zero if a pair
+ * that must pass does not.
  *
  *   npm run contrast
  */
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const css = readFileSync(join(root, 'src', 'styles', 'tokens.css'), 'utf8');
+
+/** Stroke width at body size, in tile pixels. */
+const BOX = 3;
 
 const token = (name) => {
   const match = new RegExp(`--${name}:\\s*([^;]+);`).exec(css);
@@ -42,13 +48,67 @@ const ratio = (a, b) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-/** A colour under one grain pixel of grey level g, composited in sRGB. */
-const grained = (colour, g, opacity) => colour.map((c) => c * (1 - opacity) + g * opacity);
-const EXTREMES = [0, 255];
-const worst = (text, ground, opacity) =>
-  Math.min(
-    ...EXTREMES.flatMap((a) => EXTREMES.map((b) => ratio(grained(text, a, opacity), grained(ground, b, opacity))))
-  );
+// sharp ships with Astro; it decodes the tile exactly as the browser sees it.
+let sharp;
+try {
+  sharp = createRequire(join(root, 'package.json'))('sharp');
+} catch {
+  console.error('  sharp is not installed (it comes with astro). Run npm install.');
+  process.exit(1);
+}
+
+const tilePath = join(root, 'src', 'assets', 'grain.webp');
+const opacity = Number(token('grain-opacity'));
+const { data, info } = await sharp(tilePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+const { width, height } = info;
+
+/*
+  One box W composites a colour c, per channel, to c × (1 − A) + B, where A is
+  the box's mean coverage (alpha × opacity) and B its mean added light
+  (grey × alpha × opacity). Collect every distinct (A, B) over the tile.
+*/
+const at = (x, y, offset) => data[(((y + height) % height) * width + ((x + width) % width)) * 4 + offset];
+const boxes = new Map();
+let sumA = 0;
+let sumB = 0;
+for (let y = 0; y < height; y++) {
+  for (let x = 0; x < width; x++) {
+    let a = 0;
+    let b = 0;
+    for (let dy = 0; dy < BOX; dy++) {
+      for (let dx = 0; dx < BOX; dx++) {
+        const cover = (at(x + dx, y + dy, 3) / 255) * opacity;
+        a += cover;
+        b += at(x + dx, y + dy, 0) * cover;
+      }
+    }
+    a /= BOX * BOX;
+    b /= BOX * BOX;
+    sumA += a;
+    sumB += b;
+    boxes.set(`${a.toFixed(6)},${b.toFixed(6)}`, [a, b]);
+  }
+}
+const windows = [...boxes.values()];
+const meanBox = [sumA / (width * height), sumB / (width * height)];
+const under = (colour, [a, b]) => colour.map((c) => c * (1 - a) + b);
+
+/** The extremes of a colour's luminance across every box: its darkest and lightest. */
+const span = (colour) => {
+  let lo = colour;
+  let hi = colour;
+  for (const w of windows) {
+    const c = under(colour, w);
+    if (luminance(c) < luminance(lo)) lo = c;
+    if (luminance(c) > luminance(hi)) hi = c;
+  }
+  return [lo, hi];
+};
+const worst = (text, ground) => {
+  const [tLo, tHi] = span(text);
+  const [gLo, gHi] = span(ground);
+  return Math.min(ratio(tLo, gHi), ratio(tHi, gLo), ratio(tLo, gLo), ratio(tHi, gHi));
+};
 
 const colours = {
   '--ink': rgb(token('ink')),
@@ -58,8 +118,6 @@ const colours = {
   '--orange': rgb(token('orange')),
   white: [255, 255, 255],
 };
-const opacity = Number(token('grain-opacity'));
-const RANGE_TOP = 0.05;
 
 /*
   [text, ground, bar, must pass]. The failing pairs are listed because the
@@ -78,27 +136,31 @@ const pairs = [
   ['--ink', '--paper', 4.5, true],
 ];
 
-console.log(`\n  CONTRAST - worst grain pixels at ${opacity * 100}% (declared) and ${RANGE_TOP * 100}% (range top)\n`);
-console.log(`  ${'pair'.padEnd(22)} ${'flat'.padStart(6)} ${'grain'.padStart(6)} ${'at 5%'.padStart(6)}   bar`);
+const lift = (w) => under(colours['--ink'], w)[0] - colours['--ink'][0];
+const lifts = windows.map(lift);
+console.log(
+  `\n  CONTRAST - grain read as ${BOX} × ${BOX} stroke boxes over the ${width}px tile at ${opacity * 100}%` +
+    `\n  lift on --ink: mean ${lift(meanBox).toFixed(1)}, brightest box ${Math.max(...lifts).toFixed(1)}\n`
+);
+console.log(`  ${'pair'.padEnd(22)} ${'flat'.padStart(6)} ${'mean'.padStart(6)} ${'worst'.padStart(6)}   bar`);
 
 const failures = [];
 for (const [text, ground, bar, mustPass] of pairs) {
   const t = colours[text];
   const g = colours[ground];
   const flat = ratio(t, g);
-  const now = worst(t, g, opacity);
-  const top = worst(t, g, Math.max(opacity, RANGE_TOP));
-  const low = Math.min(now, top);
+  const mean = ratio(under(t, meanBox), under(g, meanBox));
+  const low = worst(t, g);
   const verdict = low >= bar ? 'pass' : mustPass ? 'FAIL' : 'fails (documented, unused)';
   console.log(
-    `  ${`${text} on ${ground}`.padEnd(22)} ${flat.toFixed(2).padStart(6)} ${now.toFixed(2).padStart(6)} ${top.toFixed(2).padStart(6)}   ${bar}  ${verdict}`
+    `  ${`${text} on ${ground}`.padEnd(22)} ${flat.toFixed(2).padStart(6)} ${mean.toFixed(2).padStart(6)} ${low.toFixed(2).padStart(6)}   ${bar}  ${verdict}`
   );
   if (mustPass && low < bar) failures.push(`${text} on ${ground} is ${low.toFixed(2)}:1 against a ${bar}:1 bar.`);
 }
 
 if (failures.length) {
   console.error('');
-  for (const failure of failures) console.error(`  FAIL  ${failure} Fix the token, not the grain opacity.`);
+  for (const failure of failures) console.error(`  FAIL  ${failure} Fix the token or the tile, not the opacity alone.`);
   console.error('');
   process.exit(1);
 }

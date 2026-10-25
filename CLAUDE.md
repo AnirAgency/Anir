@@ -32,7 +32,7 @@ These are not preferences. Breaking one is a bug.
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Pages.** Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
 | Output | **Static.** No SSR, no server runtime except the one contact-form function. |
-| 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 35 pre-rendered frames in one image; the tilt is a `background-position` lookup. |
+| 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
 | Node | **Pin to 22** via `.nvmrc`. Cloudflare Pages' V3 build image ships Node 22 by default; building locally on a different major than CI is a needless risk on a static site. |
 | Motion | Must fully disable under `prefers-reduced-motion: reduce`. |
@@ -197,7 +197,9 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
   hairline colour. Corner ticks on section boundaries.
-- Nothing has a border radius except the small eyebrow pills (100px).
+- No `border-radius` on UI surfaces: buttons, inputs, cards, media frames,
+  the enquiry form. Geometric marks that are circular by nature are not UI
+  surfaces. The eyebrow pills (100px) are the one rounded UI element.
 
 ---
 
@@ -216,7 +218,7 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   Ethos and Ezmath, so this is not a new dependency.
 
 No React. No Tailwind. No UI library. Plain `.astro` components and CSS custom
-properties — the site is nine sections, a framework earns nothing here.
+properties — the site is one static page, a framework earns nothing here.
 
 ---
 

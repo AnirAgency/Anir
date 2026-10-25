@@ -127,12 +127,10 @@ const markStyle = mark
   }
 
   /*
-    Two columns: the wordmark, tagline and lede on the left, the 3D N on the
-    right; the product cards run full width below. One rule sets the layout:
-    the bottom of the N sits level with the bottom of the AGENCY line. Both
-    are in the first row and the row aligns to its end. The N is taller than
-    the wordmark, so its top rises above it — that lift is what keeps it from
-    reading as a bullet beside the type, and it falls out of the alignment.
+    One column, centred, with the N above the wordmark. Two columns from
+    861px — see the media query below. At one column the N is always the
+    still: the script's gate uses the identical query, so the sheet is never
+    requested for a collapsed mark.
 
     The N never goes past 280 CSS px. The cells are 600px native, so even on a
     2× screen 280px is 560 device px and nothing is upscaled — soft glass edges
@@ -142,11 +140,11 @@ const markStyle = mark
     --mark-w: clamp(180px, 20.5vw, 280px);
 
     display: grid;
-    grid-template-columns: minmax(0, 660px) minmax(var(--mark-w), 1fr);
-    align-items: end;
-    column-gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
     row-gap: clamp(1.75rem, 1rem + 3vw, 3rem);
     width: 100%;
+    text-align: center;
   }
 
   /*
@@ -155,15 +153,13 @@ const markStyle = mark
     against the mark — sized to the section it overran the page by 56px.
   */
   .hero__stage {
-    grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
     position: relative;
+    width: min(78vw, 660px);
   }
 
   .hero__mark {
-    grid-column: 2;
     grid-row: 1;
-    justify-self: center;
     position: relative;
     width: var(--mark-w);
     aspect-ratio: var(--mark-ratio);
@@ -250,7 +246,6 @@ const markStyle = mark
   }
 
   .hero__tagline {
-    grid-column: 1;
     text-wrap: balance;
   }
 
@@ -260,9 +255,46 @@ const markStyle = mark
   }
 
   .hero__lede {
-    grid-column: 1;
     max-width: 60ch;
     color: var(--muted);
+  }
+
+  /*
+    Two columns: the wordmark, tagline and lede on the left, the 3D N on the
+    right; the product cards run full width below. One rule sets the layout:
+    the bottom of the N sits level with the bottom of the AGENCY line. Both
+    are in the first row and the row aligns to its end. The N is taller than
+    the wordmark, so its top rises above it — that lift is what keeps it from
+    reading as a bullet beside the type, and it falls out of the alignment.
+
+    This query string is also the script's gate, character for character —
+    change one, change both.
+  */
+  @media (min-width: 861px) {
+    .hero__top {
+      grid-template-columns: minmax(0, 660px) minmax(var(--mark-w), 1fr);
+      align-items: end;
+      justify-items: stretch;
+      column-gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+      text-align: start;
+    }
+
+    .hero__stage {
+      grid-column: 1;
+      grid-row: 1;
+      width: auto;
+    }
+
+    .hero__mark {
+      grid-column: 2;
+      grid-row: 1;
+      justify-self: center;
+    }
+
+    .hero__tagline,
+    .hero__lede {
+      grid-column: 1;
+    }
   }
 
   .hero__products {
@@ -311,27 +343,7 @@ const markStyle = mark
     color: var(--orange);
   }
 
-  /*
-    One column, centred, with the N above the wordmark. At this width it is
-    always the still — the sheet is never requested below 860px.
-  */
   @media (max-width: 860px) {
-    .hero__top {
-      grid-template-columns: minmax(0, 1fr);
-      justify-items: center;
-      text-align: center;
-    }
-
-    .hero__mark {
-      grid-column: 1;
-      grid-row: 1;
-    }
-
-    .hero__stage {
-      grid-row: 2;
-      width: min(78vw, 660px);
-    }
-
     .card {
       padding: 1.125rem;
     }
@@ -359,9 +371,11 @@ const markStyle = mark
   const mark = document.querySelector<HTMLElement>('[data-mark]');
   const sheet = mark?.dataset.lazy;
 
+  // The width query is the CSS two-column query, character for character, so
+  // the sheet is only ever requested for the side-by-side layout.
   const capable = () =>
     matchMedia('(pointer: fine)').matches &&
-    window.innerWidth >= 860 &&
+    matchMedia('(min-width: 861px)').matches &&
     !matchMedia('(prefers-reduced-motion: reduce)').matches &&
     !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData &&
     (navigator.hardwareConcurrency || 8) > 4;

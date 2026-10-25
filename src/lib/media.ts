@@ -7,7 +7,7 @@
  * has not happened, every list comes back empty and the component renders its
  * placeholder instead of a broken <source>.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { Media } from '../content/site';
@@ -38,8 +38,9 @@ export interface ResolvedMedia {
   present: boolean;
 }
 
-const onDisk = (publicPath: string) =>
-  existsSync(fileURLToPath(new URL(`../../public${publicPath}`, import.meta.url)));
+const publicFile = (publicPath: string) => fileURLToPath(new URL(`../../public${publicPath}`, import.meta.url));
+
+const onDisk = (publicPath: string) => existsSync(publicFile(publicPath));
 
 function resolve(media: Media, variants: readonly { ext: string; type: string }[]): ResolvedMedia {
   if (!media.name) return { sources: [], fallback: null, present: false };
@@ -66,4 +67,39 @@ export const resolveVideo = (media: Media) => resolve(media, VIDEO_VARIANTS);
 export function resolveImage(media: Media): ResolvedMedia {
   const resolved = resolve(media, IMAGE_VARIANTS);
   return { ...resolved, present: resolved.fallback !== null };
+}
+
+/** The sprite sheet's layout, as the render pipeline writes it to `${name}.json`. */
+export interface MarkGrid {
+  cols: number;
+  rows: number;
+  /** One frame, [width, height] in px. */
+  cell: [number, number];
+  /** Column angles, left to right. */
+  yawDeg: number[];
+  /** Row angles, top to bottom. Not evenly spaced — denser near the centre. */
+  pitchDeg: number[];
+}
+
+export interface ResolvedMark {
+  /** The centre frame: what paints first, and all that phones ever get. */
+  still: string;
+  /** The sprite sheet, or null if it hasn't been exported — the mark is then still-only. */
+  sheet: string | null;
+  grid: MarkGrid;
+}
+
+/**
+ * The hero mark. Null unless the still and the grid file both exist: without
+ * the still there is nothing to paint, and without the grid the angles would
+ * have to be retyped into code, which is how they drift from the render.
+ */
+export function resolveMark(name: string): ResolvedMark | null {
+  const still = `/media/${name}-still.webp`;
+  const sheet = `/media/${name}.avif`;
+  const gridFile = `/media/${name}.json`;
+  if (!onDisk(still) || !onDisk(gridFile)) return null;
+
+  const grid = JSON.parse(readFileSync(publicFile(gridFile), 'utf8')) as MarkGrid;
+  return { still, sheet: onDisk(sheet) ? sheet : null, grid };
 }

@@ -29,16 +29,29 @@ These are not preferences. Breaking one is a bug.
 | Constraint | Value |
 |---|---|
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
-| First load | **Under 1 MB.** JS under 200 KB. |
+| First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset allowed on top. |
 | Hosting | **Cloudflare Pages.** Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
 | Output | **Static.** No SSR, no server runtime except the one contact-form function. |
-| 3D / WebGL | **None.** The reference site (Longbow) has zero canvas elements; its depth comes from video. So does ours. |
+| 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 35 pre-rendered frames in one image; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
 | Node | **Pin to 22** via `.nvmrc`. Cloudflare Pages' V3 build image ships Node 22 by default; building locally on a different major than CI is a needless risk on a static site. |
 | Motion | Must fully disable under `prefers-reduced-motion: reduce`. |
 
 Audience is on ~17 Mbps mobile and ~23 Mbps fixed connections. Assume every
 kilobyte is felt.
+
+### Budget
+
+Two budgets, checked separately:
+
+- **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
+- **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
+  *after* first paint, gated on `(pointer: fine)` and `min-width: 860px`, and
+  skipped when `navigator.connection.saveData` is true or
+  `hardwareConcurrency <= 4`. Today that asset is the hero mark's sprite sheet.
+
+`scripts/budget.mjs` checks the two budgets separately and must stay blocking.
+Do not make it advisory.
 
 ---
 

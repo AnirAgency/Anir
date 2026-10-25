@@ -70,9 +70,23 @@ export interface ProductCard {
   href: string;
 }
 
+/** The pre-rendered 3D N beside the wordmark. */
+export interface HeroMark {
+  /**
+   * Basename under /media. The render pipeline ships three files beside it:
+   * `${name}-still.webp`, the centre frame every visitor gets first;
+   * `${name}.avif`, the sprite sheet, lazy and desktop-only (CLAUDE.md > Budget);
+   * `${name}.json`, the sheet's grid and the angle of every row and column.
+   */
+  name: string;
+  /** Mongolian aria-label. The mark is the brand, so it gets a name. */
+  label: string;
+}
+
 export interface Hero {
   /** Alt text for the inline logo SVG. */
   logoAlt: string;
+  mark: HeroMark | null;
   tagline: {
     line: string;
     lineItalic: string;
@@ -317,6 +331,10 @@ export const site: Site = {
   },
   hero: {
     logoAlt: 'Анир агентлаг',
+    mark: {
+      name: 'mark-3d',
+      label: 'Анирын тэмдэг',
+    },
     tagline: {
       line: 'Улаанбаатараас —',
       lineItalic: 'бодит бүтээгдэхүүн',

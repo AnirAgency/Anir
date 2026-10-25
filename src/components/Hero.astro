@@ -2,7 +2,7 @@
 import Grid from './Grid.astro';
 import Section from './Section.astro';
 import { site } from '../content/site';
-import { resolveVideo } from '../lib/media';
+import { resolveMark, resolveVideo } from '../lib/media';
 
 // Inlined, not <img>, because the mark takes its colour from currentColor —
 // an external file cannot inherit --orange.
@@ -17,51 +17,79 @@ const { hero, chrome } = site;
   site.ts, so a missing file shows up here instead of as a 404 in Ulaanbaatar.
 */
 const heroVideo = hero.video ? resolveVideo(hero.video) : null;
+
+/*
+  The 3D N. What renders here is the still — the centre frame — as a plain
+  background, so it paints with no JavaScript, and phones, crawlers and
+  reduced-motion visitors never get anything else. The box is reserved by
+  aspect-ratio, taken from the sheet's own cell size, so nothing shifts later.
+*/
+const mark = hero.mark ? resolveMark(hero.mark.name) : null;
+const markStyle = mark
+  ? `background-image: url(${mark.still}); --mark-ratio: ${mark.grid.cell[0]} / ${mark.grid.cell[1]};`
+  : undefined;
 ---
 
 <Section tone="dark" id="hero" label={chrome.heroLabel} layout="hero" heading={false} seam>
   <div class="hero">
-    <div class="hero__stage">
-      <div class="hero__media" aria-hidden="true">
-        {
-          heroVideo?.present && hero.video ? (
-            <video
-              class="hero__video"
-              poster={heroVideo.fallback ?? undefined}
-              width={hero.video.width}
-              height={hero.video.height}
-              aria-label={hero.video.alt}
-              muted
-              playsinline
-              loop
-              autoplay
-              preload="none"
-            >
-              {heroVideo.sources.map((source) => (
-                <source src={source.src} type={source.type} />
-              ))}
-            </video>
-          ) : (
-            /* No label: it would sit on the wordmark at narrow widths, and a
-               placeholder string must never ship. The build report says which
-               asset is missing. */
-            <div class="hero__plate" />
-          )
-        }
+    <div class="hero__top">
+      <div class="hero__stage">
+        <div class="hero__media" aria-hidden="true">
+          {
+            heroVideo?.present && hero.video ? (
+              <video
+                class="hero__video"
+                poster={heroVideo.fallback ?? undefined}
+                width={hero.video.width}
+                height={hero.video.height}
+                aria-label={hero.video.alt}
+                muted
+                playsinline
+                loop
+                autoplay
+                preload="none"
+              >
+                {heroVideo.sources.map((source) => (
+                  <source src={source.src} type={source.type} />
+                ))}
+              </video>
+            ) : (
+              /* No label: it would sit on the wordmark at narrow widths, and a
+                 placeholder string must never ship. The build report says which
+                 asset is missing. */
+              <div class="hero__plate" />
+            )
+          }
+        </div>
+
+        <h1 class="hero__logo">
+          <span class="visually-hidden">{hero.logoAlt}</span>
+          <Fragment set:html={logo} />
+        </h1>
       </div>
 
-      <h1 class="hero__logo">
-        <span class="visually-hidden">{hero.logoAlt}</span>
-        <Fragment set:html={logo} />
-      </h1>
+      {
+        mark && hero.mark && (
+          <div
+            class="hero__mark"
+            role="img"
+            aria-label={hero.mark.label}
+            style={markStyle}
+            data-mark
+            data-lazy={mark.sheet ?? undefined}
+            data-yaw={JSON.stringify(mark.grid.yawDeg)}
+            data-pitch={JSON.stringify(mark.grid.pitchDeg)}
+          />
+        )
+      }
+
+      <p class="hero__tagline t-serif-display">
+        {hero.tagline.line}
+        <em class="hero__tagline-italic">{hero.tagline.lineItalic}</em>
+      </p>
+
+      <p class="hero__lede t-mono-body">{hero.lede}</p>
     </div>
-
-    <p class="hero__tagline t-serif-display">
-      {hero.tagline.line}
-      <em class="hero__tagline-italic">{hero.tagline.lineItalic}</em>
-    </p>
-
-    <p class="hero__lede t-mono-body">{hero.lede}</p>
 
     <div class="hero__products">
       <Grid cols={3}>
@@ -89,14 +117,53 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   /*
+    Two columns: the wordmark, tagline and lede on the left, the 3D N on the
+    right; the product cards run full width below. One rule sets the layout:
+    the bottom of the N sits level with the bottom of the AGENCY line. Both
+    are in the first row and the row aligns to its end. The N is taller than
+    the wordmark, so its top rises above it — that lift is what keeps it from
+    reading as a bullet beside the type, and it falls out of the alignment.
+
+    The N never scales past 300px: the sheet's cells are 300px native, and
+    soft glass edges are exactly what gives a pre-rendered mark away.
+  */
+  .hero__top {
+    --mark-w: clamp(190px, 20vw, 300px);
+
+    display: grid;
+    grid-template-columns: minmax(0, 660px) minmax(var(--mark-w), 1fr);
+    align-items: end;
+    column-gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+    row-gap: clamp(1.75rem, 1rem + 3vw, 3rem);
+    width: 100%;
+  }
+
+  /*
     Holds the logo and the footage behind it in one stacking box. The stage is
     sized to the wordmark, not to the section, so the media's bleed is measured
     against the mark — sized to the section it overran the page by 56px.
   */
   .hero__stage {
+    grid-column: 1;
+    grid-row: 1;
     position: relative;
-    width: min(78vw, 660px);
-    max-width: 100%;
+  }
+
+  .hero__mark {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    width: var(--mark-w);
+    aspect-ratio: var(--mark-ratio);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    /* The centre cell, in both the still and the sheet. */
+    background-position: 50% 50%;
+  }
+
+  /* Set by the script once the sheet has decoded and the tilt is running. */
+  .hero__mark.is-live {
+    will-change: transform;
   }
 
   .hero__logo {
@@ -143,7 +210,7 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   .hero__tagline {
-    text-align: center;
+    grid-column: 1;
     text-wrap: balance;
   }
 
@@ -153,8 +220,8 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
   }
 
   .hero__lede {
+    grid-column: 1;
     max-width: 60ch;
-    text-align: center;
     color: var(--muted);
   }
 
@@ -204,9 +271,181 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
     color: var(--orange);
   }
 
+  /*
+    One column, centred, with the N above the wordmark. At this width it is
+    always the still — the sheet is never requested below 860px.
+  */
   @media (max-width: 860px) {
+    .hero__top {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+      text-align: center;
+    }
+
+    .hero__mark {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .hero__stage {
+      grid-row: 2;
+      width: min(78vw, 660px);
+    }
+
     .card {
       padding: 1.125rem;
     }
   }
 </style>
+
+<script>
+  /*
+    The tilt. Enhancement only: the still is already painted, and none of this
+    runs unless the visitor is on a capable desktop that has not asked for
+    reduced motion (CLAUDE.md > Budget). The sheet is requested after the page
+    has loaded, so it never competes with the first load, and it replaces the
+    still only once it has decoded. If it fails — no AVIF support — the still
+    stays; there is deliberately no WebP fallback, which would break the lazy
+    budget.
+
+    Frames are picked by nearest value from the grid file's angle arrays,
+    never round(angle / step): the rows are denser near the centre. The angle
+    left over after snapping to a frame is applied as a small CSS rotation —
+    without it the lighting changes in visible steps and it reads as a
+    flipbook.
+  */
+  const mark = document.querySelector<HTMLElement>('[data-mark]');
+  const sheet = mark?.dataset.lazy;
+
+  const capable = () =>
+    matchMedia('(pointer: fine)').matches &&
+    window.innerWidth >= 860 &&
+    !matchMedia('(prefers-reduced-motion: reduce)').matches &&
+    !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData &&
+    (navigator.hardwareConcurrency || 8) > 4;
+
+  if (mark && sheet && capable()) {
+    const request = () => {
+      const image = new Image();
+      image.onload = () => start(mark, sheet);
+      image.src = sheet;
+    };
+
+    // After load AND after the browser reports first contentful paint. `load`
+    // alone is not enough — on a fast or cached load it fires before the first
+    // paint — and neither is a double rAF, which proves a frame was produced
+    // but not presented. Browsers without paint timing fall back to that.
+    const painted = () => performance.getEntriesByType('paint').some((entry) => entry.name === 'first-contentful-paint');
+
+    const afterFirstPaint = () => {
+      if (painted()) return request();
+      if (!PerformanceObserver.supportedEntryTypes?.includes('paint')) {
+        return requestAnimationFrame(() => requestAnimationFrame(request));
+      }
+      const observer = new PerformanceObserver(() => {
+        if (!painted()) return;
+        observer.disconnect();
+        request();
+      });
+      observer.observe({ type: 'paint', buffered: true });
+    };
+
+    if (document.readyState === 'complete') afterFirstPaint();
+    else window.addEventListener('load', afterFirstPaint, { once: true });
+  }
+
+  function start(mark: HTMLElement, sheet: string) {
+    const yaw: number[] = JSON.parse(mark.dataset.yaw ?? '[]');
+    const pitch: number[] = JSON.parse(mark.dataset.pitch ?? '[]');
+    const maxYaw = Math.max(...yaw.map(Math.abs));
+    const maxPitch = Math.max(...pitch.map(Math.abs));
+
+    const LERP = 0.12;
+    const IDLE_MS = 2600;
+    const SETTLED = 0.001;
+
+    let pointerX = 0;
+    let pointerY = 0;
+    let movedAt = -Infinity;
+    let x = 0; // current tilt, -1 (left / up) to 1 (right / down)
+    let y = 0;
+    let frame = 0;
+    let idleTimer = 0;
+    let position = '';
+
+    const nearest = (list: number[], value: number) => {
+      let best = 0;
+      for (let i = 1; i < list.length; i++) {
+        if (Math.abs(list[i] - value) < Math.abs(list[best] - value)) best = i;
+      }
+      return best;
+    };
+
+    const clamp = (value: number) => Math.max(-1, Math.min(1, value));
+
+    // Positive yaw turns the face to screen right; positive pitch turns it
+    // down, which is row 0 — so the cursor at the bottom of the viewport
+    // selects the top row.
+    const render = (yawDeg: number, pitchDeg: number) => {
+      const c = nearest(yaw, yawDeg);
+      const r = nearest(pitch, pitchDeg);
+      const next = `${(c / (yaw.length - 1)) * 100}% ${(r / (pitch.length - 1)) * 100}%`;
+      if (next !== position) {
+        mark.style.backgroundPosition = next;
+        position = next;
+      }
+      const ry = yawDeg - yaw[c];
+      const rx = pitchDeg - pitch[r];
+      mark.style.transform = `perspective(900px) rotateY(${ry.toFixed(2)}deg) rotateX(${(-rx).toFixed(2)}deg)`;
+    };
+
+    const tick = (now: number) => {
+      frame = 0;
+      const idle = now - movedAt >= IDLE_MS;
+      const targetX = idle ? 0 : clamp((pointerX / window.innerWidth) * 2 - 1);
+      const targetY = idle ? 0 : clamp((pointerY / window.innerHeight) * 2 - 1);
+
+      x += (targetX - x) * LERP;
+      y += (targetY - y) * LERP;
+      const settled = Math.abs(targetX - x) < SETTLED && Math.abs(targetY - y) < SETTLED;
+      if (settled) {
+        x = targetX;
+        y = targetY;
+      }
+
+      render(x * maxYaw, y * maxPitch);
+
+      // The loop stops itself once it has converged. If it stopped away from
+      // centre, one timer brings it back after the idle window.
+      if (!settled) {
+        frame = requestAnimationFrame(tick);
+      } else if (!idle) {
+        clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(wake, IDLE_MS - (now - movedAt));
+      }
+    };
+
+    const wake = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+
+    // Swap the still for the sheet in one write, already on the centre frame.
+    mark.style.backgroundImage = `url(${sheet})`;
+    mark.style.backgroundSize = `${yaw.length * 100}% ${pitch.length * 100}%`;
+    mark.classList.add('is-live');
+    render(0, 0);
+
+    // The handler only records where the pointer is and when; all the work
+    // happens in the frame loop.
+    window.addEventListener(
+      'mousemove',
+      (event) => {
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        movedAt = event.timeStamp;
+        wake();
+      },
+      { passive: true }
+    );
+  }
+</script>

@@ -79,6 +79,7 @@
   --inset-right: 56px;
   --inset-mobile: 38px; /* rail is hidden below 860px            */
   --hairline: 1px;
+  --header-h: 4rem; /* solid nav bar: 44px targets + 10px each side */
 
   /* Single breakpoint. Below it the rail goes and every grid is one column. */
   --bp-collapse: 860px;

@@ -2,26 +2,17 @@
 import { site } from '../content/site';
 
 /*
-  Fixed top bar.
+  Fixed top bar on a solid --ink ground, at every scroll position.
 
-  It reads on both tones via mix-blend-mode: difference — --paper differenced
-  against --paper is pure black, and against --ink is near-white, so the same
-  markup renders dark on light sections and light on dark ones with no JS.
+  Solid rather than see-through: content scrolling under a transparent bar
+  collides with the nav labels, and a backdrop blur would re-blur the strip on
+  every frame of scrolling — on a budget Android already running Lenis and the
+  scroll-driven animations — for a blur that is barely visible over a dark
+  page anyway. A flat fill costs nothing.
 
-  The catch: difference would also eat the --orange CTA. Orange over --ink stays
-  orange, but orange over --paper comes out cyan (#11BDF3), which breaks the
-  orange rule exactly where it matters — the one link that converts. So the bar
-  is two fixed layers: the blended one carries the wordmark and the two plain
-  links, and the CTA — the third nav link — is a separate unblended fixed
-  element in true --orange —
-  over dark sections. Over light ones orange is 3.21:1, which fails AA at the
-  CTA's 10px, so a script below tells it the tone and it takes --muted there.
-  A hidden ghost of the CTA's label holds its width open in the blended bar so
-  the two layers line up without either knowing the other's measurements.
-
-  Both layers have to be fixed siblings rather than nested: position: fixed
-  creates a stacking context, which isolates the blend group, so a blended child
-  inside a fixed parent would have nothing to blend against.
+  On --ink the CTA's --orange is 5.43:1 wherever the page is scrolled, so it no
+  longer needs to know what is underneath it: the old blended layer, the
+  width-holding ghost and the tone-tracking script are all gone.
 */
 
 const { navLabel } = site.chrome;
@@ -30,64 +21,44 @@ const cta = site.nav.links.find((link) => link.accent);
 ---
 
 <header class="header">
-  <div class="header__blend">
-    <a class="header__mark t-display-s" href="#top">{site.nav.wordmark}</a>
+  <a class="header__mark t-display-s" href="#top">{site.nav.wordmark}</a>
 
-    <nav class="header__nav" aria-label={navLabel}>
-      <ul class="header__list">
-        {
-          links.map((link) => (
-            <li>
-              <a class="header__link t-mono-label" href={link.href}>
-                {link.label}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-      {cta && <span class="header__ghost t-mono-label" aria-hidden="true">{cta.label}</span>}
-    </nav>
-  </div>
-
-  {
-    cta && (
-      <a class="header__cta t-mono-label" href={cta.href} data-header-cta>
-        {cta.label}
-      </a>
-    )
-  }
+  <nav class="header__nav" aria-label={navLabel}>
+    <ul class="header__list">
+      {
+        links.map((link) => (
+          <li>
+            <a class="header__link t-mono-label" href={link.href}>
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    {
+      cta && (
+        <a class="header__cta t-mono-label" href={cta.href}>
+          {cta.label}
+        </a>
+      )
+    }
+  </nav>
 </header>
 
 <style>
-  /*
-    Deliberately not positioned and with no z-index: .header must not become a
-    stacking context, or it would isolate the blend below it.
-  */
   .header {
-    display: contents;
-  }
-
-  .header__blend,
-  .header__cta {
     position: fixed;
-    top: 0;
+    inset: 0 0 auto 0;
     z-index: 40;
-    padding-block: 0.625rem;
-    /* The bar spans the viewport; only its links should catch the pointer. */
-    pointer-events: none;
-  }
-
-  .header__blend {
-    left: 0;
-    right: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 2rem;
+    height: var(--header-h);
     padding-left: var(--inset);
     padding-right: var(--inset-right);
+    background: var(--ink);
     color: var(--paper);
-    mix-blend-mode: difference;
   }
 
   .header__mark {
@@ -98,7 +69,6 @@ const cta = site.nav.links.find((link) => link.accent);
     min-width: 44px;
     padding-inline: 3px;
     margin-inline: -3px;
-    pointer-events: auto;
     letter-spacing: 0.14em;
   }
 
@@ -115,13 +85,13 @@ const cta = site.nav.links.find((link) => link.accent);
     margin: 0;
   }
 
-  .header__link {
+  .header__link,
+  .header__cta {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
     min-width: 44px;
-    pointer-events: auto;
     transition: color 0.3s ease;
   }
 
@@ -129,64 +99,18 @@ const cta = site.nav.links.find((link) => link.accent);
     color: var(--dim);
   }
 
-  /* Holds the CTA's width open in the blended layer. Never seen, never read. */
-  .header__ghost {
-    visibility: hidden;
-  }
-
-  /*
-    The CTA has no bar around it, so the bar's 0.625rem block padding becomes
-    an offset instead: same 44px box, same vertical centre as the links.
-  */
   .header__cta {
-    top: 0.625rem;
-    padding-block: 0;
-    right: var(--inset-right);
-    z-index: 41;
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    pointer-events: auto;
     color: var(--orange);
-    transition: color 0.3s ease;
   }
 
   .header__cta:hover {
     color: var(--paper);
   }
 
-  /*
-    Over a light section: that tone's --muted, hovering to its --fg. This is
-    Section.astro's light mapping restated, because the CTA sits outside every
-    section and cannot inherit it.
-  */
-  .header__cta[data-tone='light'] {
-    --muted: var(--dim-2);
-    color: var(--muted);
-  }
-
-  .header__cta[data-tone='light']:hover {
-    color: var(--ink);
-  }
-
-  /*
-    Without JS nothing can tell the CTA which ground it is over, and no single
-    colour clears 4.5:1 on both --ink and --paper. So it falls back to the
-    blended bar's own treatment — --paper under difference — which reads on both.
-  */
-  :global(html:not(.js)) .header__cta {
-    color: var(--paper);
-    mix-blend-mode: difference;
-  }
-
   @media (max-width: 860px) {
-    .header__blend {
+    .header {
       padding-left: var(--inset-mobile);
       padding-right: var(--inset-mobile);
-    }
-
-    .header__cta {
-      right: var(--inset-mobile);
     }
 
     .header__nav,
@@ -208,49 +132,8 @@ const cta = site.nav.links.find((link) => link.accent);
     }
 
     .header__link,
-    .header__cta,
-    .header__ghost {
+    .header__cta {
       letter-spacing: 0.1em;
     }
   }
 </style>
-
-<script>
-  /*
-    Tells the CTA which tone it is over. The blended layer gets this for free
-    from mix-blend-mode; the CTA is unblended so it can stay true orange, which
-    means it has to be told. The ground is whichever section spans the CTA's
-    vertical centre. Anything that is not a light section — the footer
-    included — is dark.
-
-    Same pattern as the rail: the scroll handler only raises a flag, and the
-    reads happen once per frame.
-  */
-  const cta = document.querySelector<HTMLElement>('[data-header-cta]');
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
-
-  if (cta) {
-    let queued = false;
-
-    const render = () => {
-      queued = false;
-      const box = cta.getBoundingClientRect();
-      const line = box.top + box.height / 2;
-      const ground = sections.find((section) => {
-        const rect = section.getBoundingClientRect();
-        return rect.top <= line && rect.bottom > line;
-      });
-      cta.dataset.tone = ground?.dataset.tone === 'light' ? 'light' : 'dark';
-    };
-
-    const request = () => {
-      if (queued) return;
-      queued = true;
-      requestAnimationFrame(render);
-    };
-
-    render();
-    window.addEventListener('scroll', request, { passive: true });
-    window.addEventListener('resize', request, { passive: true });
-  }
-</script>

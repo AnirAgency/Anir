@@ -46,7 +46,6 @@ const showHeading = heading && Boolean(label);
   id={id}
   class:list={['section', `section--${tone}`, `section--${layout}`, { 'section--seam': seam }, className]}
   data-section
-  data-tone={tone}
   data-label={label}
   aria-labelledby={showHeading ? `${id}-label` : undefined}
   aria-label={!showHeading && label ? label : undefined}
@@ -95,6 +94,8 @@ const showHeading = heading && Boolean(label);
     padding-block: var(--section-pad-y);
     padding-left: var(--inset);
     padding-right: var(--inset-right);
+    /* Anchor jumps — Lenis honours this too — land below the solid nav bar. */
+    scroll-margin-top: var(--header-h);
   }
 
   .section--dark {
@@ -127,6 +128,8 @@ const showHeading = heading && Boolean(label);
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    /* The first thing on the page must clear the solid nav bar. */
+    padding-top: max(var(--section-pad-y), calc(var(--header-h) + 1.5rem));
   }
 
   /*

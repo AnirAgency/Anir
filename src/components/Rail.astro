@@ -5,9 +5,10 @@ import { site } from '../content/site';
   The fixed 88px left rail: a "УБ" tick, a 1px track carrying an --orange
   progress fill, and the current section's name set vertically.
 
-  Same two-layer trick as the header, for the same reason — the tick, track and
-  label blend with difference so they read on both tones, and the orange fill is
-  a separate unblended fixed element so it stays orange over light sections.
+  Two layers: the tick, track and label blend with difference so they read on
+  both tones, and the orange fill is a separate unblended fixed element so it
+  stays orange over light sections. Both sit above the solid nav bar, so the
+  "УБ" tick still shows where the bar crosses the rail.
   The fill's geometry is measured from the track rather than guessed, so the two
   layers stay aligned whatever the tick and label end up sizing to.
 
@@ -32,7 +33,7 @@ const { railTick } = site.chrome;
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 30;
+    z-index: 41;
     width: var(--rail);
     height: 100svh;
     display: flex;
@@ -76,7 +77,7 @@ const { railTick } = site.chrome;
   .rail__fill {
     position: fixed;
     left: calc(var(--rail) / 2);
-    z-index: 31;
+    z-index: 42;
     width: var(--hairline);
     height: 0;
     background: var(--orange);

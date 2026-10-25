@@ -29,7 +29,7 @@ These are not preferences. Breaking one is a bug.
 | Constraint | Value |
 |---|---|
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
-| First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset allowed on top. |
+| First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Pages.** Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
 | Output | **Static.** No SSR, no server runtime except the one contact-form function. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 35 pre-rendered frames in one image; the tilt is a `background-position` lookup. |
@@ -42,7 +42,7 @@ kilobyte is felt.
 
 ### Budget
 
-Two budgets, checked separately:
+Three budgets, checked separately:
 
 - **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
 - **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
@@ -54,7 +54,29 @@ Two budgets, checked separately:
 **A lazy asset waits for first contentful paint, not for `load`. `load` fires
 before FCP on a fast build.**
 
-`scripts/budget.mjs` checks the two budgets separately and must stay blocking.
+- **Below-the-fold media: 1.6 MB total.** Every item lazy and out of the
+  critical path. Nothing over 300 kB is fetched when
+  `navigator.connection.saveData` is true. Within it:
+  - Tiles **≤ 300 kB together**. AVIF, encoded at display size, never scaled
+    down in CSS from something larger. Explicit `width`/`height` on every one.
+    Plain `<img loading="lazy" decoding="async">` — they are the work, so they
+    load on every connection, `saveData` included, with JS on or off.
+  - Video **≤ 1.2 MB**, `preload="none"`, `muted`, `playsinline`, `loop`,
+    explicit dimensions, poster **≤ 40 kB**. Its `src` is attached by script
+    only when the section is within one viewport, behind the same `saveData`
+    and `hardwareConcurrency` gates as the lazy asset; otherwise the poster
+    stands in.
+
+  An element joins this lane by declaring `data-lane="tile|poster|video"`.
+  The tiles and poster are what a `saveData` visitor pays, so the 300 kB is
+  checked against their sum.
+
+Placeholder media lives in `public/media/placeholder/` and renders only in a
+build run with `PLACEHOLDER_MEDIA=1`. Any other build strips it from `dist/`,
+and the build fails if real media in `site.ts` points inside that folder.
+Never deploy a `PLACEHOLDER_MEDIA=1` build.
+
+`scripts/budget.mjs` checks the three budgets separately and must stay blocking.
 Do not make it advisory.
 
 ---
@@ -200,7 +222,9 @@ properties — the site is nine sections, a framework earns nothing here.
 - Prices are data, not markup. They change; they live in `site.ts`.
 - Every image ships with explicit `width`/`height` to prevent layout shift.
 - Every video: `muted`, `playsinline`, `loop`, `preload="none"`, a `poster`
-  frame, and `loading="lazy"` on anything below the fold.
+  frame, and `loading="lazy"` on anything below the fold. Below the fold the
+  poster is a lazy `<img>` under the video, not the `poster` attribute —
+  browsers fetch that eagerly, whatever `preload` says.
 
 ---
 

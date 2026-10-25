@@ -75,9 +75,9 @@ export interface MarkGrid {
   rows: number;
   /** One frame, [width, height] in px. */
   cell: [number, number];
-  /** Column angles, left to right. */
+  /** Column angles, left to right, evenly spaced. */
   yawDeg: number[];
-  /** Row angles, top to bottom. Not evenly spaced — denser near the centre. */
+  /** Row angles, top to bottom. [0] for a yaw-only strip, where pitch is CSS. */
   pitchDeg: number[];
 }
 

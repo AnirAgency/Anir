@@ -165,6 +165,14 @@ const markStyle = mark
     aspect-ratio: var(--mark-ratio);
     background-repeat: no-repeat;
     background-size: 100% 100%;
+    /*
+      The blend group for the cross-fade below, stated outright. A transform
+      would also isolate it, but the transform is set by script — so without
+      this the group would depend on script timing, and would silently break
+      the day the transform moves. With it, the two frames blend only with
+      each other and the result composites over the page like any element.
+    */
+    isolation: isolate;
   }
 
   /*
@@ -182,8 +190,6 @@ const markStyle = mark
   /* Set by the script once the sheet has decoded and the tilt is running. */
   .hero__mark.is-live {
     will-change: transform;
-    /* The blend below must only see the two frames, never the page. */
-    isolation: isolate;
   }
 
   .hero__mark.is-live .hero__mark-layer {

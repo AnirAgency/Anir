@@ -439,7 +439,13 @@ const markStyle = mark
     const MAX_PITCH = 14; // degrees. No pitch frames, so this range is CSS-only.
     const YAW_PARALLAX = 0.25; // the sprite carries yaw; CSS adds a little on top
     const PITCH_FACTOR = 0.8; // CSS carries pitch on its own
-    const LERP = 0.14; // a slower ease holds each blend on screen longer
+    // The ease is a time constant, not a per-frame fraction, so it feels the
+    // same at 60 Hz and 120 Hz. 110 ms is 0.14 per frame at 60 Hz:
+    // exp(−16.67 / 110) ≈ 0.86.
+    const TAU_MS = 110;
+    // A backgrounded tab returns with a huge gap since the last frame; without
+    // a cap the mark would cover it in a single jump.
+    const MAX_FRAME_MS = 50;
     const IDLE_MS = 2600;
     const SETTLED = 0.0005; // looser, and the last fraction of a degree lands as a step
 
@@ -449,6 +455,7 @@ const markStyle = mark
     let x = 0; // current tilt, -1 (left / up) to 1 (right / down)
     let y = 0;
     let frame = 0;
+    let previousFrame = 0; // 0 while the loop is stopped
     let idleTimer = 0;
     let pair = -1;
 
@@ -482,8 +489,15 @@ const markStyle = mark
       const targetX = idle ? 0 : clamp((pointerX / window.innerWidth) * 2 - 1);
       const targetY = idle ? 0 : clamp((pointerY / window.innerHeight) * 2 - 1);
 
-      x += (targetX - x) * LERP;
-      y += (targetY - y) * LERP;
+      // The first frame after the loop restarts takes a nominal 60 Hz step:
+      // the gap since it stopped is rest, not elapsed motion, and even capped
+      // at 50 ms it would open every movement with a 2.6× step.
+      const dt = previousFrame ? Math.min(Math.max(now - previousFrame, 0), MAX_FRAME_MS) : 1000 / 60;
+      previousFrame = now;
+      const k = 1 - Math.exp(-dt / TAU_MS);
+
+      x += (targetX - x) * k;
+      y += (targetY - y) * k;
       const settled = Math.abs(targetX - x) < SETTLED && Math.abs(targetY - y) < SETTLED;
       if (settled) {
         x = targetX;
@@ -496,9 +510,12 @@ const markStyle = mark
       // centre, one timer brings it back after the idle window.
       if (!settled) {
         frame = requestAnimationFrame(tick);
-      } else if (!idle) {
-        clearTimeout(idleTimer);
-        idleTimer = window.setTimeout(wake, IDLE_MS - (now - movedAt));
+      } else {
+        previousFrame = 0;
+        if (!idle) {
+          clearTimeout(idleTimer);
+          idleTimer = window.setTimeout(wake, IDLE_MS - (now - movedAt));
+        }
       }
     };
 

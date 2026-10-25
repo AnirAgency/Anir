@@ -76,11 +76,10 @@ const markStyle = mark
       </div>
 
       {
-        mark && hero.mark && (
+        mark && (
           <div
             class="hero__mark"
-            role="img"
-            aria-label={hero.mark.label}
+            aria-hidden="true"
             style={markStyle}
             data-mark
             data-lazy={mark.sheet ?? undefined}

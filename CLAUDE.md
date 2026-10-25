@@ -46,9 +46,13 @@ Two budgets, checked separately:
 
 - **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
 - **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
-  *after* first paint, gated on `(pointer: fine)` and `min-width: 860px`, and
+  *after* first paint, gated on `(pointer: fine)` and `(min-width: 861px)` —
+  the same query, character for character, as the layout it serves — and
   skipped when `navigator.connection.saveData` is true or
   `hardwareConcurrency <= 4`. Today that asset is the hero mark's sprite sheet.
+
+**A lazy asset waits for first contentful paint, not for `load`. `load` fires
+before FCP on a fast build.**
 
 `scripts/budget.mjs` checks the two budgets separately and must stay blocking.
 Do not make it advisory.

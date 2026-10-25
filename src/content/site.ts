@@ -183,15 +183,17 @@ export interface Projects {
 /* ----------------------------------------------------------------- process */
 
 export interface ProcessStep {
-  /** A real sequence, unlike the disciplines — so numbering is legitimate,
-   *  and CLAUDE.md's orange rule lists step numbers as a permitted use. */
-  number: string;
+  /** Who does this step: the client, or the studio. Steps alternate sides. */
+  side: 'client' | 'studio';
   title: string;
   description: string;
 }
 
 export interface Process {
   intro: SectionIntro;
+  /** The two column heads: what the client gives, what the studio does. */
+  sides: { client: string; studio: string };
+  /** In order. The sequence is the content, so the step number is derived. */
   items: ProcessStep[];
 }
 
@@ -573,33 +575,65 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    New Mongolian, from the Phase 14 brief — Bat-Enkh to proofread before it
+    ships. The heading reuses the old three-step section's proofread eyebrow.
+  */
   process: {
     intro: {
-      label: 'Гурван үе шат',
-      eyebrow: 'Хэрхэн явагддаг',
-      title: 'Гурван үе шат',
+      label: 'Процесс',
+      eyebrow: 'Процесс',
+      title: 'Хэрхэн явагддаг',
+    },
+    sides: {
+      client: 'Та',
+      studio: 'Бид',
     },
     items: [
       {
-        number: '01',
-        title: 'Хэлэлцэх',
-        description:
-          'Нэг уулзалт, дараа нь тогтсон үнэ, хугацаа бүхий бичгэн санал. ' +
-          'Хэрэв бид тохирохгүй бол яг энд хэлнэ.',
+        side: 'studio',
+        title: 'Үнэгүй зөвлөгөө',
+        description: 'Төслийн зорилго, шаардлагыг хамтдаа тодорхойлно.',
       },
       {
-        number: '02',
-        title: 'Хийх',
-        description:
-          'Эхний долоо хоногоос амьд холбоос өгнө. Төгсгөлд нь гайхшруулахыг ' +
-          'хүлээхгүй, бүтэхийг нь харж явна.',
+        side: 'client',
+        title: 'Материал өгөх',
+        description: 'Текст, зураг, лого болон бусад контентоо өгнө.',
       },
       {
-        number: '03',
-        title: 'Хүлээлгэн өгөх',
-        description:
-          'Код, эх файл, заавар бүгд тань дээр очно. Юу ч бидэнд түгжигдэхгүй, ' +
-          'хүсвэл дэмжлэг үргэлжилнэ.',
+        side: 'studio',
+        title: 'Санал ба үнэ',
+        description: 'Ажлын хүрээ, хугацаа, төсвийг дэлгэрэнгүй гаргана.',
+      },
+      {
+        side: 'client',
+        title: 'Гэрээ байгуулах',
+        description: 'Нөхцөлийг зөвшөөрч, ажлыг эхлүүлнэ.',
+      },
+      {
+        side: 'studio',
+        title: 'Загвар гаргах',
+        description: 'Өнгө, үсгийн хэв, нүүр хуудсыг зохионо.',
+      },
+      {
+        side: 'client',
+        title: 'Загварын шүүмж',
+        description: 'Загварыг хянаж, санал хүсэлтээ хэлнэ.',
+      },
+      {
+        side: 'studio',
+        title: 'Хөгжүүлэлт',
+        description: 'Сайтыг кодоор бүтээж, агуулгыг оруулна.',
+      },
+      {
+        side: 'client',
+        title: 'Эцсийн хяналт',
+        description: 'Бэлэн сайтыг шалгаж, баталгаажуулна.',
+      },
+      {
+        side: 'studio',
+        title: 'Нийтлэх ба дэмжлэг',
+        description: 'Сайтыг олны хүртээл болгож, цаашид арчилна.',
       },
     ],
   },

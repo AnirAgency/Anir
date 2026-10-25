@@ -127,8 +127,8 @@ Three rules follow:
    `#656B75` on light.
 2. On light sections, orange fails the 4.5:1 small-text bar (3.21:1) but
    passes the 3:1 large-text bar. It may be used as text only at >=24px
-   regular or >=18.66px bold — the Гурван үе шат step numbers at 56px
-   qualify. Below that it is a mark, not a text colour: use --muted and
+   regular or >=18.66px bold — the enquiry email at Display/M (26–34px)
+   qualifies. Below that it is a mark, not a text colour: use --muted and
    return the orange as a 2px rule or dot.
 3. **Text on an orange fill is `--ink`, never white.** White on orange fails.
 
@@ -186,7 +186,10 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 ### Layout
 
 - Desktop canvas 1440. Content inset: **144px left** (an 88px rail + 56px pad), 56px right.
-- Sections alternate light and dark. Never two of the same in a row.
+- Sections alternate light and dark. Never two of the same in a row — with
+  one decided exception: the showreel mosaic and the process are both dark
+  (a glowing video and low-alpha orange need dark ground), and are told apart
+  by density instead. The section after them is light.
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
   hairline colour. Corner ticks on section boundaries.

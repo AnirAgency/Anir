@@ -20,7 +20,7 @@ const { intro, email, address, form } = site.contact;
 const { fields, honeypot } = form;
 ---
 
-<Section tone="dark" id="contact" label={intro.label} heading={false}>
+<Section tone="light" id="contact" label={intro.label} heading={false}>
   <div class="contact">
     <div class="contact__left">
       <p class="contact__eyebrow t-mono-label" data-reveal>{intro.eyebrow}</p>
@@ -133,6 +133,11 @@ const { fields, honeypot } = form;
     text-wrap: balance;
   }
 
+  /*
+    Orange as text on --paper is 3.21:1 — large text only (CLAUDE.md >
+    Contrast, rule 2). The email is Display/M, 26–34px, so it qualifies; the
+    10px button label and status line do not, so there the orange is a mark.
+  */
   .contact__email {
     display: inline-flex;
     align-items: center;
@@ -289,9 +294,10 @@ const { fields, honeypot } = form;
       color 0.3s ease;
   }
 
+  /* The orange stays as the border; the label goes to --fg. */
   .submit:hover {
     background: transparent;
-    color: var(--orange);
+    color: var(--fg);
   }
 
   .submit[disabled] {
@@ -305,8 +311,15 @@ const { fields, honeypot } = form;
     min-height: 1.5rem;
   }
 
-  .status[data-state='ok'] {
-    color: var(--orange);
+  /* Sent: --muted text with an orange dot, not orange text. */
+  .status[data-state='ok']::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.6em;
+    background: var(--orange);
+    vertical-align: 0.05em;
   }
 
   @media (max-width: 860px) {

@@ -189,10 +189,11 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 ### Layout
 
 - Desktop canvas 1440. Content inset: **144px left** (an 88px rail + 56px pad), 56px right.
-- Sections alternate light and dark. Never two of the same in a row — with
-  one decided exception: the showreel mosaic and the process are both dark
-  (a glowing video and low-alpha orange need dark ground), and are told apart
-  by density instead. The section after them is light.
+- Sections alternate light and dark. Where two dark sections have to meet,
+  one is full and the other sparse, so density separates them where tone
+  cannot: the edge-to-edge showreel mosaic after the hero (a glowing video
+  needs dark ground), and the sparse process after the ruled work rows
+  (low-alpha orange needs dark ground).
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
   hairline colour. Corner ticks on section boundaries.

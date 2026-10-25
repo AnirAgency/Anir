@@ -1,246 +1,315 @@
 ---
 import Section from './Section.astro';
 import SectionHead from './SectionHead.astro';
-import { site } from '../content/site';
+import { site, type ProcessStep } from '../content/site';
 
 /*
-  The process, as two columns either side of a spine: what the client gives
-  (left) and what the studio does (right). Steps alternate sides so the eye
-  zig-zags down the spine; every step appears once.
+  The process as a swimlane: what the client does on the left, what the
+  studio does on the right, either side of one continuous chain of outlined
+  circles. The overlaps are the effect — crossing arcs read brighter and the
+  column reads as one object rather than a row of bullets. Every circle is
+  decoration; the labels carry the steps.
 
-  Each step's circle and text bloom as the step crosses the middle of the
-  viewport and shrink back as it leaves — CSS scroll-driven animation, no
-  JavaScript. The base styles are the finished state: without support, under
-  reduced motion and with JS off, every step is at full size and opacity and
-  the spine rests at its calm 18% orange.
+  Each circle brightens as it crosses the middle of the viewport — CSS
+  scroll-driven animation, scale and opacity only, no JavaScript. The base
+  styles are the finished composition, so without support, under reduced
+  motion and with JS off the chain sits at full size.
 */
 
-const { intro, sides, items } = site.process;
+const { intro, sides, events } = site.process;
 
 /*
-  Circle diameters, varied so the spine does not read as a progress bar.
-  Presentation, not content — cycled, so any number of steps works.
+  The chain's geometry. Presentation, not copy, so it lives here; but it is
+  matched to the events one for one. Fillers sit between consecutive events
+  and are load-bearing: the label spacing comes from the diameters, and
+  without them neighbouring labels nearly collide.
 */
-const DIAMETERS = [128, 80, 160, 96, 140, 72, 168, 88, 120];
+const EVENT_D = [118, 62, 150, 88, 196, 74, 128, 224, 92, 166, 58, 140, 80, 108];
+const FILLER_D = [46, 88, 40, 96, 36, 104, 44, 92, 38, 100, 42, 86, 50];
+
+if (EVENT_D.length !== events.length || FILLER_D.length !== events.length - 1) {
+  throw new Error(
+    `site.process has ${events.length} events but Process.astro has ${EVENT_D.length} event and ` +
+      `${FILLER_D.length} filler diameters. Add or remove a diameter for each event (and the filler after it).`
+  );
+}
+
+/*
+  Consecutive centres sit 0.58 of their radii apart, so neighbours overlap by
+  42%. The bloom's floor (scale 0.70 in @keyframes process-dot) must stay above
+  this or the chain breaks into separate dots at the bottom of every cycle.
+  Change one, change the other.
+*/
+const SPACING = 0.58;
+
+const sequence = EVENT_D.flatMap((d, i) =>
+  i < FILLER_D.length ? [{ d, event: i }, { d: FILLER_D[i], event: null }] : [{ d, event: i }]
+);
+
+let y = 0;
+let previous = 0;
+const circles = sequence.map(({ d, event }, i) => {
+  const r = d / 2;
+  y = i === 0 ? r : y + (previous + r) * SPACING;
+  previous = r;
+  return { d, y: Math.round(y * 10) / 10, event };
+});
+const height = Math.ceil(y + previous);
+const centres = circles.filter((circle) => circle.event !== null).map((circle) => circle.y);
+
+const rows = events.map((event, i) => {
+  const shared = 'both' in event;
+  return {
+    y: centres[i],
+    r: EVENT_D[i] / 2,
+    shared,
+    labels: [
+      { side: 'client' as const, step: shared ? event.both : event.client },
+      { side: 'studio' as const, step: shared ? event.both : event.studio },
+    ].filter((label): label is { side: 'client' | 'studio'; step: ProcessStep } => label.step !== null),
+  };
+});
+
+const both = `${sides.client} · ${sides.studio}`;
 ---
 
 <Section tone="dark" id="process" label={intro.label} heading={false}>
   <SectionHead intro={intro} id="process-title" />
 
-  <div class="process">
+  <div class="process" style={`--h: ${height}; --r-first: ${EVENT_D[0] / 2}; --r-max: ${Math.max(...EVENT_D, ...FILLER_D) / 2};`}>
     <div class="process__sides" aria-hidden="true">
       <p class="process__side process__side--client t-display-s">{sides.client}</p>
       <p class="process__side process__side--studio t-display-s">{sides.studio}</p>
     </div>
 
-    <ol class="process__steps">
-      {
-        items.map((step, i) => (
-          <li class:list={['step', `step--${step.side}`]} style={`--d: ${DIAMETERS[i % DIAMETERS.length]}px;`}>
-            <span class="step__dot" aria-hidden="true" />
-            <div class="step__text">
-              <p class="step__meta t-mono-label">
-                {String(i + 1).padStart(2, '0')} · {sides[step.side]}
-              </p>
-              <h3 class="step__title t-display-s">{step.title}</h3>
-              <p class="step__desc t-mono-spec">{step.description}</p>
-            </div>
-          </li>
-        ))
-      }
-    </ol>
+    <div class="process__body">
+      <div class="chain" aria-hidden="true">
+        {circles.map((circle) => <span class="dot" aria-hidden="true" style={`--d: ${circle.d}; --y: ${circle.y};`} />)}
+      </div>
+
+      <ol class="events">
+        {
+          rows.map((row) => (
+            <li class="event" style={`--y: ${row.y}; --r: ${row.r};`}>
+              {row.labels.map(({ side, step }) => {
+                // A shared event shows the same label on both sides. The left
+                // copy is for the eye only: assistive tech hears it once, from
+                // the right, tagged with both parties.
+                const echo = row.shared && side === 'client';
+                return (
+                  <div class:list={['lab', `lab--${side}`, { 'lab--echo': echo }]} aria-hidden={echo ? 'true' : undefined}>
+                    <span class="lab__rule" />
+                    <p class="lab__side t-mono-label">{row.shared ? both : sides[side]}</p>
+                    <h3 class="lab__title t-display-s">{step.title}</h3>
+                    <p class="lab__desc t-mono-spec">{step.description}</p>
+                  </div>
+                );
+              })}
+            </li>
+          ))
+        }
+      </ol>
+    </div>
   </div>
 </Section>
 
 <style>
   .process {
-    /* The band the spine runs down: wide enough for the largest circle. */
-    --spine-gap: 14rem;
+    /* Chain scale: every diameter, centre and offset is multiplied by it. */
+    --k: 1;
+    --spine: 50%;
+    /* A label starts this far clear of its circle's edge... */
+    --gap: 16px;
+    /* ...with a rule this long (94px from 1440 up, shorter on narrower
+       screens so the labels keep their width), then this gap to the text. */
+    --rule: clamp(40px, 9.8vw - 47px, 94px);
+    --rule-gap: 16px;
+    --lab-max: 24rem;
   }
 
   .process__sides {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--spine-gap) minmax(0, 1fr);
+    position: relative;
+    height: calc(var(--size-display-s) * 1.1);
     margin-bottom: clamp(2rem, 1rem + 3vw, 3.5rem);
     color: var(--muted);
+    /* Over the first row's text, which starts this far from the spine. */
+    --head-off: calc(var(--r-first) * var(--k) * 1px + var(--gap) + var(--rule) + var(--rule-gap));
+  }
+
+  .process__side {
+    position: absolute;
+    top: 0;
   }
 
   .process__side--client {
-    grid-column: 1;
-    text-align: right;
+    right: calc(100% - var(--spine) + var(--head-off));
   }
 
   .process__side--studio {
-    grid-column: 3;
+    left: calc(var(--spine) + var(--head-off));
   }
 
-  .process__steps {
+  /* The chain and the labels share one coordinate system: y from its top. */
+  .process__body {
     position: relative;
+    height: calc(var(--h) * var(--k) * 1px);
+  }
+
+  .chain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /*
+    Outlined, not solid: two solids just occlude, two outlines cross. --orange
+    throughout, at two alphas. Base state is the approved composition.
+  */
+  .dot {
+    position: absolute;
+    left: var(--spine);
+    top: calc(var(--y) * var(--k) * 1px);
+    width: calc(var(--d) * var(--k) * 1px);
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    border: 1.5px solid color-mix(in srgb, var(--orange) 82%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--orange) 11%, transparent);
+    scale: 1;
+    opacity: 1;
+  }
+
+  .events {
+    position: absolute;
+    inset: 0;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  /* The spine. */
-  .process__steps::before {
-    content: '';
+  /* A zero-height anchor on the circle's centre line. */
+  .event {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: var(--hairline);
-    background: var(--line);
-  }
-
-  .step {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--spine-gap) minmax(0, 1fr);
-    align-items: center;
-    min-height: 9rem;
-  }
-
-  /* The hairline tying each step to the spine. Not on the text, so it never scales. */
-  .step::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    width: calc(var(--spine-gap) / 2);
-    height: var(--hairline);
-    background: var(--line);
-  }
-
-  .step--client::after {
-    right: 50%;
-  }
-
-  .step--studio::after {
-    left: 50%;
+    top: calc(var(--y) * var(--k) * 1px);
+    left: 0;
+    right: 0;
+    height: 0;
+    /* Clear of the circle at its base size; the bloom only ever shrinks it. */
+    --off: calc(var(--r) * var(--k) * 1px + var(--gap));
   }
 
   /*
-    The circle: --orange throughout, varying only alpha. ::before is the calm
-    18% that is always there; ::after adds 45% at the bloom's peak, which
-    composites to ~55% (1 − 0.82 × 0.55). Opacity on a pseudo-element is
-    compositor work, so the bloom costs nothing per frame. Overlapping
-    neighbours stack into deeper orange.
+    The label hangs off the anchor line: rule on it, title above it, the
+    description below it. A title that wraps grows upward, away from the rule.
   */
-  .step__dot {
+  .lab {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    z-index: 1;
-    width: var(--d);
-    height: var(--d);
-    margin-top: calc(var(--d) / -2);
-    margin-left: calc(var(--d) / -2);
-    border-radius: 50%;
+    top: 0;
+    width: min(calc(var(--spine) - var(--off)), calc(var(--rule) + var(--rule-gap) + var(--lab-max)));
   }
 
-  .step__dot::before,
-  .step__dot::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: var(--orange);
-  }
-
-  .step__dot::before {
-    opacity: 0.18;
-  }
-
-  .step__dot::after {
-    opacity: 0;
-  }
-
-  .step__text {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-width: 26rem;
-    grid-row: 1;
-  }
-
-  /* Each side grows away from the spine, never across it. */
-  .step--client .step__text {
-    grid-column: 1;
-    justify-self: end;
-    align-items: flex-end;
+  .lab--client {
+    right: calc(100% - var(--spine) + var(--off));
     text-align: right;
-    transform-origin: right center;
+    transform-origin: right top;
   }
 
-  .step--studio .step__text {
-    grid-column: 3;
-    justify-self: start;
-    transform-origin: left center;
+  .lab--studio {
+    left: calc(var(--spine) + var(--off));
+    transform-origin: left top;
   }
 
-  .step__meta,
-  .step__desc {
+  .lab__rule {
+    position: absolute;
+    top: 0;
+    width: var(--rule);
+    height: var(--hairline);
+    background: color-mix(in srgb, var(--fg) 30%, transparent);
+  }
+
+  .lab--client .lab__rule {
+    right: 0;
+  }
+
+  .lab--studio .lab__rule {
+    left: 0;
+  }
+
+  .lab__title,
+  .lab__desc {
+    position: absolute;
+    margin: 0;
+  }
+
+  .lab--client :is(.lab__title, .lab__desc) {
+    left: 0;
+    right: calc(var(--rule) + var(--rule-gap));
+  }
+
+  .lab--studio :is(.lab__title, .lab__desc) {
+    left: calc(var(--rule) + var(--rule-gap));
+    right: 0;
+  }
+
+  .lab__title {
+    bottom: 0.3rem;
+  }
+
+  .lab__desc {
+    top: 0.3rem;
     color: var(--muted);
   }
 
+  /* The columns say whose step it is; the tag is for screen readers here. */
+  .lab__side {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   /*
-    The bloom. One named view timeline per step drives its circle, its glow
-    and its text together. Scale and opacity only — never font-size, which
-    would relayout every frame.
+    The bloom. Circles: scale and opacity on each circle's own view() timeline
+    — compositor properties only; animating the border and fill colours would
+    repaint 27 elements every frame. The floor is 0.70, above the 0.58
+    spacing, so the chain stays joined at the bottom of every cycle.
   */
   @supports (animation-timeline: view()) {
-    .step {
-      view-timeline: --process-step block;
-    }
-
-    .step__dot,
-    .step__dot::after,
-    .step__text {
-      animation-timeline: --process-step;
-      animation-range: entry 15% exit 85%;
+    .dot,
+    .lab {
       animation-timing-function: linear;
       animation-fill-mode: both;
       animation-duration: auto;
+      animation-timeline: view();
+      animation-range: entry 15% exit 85%;
     }
 
-    .step__dot {
-      animation-name: process-bloom-dot;
+    .dot {
+      animation-name: process-dot;
     }
 
-    .step__dot::after {
-      animation-name: process-bloom-glow;
+    .lab {
+      animation-name: process-lab;
     }
 
-    .step__text {
-      animation-name: process-bloom-text;
-    }
-
-    @keyframes process-bloom-dot {
+    @keyframes process-dot {
       0% {
-        scale: 0.45;
+        scale: 0.7;
+        opacity: 0.55;
       }
       50% {
         scale: 1;
+        opacity: 1;
       }
       100% {
-        scale: 0.45;
+        scale: 0.7;
+        opacity: 0.55;
       }
     }
 
-    @keyframes process-bloom-glow {
-      0% {
-        opacity: 0;
-      }
-      50% {
-        opacity: 0.45;
-      }
-      100% {
-        opacity: 0;
-      }
-    }
-
-    @keyframes process-bloom-text {
+    @keyframes process-lab {
       0% {
         scale: 0.88;
         opacity: 0.3;
@@ -257,60 +326,96 @@ const DIAMETERS = [128, 80, 160, 96, 140, 72, 168, 88, 120];
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .step__dot,
-    .step__dot::after,
-    .step__text {
+    .dot,
+    .lab {
       animation: none;
     }
   }
 
   /*
-    One column: the spine moves to the left edge and every step hangs off it
-    in reading order. view() does not care about the layout, so the bloom is
-    unchanged.
+    Phones. Two label columns either side of a centred spine leave about 65px
+    of text at 390, and labels hung off the chain in one column collide: the
+    five events with a label on each track need about 130px, and the chain
+    gives 40–80px. So the labels go into reading order in one column, each
+    tagged with whose step it is, and the chain becomes the left edge of the
+    section — centred on the screen's edge, half of every circle showing.
   */
   @media (max-width: 860px) {
-    .process {
-      --spine-x: 1.25rem;
-      --spine-col: 3.5rem;
+    :global(#process) {
+      overflow-x: clip;
     }
 
-    .process__sides {
+    .process {
+      --k: 1;
+      --spine: calc(-1 * var(--inset-mobile));
+    }
+
+    .process__sides,
+    .lab__rule,
+    .lab.lab--echo {
       display: none;
     }
 
-    .process__steps::before {
-      left: var(--spine-x);
+    .process__body {
+      height: auto;
+      min-height: calc(var(--h) * var(--k) * 1px);
     }
 
-    .step {
-      grid-template-columns: var(--spine-col) minmax(0, 1fr);
-      min-height: 0;
-      padding-block: 1.5rem;
+    .events {
+      position: static;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      padding-left: calc(var(--r-max) * var(--k) * 1px - var(--inset-mobile) + var(--gap));
     }
 
-    .step__dot {
-      left: var(--spine-x);
-      width: calc(var(--d) * 0.5);
-      height: calc(var(--d) * 0.5);
-      margin-top: calc(var(--d) * -0.25);
-      margin-left: calc(var(--d) * -0.25);
+    .event {
+      position: static;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      height: auto;
     }
 
-    .step--client .step__text,
-    .step--studio .step__text {
-      grid-column: 2;
-      justify-self: start;
-      align-items: flex-start;
+    /* Whose step it is sits on the title row, so the list stays about as
+       tall as the chain beside it. */
+    .lab,
+    .lab--client,
+    .lab--studio {
+      position: static;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: baseline;
+      column-gap: 1rem;
+      width: auto;
       text-align: left;
       transform-origin: left center;
     }
 
-    .step--client::after,
-    .step--studio::after {
-      left: var(--spine-x);
-      right: auto;
-      width: calc(var(--spine-col) - var(--spine-x));
+    .lab__title,
+    .lab__desc,
+    .lab--client :is(.lab__title, .lab__desc),
+    .lab--studio :is(.lab__title, .lab__desc) {
+      position: static;
+    }
+
+    .lab__side {
+      position: static;
+      grid-area: 1 / 2;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      clip-path: none;
+      color: var(--muted);
+    }
+
+    .lab__title {
+      grid-area: 1 / 1;
+    }
+
+    .lab__desc {
+      grid-area: 2 / 1 / 3 / 3;
+      margin-top: 0.35rem;
     }
   }
 </style>

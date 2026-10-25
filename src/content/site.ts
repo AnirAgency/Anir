@@ -236,18 +236,26 @@ export interface Projects {
 /* ----------------------------------------------------------------- process */
 
 export interface ProcessStep {
-  /** Who does this step: the client, or the studio. Steps alternate sides. */
-  side: 'client' | 'studio';
   title: string;
   description: string;
 }
 
+/**
+ * One point on the process, as a swimlane: what the client does and what the
+ * studio does at that moment. The tracks are not equal — either side can be
+ * null. An event both parties genuinely share is written once, as `both`, and
+ * renders as one circle with the same label on each side.
+ */
+export type ProcessEvent =
+  | { both: ProcessStep }
+  | { client: ProcessStep | null; studio: ProcessStep | null };
+
 export interface Process {
   intro: SectionIntro;
-  /** The two column heads: what the client gives, what the studio does. */
+  /** The two track heads: the client on the left, the studio on the right. */
   sides: { client: string; studio: string };
-  /** In order. The sequence is the content, so the step number is derived. */
-  items: ProcessStep[];
+  /** In order, top to bottom. Each one is a circle on the chain. */
+  events: ProcessEvent[];
 }
 
 /* -------------------------------------------------------------------- team */
@@ -663,8 +671,9 @@ export const site: Site = {
     ],
   },
   /*
-    New Mongolian, from the Phase 14 brief — Bat-Enkh to proofread before it
-    ships. The heading reuses the old three-step section's proofread eyebrow.
+    New Mongolian, from the Phase 15 brief — Anir's own words, not the
+    reference site's. Bat-Enkh to proofread before it ships. The heading reuses
+    the old three-step section's proofread eyebrow.
   */
   process: {
     intro: {
@@ -676,52 +685,36 @@ export const site: Site = {
       client: 'Та',
       studio: 'Бид',
     },
-    items: [
+    events: [
+      { both: { title: 'Зөвлөгөөний уулзалт', description: 'Төслийн зорилго, шаардлагыг хамтдаа тодорхойлно.' } },
+      { client: null, studio: { title: 'Судалгаа', description: 'Сайтад хэрэгтэй мэдээллийг цуглуулна.' } },
+      { client: null, studio: { title: 'Санал', description: 'Зардал, үйлчилгээг нарийвчлан багцална.' } },
+      { both: { title: 'Үнийн ярилцлага', description: 'Зардлын бүтэц, төлбөрийн нөхцөлийг тодруулна.' } },
       {
-        side: 'studio',
-        title: 'Үнэгүй зөвлөгөө',
-        description: 'Төслийн зорилго, шаардлагыг хамтдаа тодорхойлно.',
+        client: { title: 'Эхлэх уулзалт', description: 'Төслийг албан ёсоор эхлүүлнэ.' },
+        studio: { title: 'Стратегийн ярилцлага', description: 'Хэрэгжүүлэлтийн стратегийг тусгайлан боловсруулна.' },
       },
       {
-        side: 'client',
-        title: 'Материал өгөх',
-        description: 'Текст, зураг, лого болон бусад контентоо өгнө.',
+        client: { title: 'Контент өгөх', description: 'Текст, зураг болон бусад агуулгыг өгнө.' },
+        studio: { title: 'Загварын заавар', description: 'Өнгө, үсгийн хэв зэрэг дүрмийг тогтооно.' },
+      },
+      { client: null, studio: { title: 'Нүүр хуудсын загвар', description: 'Сайтын гол хуудсыг зохионо.' } },
+      {
+        client: { title: 'Үзэл баримтлалын шүүмж', description: 'Танилцуулсан загварт санал хүсэлтээ хэлнэ.' },
+        studio: { title: 'Бүх сайтын загвар', description: 'Заавар, саналд тулгуурлан бүрэн загварыг гаргана.' },
       },
       {
-        side: 'studio',
-        title: 'Санал ба үнэ',
-        description: 'Ажлын хүрээ, хугацаа, төсвийг дэлгэрэнгүй гаргана.',
+        client: { title: 'Бүрэн загварын шүүмж', description: 'Эцсийн хэрэгжүүлэлтийн өмнө бүх загварыг хянана.' },
+        studio: { title: 'Хөгжүүлэлт', description: 'Сайтыг Astro дээр бүтээнэ.' },
       },
       {
-        side: 'client',
-        title: 'Гэрээ байгуулах',
-        description: 'Нөхцөлийг зөвшөөрч, ажлыг эхлүүлнэ.',
+        client: { title: 'Бэлэн сайтын шүүмж', description: 'Нийтлэхийн өмнө бэлэн сайтыг хянана.' },
+        studio: { title: 'Агуулга оруулах', description: 'Бүх текст, зургийг сайтад байршуулна.' },
       },
-      {
-        side: 'studio',
-        title: 'Загвар гаргах',
-        description: 'Өнгө, үсгийн хэв, нүүр хуудсыг зохионо.',
-      },
-      {
-        side: 'client',
-        title: 'Загварын шүүмж',
-        description: 'Загварыг хянаж, санал хүсэлтээ хэлнэ.',
-      },
-      {
-        side: 'studio',
-        title: 'Хөгжүүлэлт',
-        description: 'Сайтыг кодоор бүтээж, агуулгыг оруулна.',
-      },
-      {
-        side: 'client',
-        title: 'Эцсийн хяналт',
-        description: 'Бэлэн сайтыг шалгаж, баталгаажуулна.',
-      },
-      {
-        side: 'studio',
-        title: 'Нийтлэх ба дэмжлэг',
-        description: 'Сайтыг олны хүртээл болгож, цаашид арчилна.',
-      },
+      { client: null, studio: { title: 'Тест ба тохируулга', description: 'Бүх үйлдлийг нарийн шалгана.' } },
+      { client: null, studio: { title: 'Нийтлэх', description: 'Бэлэн сайтыг олны хүртээл болгоно.' } },
+      { client: null, studio: { title: 'Сайжруулалт ба арчилгаа', description: 'Нийтэлсний дараа тогтмол арчилж, сайжруулна.' } },
+      { client: { title: 'Үр шим', description: 'Үйлчлүүлэгчээ гайхшруулна.' }, studio: null },
     ],
   },
   /*

@@ -108,15 +108,21 @@ const showHeading = heading && Boolean(label);
   }
 
   /*
-    Two-column hero: its top padding only has to clear the fixed header bar
-    (4rem). The section rhythm above that pushed the product cards half out of
-    view at 1440 × 900 — the cut-in-half state that reads as neither "there's
-    more below" nor "this is the whole hero". The space comes out of the
-    padding, never the mark.
+    Two-column hero. The top padding is set by two things, measured across
+    common desktop viewports from 1024 × 768 to 2560 × 1440:
+
+    - The 3D N's glass must clear the nav labels by at least 64px, in every
+      frame of the tilt. 10rem gives 121px. The section rhythm is not enough:
+      it shrinks to ~90px of padding at 1024–1280 wide.
+    - The product-card row is cut wherever that lands — a cut row is the
+      scroll signal, not a defect — but never by a few pixels either way, a
+      sliver that reads as a mistake. At 10rem it is cut 56% at 1440 × 900 and
+      34% at 1360 × 932, and everywhere else it is clearly cut, wholly in view
+      or wholly below the fold. 9.5rem leaves 7px of it showing at 1280 × 800.
   */
   @media (min-width: 861px) {
     .section--hero {
-      padding-top: 3.75rem;
+      padding-top: 10rem;
     }
   }
 

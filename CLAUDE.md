@@ -96,9 +96,10 @@ only colours in the project. No one-off hex values.
 ```css
 --ink:     #08090B;  /* primary background          */
 --ink-2:   #121519;  /* deep surface, hover ground  */
---paper:   #EEF0F3;  /* light background            */
+--paper:   #F7F9FC;  /* light background            */
 --paper-2: #DCE0E5;  /* plates — where imagery sits */
---dim:     #767C85;  /* secondary text              */
+--dim:     #80868F;  /* secondary text on dark      */
+--dim-2:   #5E646E;  /* secondary text on light     */
 --orange:  #FF3300;  /* active state ONLY           */
 ```
 
@@ -115,25 +116,42 @@ palette into a fast-food one within a week.
 
 ### Contrast — measured, not assumed
 
-Measured in Phase 02. An earlier draft of this file predicted these backwards;
-these are the real numbers.
+Measured in Phase 02; re-measured in Phase 16 with the film grain in place.
+The grain lies over the whole page under the nav, so it moves text and ground
+alike. Each "with grain" figure is the **worst case**: a text pixel and the
+ground pixel beside it under opposite extremes of grain (black and white),
+whichever pairing compresses the contrast most, at the grain's 4% opacity.
+Every verdict holds anywhere in its 3.5–5% range.
 
-| Pair | Ratio | Verdict |
-|---|---|---|
-| `--dim` on `--ink` | 4.74 : 1 | passes AA |
-| `--dim` on `--paper` | 3.68 : 1 | **fails** |
-| `--orange` on `--ink` | 5.43 : 1 | passes AA |
-| `--orange` on `--paper` | 3.21 : 1 | **fails** for text |
-| `--ink` on `--orange` | 5.43 : 1 | passes AA |
-| white on `--orange` | 3.67 : 1 | **fails** |
+| Pair | Flat | With grain | Verdict |
+|---|---|---|---|
+| `--dim` on `--ink` | 5.43 : 1 | 4.72 : 1 | passes AA |
+| `--dim` on `--paper` | 3.48 : 1 | 2.99 : 1 | **fails** |
+| `--dim-2` on `--paper` | 5.65 : 1 | 4.71 : 1 | passes AA |
+| `--dim-2` on `--ink` | 3.34 : 1 | 2.94 : 1 | **fails** |
+| `--orange` on `--ink` | 5.43 : 1 | 4.71 : 1 | passes AA |
+| `--orange` on `--paper` | 3.48 : 1 | 3.10 : 1 | **fails** for text below large size |
+| `--ink` on `--orange` | 5.43 : 1 | 4.71 : 1 | passes AA |
+| white on `--orange` | 3.67 : 1 | 3.27 : 1 | **fails** |
+
+With the Phase 02 values the grain pushed three pairs under their bars at 5%
+(`--dim` on `--ink` to 3.97, `#656B75` on `--paper` to 3.78, `--orange` on
+`--paper` to 2.78; `--orange` on `--ink` held at 4.52). Phase 16 moved the
+tokens, not the grain: `--paper` #EEF0F3 → #F7F9FC, `--dim` #767C85 →
+#80868F, `--dim-2` #656B75 → #5E646E. `--orange` stays: the logo fixes it.
+Under the grain the new `--paper` reads about where the old one did.
+
+`npm run contrast` measures this table from `tokens.css` and fails if a pair
+that must pass does not. `npm run budget` runs it. If it fails after a change
+to the grain or a token, fix the token, not the grain opacity.
 
 Three rules follow:
 
 1. **`--muted` is tone-split.** One grey cannot serve both grounds — a grey dark
-   enough for `--paper` fails on `--ink`. Section sets `#767C85` on dark and
-   `#656B75` on light.
-2. On light sections, orange fails the 4.5:1 small-text bar (3.21:1) but
-   passes the 3:1 large-text bar. It may be used as text only at >=24px
+   enough for `--paper` fails on `--ink`. Section sets `--dim` on dark and
+   `--dim-2` on light.
+2. On light sections, orange fails the 4.5:1 small-text bar (3.10:1 with the
+   grain) but passes the 3:1 large-text bar. It may be used as text only at >=24px
    regular or >=18.66px bold — the enquiry email at Display/M (26–34px)
    qualifies. Below that it is a mark, not a text colour: use --muted and
    return the orange as a 2px rule or dot.

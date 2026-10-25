@@ -11,19 +11,23 @@
 
   --ink: #08090b; /* primary background         */
   --ink-2: #121519; /* deep surface, hover ground */
-  --paper: #eef0f3; /* light background           */
+  --paper: #f7f9fc; /* light background           */
   --paper-2: #dce0e5; /* plates — where imagery sits */
-  --dim: #767c85; /* secondary text on dark     */
-  --dim-2: #656b75; /* secondary text on light    */
+  --dim: #80868f; /* secondary text on dark     */
+  --dim-2: #5e646e; /* secondary text on light    */
   --orange: #ff3300; /* active state ONLY          */
 
   /*
-    --dim is tone-split because one grey cannot serve both grounds, measured:
+    --dim is tone-split because one grey cannot serve both grounds, measured
+    with the film grain over text and ground, at its worst (npm run contrast):
 
-      #767C85 on --ink    4.74:1  passes AA
-      #767C85 on --paper  3.68:1  fails
-      #656B75 on --paper  4.70:1  passes AA
-      #656B75 on --ink    3.71:1  fails
+      #80868F on --ink    4.72:1  passes AA
+      #80868F on --paper  2.99:1  fails
+      #5E646E on --paper  4.71:1  passes AA
+      #5E646E on --ink    2.94:1  fails
+
+    Phase 16 moved --paper, --dim and --dim-2 a few levels so these still
+    pass under the grain; CLAUDE.md > Contrast has the detail.
 
     Each value passes on its own ground and fails on the other, so there is no
     single grey to pick. Section.astro maps --muted to the right one; never

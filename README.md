@@ -21,7 +21,8 @@ npm run dev          # http://localhost:4321
 | `npm run dev` | Dev server with HMR |
 | `npm run build` | Static build into `dist/` |
 | `npm run preview` | Serves the built `dist/` locally |
-| `npm run budget` | Builds, then enforces the weight budget. **Exits non-zero if the page is over.** |
+| `npm run budget` | Builds, then enforces the weight budget and the contrast table. **Exits non-zero if the page is over or a pair fails.** |
+| `npm run contrast` | Measures the CLAUDE.md contrast table, film grain included, from `tokens.css` |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
 
@@ -180,7 +181,8 @@ and update `src/styles/fonts.css` to match.
 Push to `main`. Cloudflare Pages builds and deploys it. That is the whole loop.
 
 Before pushing, run `npm run budget` — it builds and fails if the page is over
-1 MB or 200 kB of JS. A red build is cheaper than a slow site.
+1 MB or 200 kB of JS, or if a text colour no longer clears its contrast bar. A
+red build is cheaper than a slow site.
 
 ### First-time setup
 

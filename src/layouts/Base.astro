@@ -82,14 +82,18 @@ const jsonLd = {
     {ogImage && <meta name="twitter:image" content={ogImage} />}
 
     {/*
-      Only the faces that render above the fold: the serif tagline, the mono
-      lede, and the Oswald product names. The other three are fetched by the
-      stylesheet when the sections below need them — preloading all six would
-      put 146 kB in front of the first paint.
+      Two faces only: the nav (JetBrains Mono 400) and the italic tagline line
+      (PT Serif 400 italic) — the two a visitor reads the moment the page
+      paints, at every width, and the two that moved on swap before their
+      fallbacks were metric-matched. Everything else, the tagline's roman line
+      included, comes via the stylesheet behind a matched fallback (fonts.css).
+
+      Each preload competes with the render-blocking CSS for bandwidth.
+      Measured on Slow 4G with 4× CPU, uncached, FCP median: 1148ms before;
+      1236ms preloading PT Serif 400 as well; 1084ms with these two.
     */}
-    <link rel="preload" href="/fonts/ptserif-400.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/jetbrainsmono-300.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/oswald-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrainsmono-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ptserif-400-italic.woff2" as="font" type="font/woff2" crossorigin />
 
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 

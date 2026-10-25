@@ -7,8 +7,8 @@
   optional. Do not swap these files for Google Fonts links: an extra DNS lookup
   and TLS handshake is expensive on a 17 Mbps connection.
 
-  The fallback stacks are Cyrillic-capable on purpose, so the swap period shows
-  Mongolian text rather than boxes.
+  The fallbacks are metric-matched, so the swap from fallback to web font moves
+  nothing on screen — see the second half of this file.
 */
 
 @font-face {
@@ -59,8 +59,140 @@
   font-display: swap;
 }
 
+/*
+  Metric-matched fallbacks.
+
+  font-display: swap shows a system font until the web font lands. Unadjusted,
+  the swap reflowed what a visitor is looking straight at: the nav grew 7px
+  and moved 8px left (Consolas is 0.55em wide, JetBrains Mono 0.6em) and the
+  italic tagline jumped 5px (Georgia's ascent is not PT Serif's).
+
+  Each fallback below is a real system font with the web face's box imposed on
+  it: size-adjust matches advance width, and the ascent / descent / line-gap
+  overrides are the web face's own — divided by size-adjust, which the browser
+  multiplies them by — so the baseline lands in the same place.
+
+  - Measured in Chrome against the strings the page actually sets, cased as
+    the CSS renders them: the nav labels, the lede, the tagline, the section
+    headings, the marquee. Cyrillic, because Latin and Cyrillic advance ratios
+    differ between faces and this site is Cyrillic.
+  - One fallback family per platform, listed in order in each stack: the
+    browser takes the first whose local() font exists — Consolas, Georgia and
+    Arial on Windows; Menlo, Georgia and Arial on Apple; Droid Sans Mono, Noto
+    Serif and Roboto on Android.
+  - Georgia has no ү or ө; those glyphs come from the next font in the stack, so
+    the italic tagline keeps a few px of width mismatch under Georgia. Its
+    baseline is matched, which is what removes the jump.
+*/
+
+@font-face {
+  font-family: 'JetBrains Mono Fallback Consolas';
+  src: local('Consolas');
+  font-weight: 300 400;
+  size-adjust: 109.13%;
+  ascent-override: 93.47%;
+  descent-override: 27.49%;
+  line-gap-override: 0%;
+}
+
+/* Courier New, Menlo, Droid Sans Mono and Noto Sans Mono are all 0.6em wide. */
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  src: local('Droid Sans Mono'), local('DroidSansMono'), local('Noto Sans Mono'), local('NotoSansMono-Regular'),
+    local('Menlo-Regular'), local('Menlo'), local('Courier New');
+  font-weight: 300 400;
+  size-adjust: 100%;
+  ascent-override: 102%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'PT Serif Fallback Georgia';
+  src: local('Georgia');
+  font-weight: 400;
+  font-style: normal;
+  size-adjust: 99.32%;
+  ascent-override: 104.71%;
+  descent-override: 29.2%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'PT Serif Fallback Georgia';
+  src: local('Georgia Italic'), local('Georgia-Italic');
+  font-weight: 400;
+  font-style: italic;
+  size-adjust: 92.62%;
+  ascent-override: 112.29%;
+  descent-override: 31.31%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'PT Serif Fallback Noto';
+  src: local('Noto Serif'), local('NotoSerif'), local('NotoSerif-Regular');
+  font-weight: 400;
+  font-style: normal;
+  size-adjust: 89.68%;
+  ascent-override: 115.97%;
+  descent-override: 32.34%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'PT Serif Fallback Noto';
+  src: local('Noto Serif Italic'), local('NotoSerif-Italic');
+  font-weight: 400;
+  font-style: italic;
+  size-adjust: 88.42%;
+  ascent-override: 117.62%;
+  descent-override: 32.8%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Oswald Fallback Arial';
+  src: local('Arial'), local('ArialMT');
+  font-weight: 500;
+  size-adjust: 83.03%;
+  ascent-override: 143.32%;
+  descent-override: 34.93%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Oswald Fallback Arial';
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 600;
+  size-adjust: 81.12%;
+  ascent-override: 146.7%;
+  descent-override: 35.75%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Oswald Fallback Roboto';
+  src: local('Roboto'), local('Roboto-Regular');
+  font-weight: 500;
+  size-adjust: 86.15%;
+  ascent-override: 138.14%;
+  descent-override: 33.66%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Oswald Fallback Roboto';
+  src: local('Roboto Medium'), local('Roboto-Medium'), local('Roboto');
+  font-weight: 600;
+  size-adjust: 84.32%;
+  ascent-override: 141.13%;
+  descent-override: 34.39%;
+  line-gap-override: 0%;
+}
+
 :root {
-  --font-display: 'Oswald', 'Arial Narrow', Arial, 'Helvetica Neue', sans-serif;
-  --font-serif: 'PT Serif', Georgia, 'Times New Roman', Times, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, 'Cascadia Mono', 'Liberation Mono', monospace;
+  --font-display: 'Oswald', 'Oswald Fallback Arial', 'Oswald Fallback Roboto', sans-serif;
+  --font-serif: 'PT Serif', 'PT Serif Fallback Georgia', 'PT Serif Fallback Noto', serif;
+  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback Consolas', 'JetBrains Mono Fallback', monospace;
 }

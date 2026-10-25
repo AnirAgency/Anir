@@ -59,8 +59,6 @@ const showHeading = heading && Boolean(label);
         {/* Blueprint corner ticks. Decorative — never announced. */}
         <span class="section__tick section__tick--tl" aria-hidden="true" />
         <span class="section__tick section__tick--tr" aria-hidden="true" />
-        <span class="section__tick section__tick--bl" aria-hidden="true" />
-        <span class="section__tick section__tick--br" aria-hidden="true" />
       </Fragment>
     )
   }
@@ -68,6 +66,22 @@ const showHeading = heading && Boolean(label);
   <div class="section__inner">
     <slot />
   </div>
+
+  {/*
+    The bottom ticks come after the content on purpose. They sit on the
+    section's bottom edge, and that edge moves while the section is still
+    parsing — if the HTML stalls mid-section, ticks parsed up front would be
+    painted at a provisional bottom and then jump. Parsed last, they first
+    appear where they stay.
+  */}
+  {
+    layout !== 'strip' && (
+      <Fragment>
+        <span class="section__tick section__tick--bl" aria-hidden="true" />
+        <span class="section__tick section__tick--br" aria-hidden="true" />
+      </Fragment>
+    )
+  }
 </section>
 
 <style>
@@ -99,12 +113,20 @@ const showHeading = heading && Boolean(label);
     --plate: var(--paper-2);
   }
 
-  /* svh, not vh: the mobile URL bar must not push the hero taller than the screen. */
+  /*
+    svh, not vh: the mobile URL bar must not push the hero taller than the screen.
+
+    Content is top-aligned, never centred. Centring against the content's own
+    height has no stable answer until all of that content exists: if the HTML
+    stalls mid-hero while the CSS has landed, the browser paints and centres
+    whatever has parsed, then re-centres when the rest arrives — measured at
+    CLS 0.1155 at 1440 and 0.2976 at 390.
+  */
   .section--hero {
     min-height: 100svh;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   /*

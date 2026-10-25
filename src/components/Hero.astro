@@ -21,8 +21,11 @@ const heroVideo = hero.video ? resolveVideo(hero.video) : null;
 /*
   The 3D N. What renders here is the still — the centre frame — as a plain
   background, so it paints with no JavaScript, and phones, crawlers and
-  reduced-motion visitors never get anything else. The box is reserved by
-  aspect-ratio, taken from the sheet's own cell size, so nothing shifts later.
+  reduced-motion visitors never get anything else.
+
+  The sheet's cell size goes on the grid, not the mark: both the mark's
+  aspect-ratio and the grid's first row are derived from it, so the row holds
+  the mark's height before the mark itself has parsed (see .hero__top).
 
   The sheet is a yaw-only strip: one row, every frame at pitch 0. Pitch is CSS
   alone (see the script), so a grid with pitch rows would be silently wrong —
@@ -32,14 +35,13 @@ const mark = hero.mark ? resolveMark(hero.mark.name) : null;
 if (mark && mark.grid.rows !== 1) {
   throw new Error(`${hero.mark?.name}.json has ${mark.grid.rows} rows; the hero tilt expects a yaw-only strip (rows: 1).`);
 }
-const markStyle = mark
-  ? `background-image: url(${mark.still}); --mark-ratio: ${mark.grid.cell[0]} / ${mark.grid.cell[1]};`
-  : undefined;
+const markStyle = mark ? `background-image: url(${mark.still});` : undefined;
+const topStyle = mark ? `--mark-cell-w: ${mark.grid.cell[0]}; --mark-cell-h: ${mark.grid.cell[1]};` : undefined;
 ---
 
 <Section tone="dark" id="hero" label={chrome.heroLabel} layout="hero" heading={false} seam>
   <div class="hero">
-    <div class="hero__top">
+    <div class="hero__top" style={topStyle}>
       <div class="hero__stage">
         <div class="hero__media" aria-hidden="true">
           {
@@ -135,12 +137,21 @@ const markStyle = mark
     The N never goes past 280 CSS px. The cells are 600px native, so even on a
     2× screen 280px is 560 device px and nothing is upscaled — soft glass edges
     are exactly what gives a pre-rendered mark away.
+
+    Row 1 — the N's row at every width — is pinned to the N's height, derived
+    from its width and the sheet's cell (set inline from the grid file). Its
+    height must not depend on the N having parsed: if the HTML stalls between
+    the wordmark and the N, an unpinned row would be painted at the wordmark's
+    height, and everything aligned to its end would drop ~146px when the N
+    arrived.
   */
   .hero__top {
     --mark-w: clamp(180px, 20.5vw, 280px);
+    --mark-h: calc(var(--mark-w) * var(--mark-cell-h) / var(--mark-cell-w));
 
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(var(--mark-h), auto);
     justify-items: center;
     row-gap: clamp(1.75rem, 1rem + 3vw, 3rem);
     width: 100%;
@@ -162,7 +173,7 @@ const markStyle = mark
     grid-row: 1;
     position: relative;
     width: var(--mark-w);
-    aspect-ratio: var(--mark-ratio);
+    aspect-ratio: var(--mark-cell-w) / var(--mark-cell-h);
     background-repeat: no-repeat;
     background-size: 100% 100%;
     /*

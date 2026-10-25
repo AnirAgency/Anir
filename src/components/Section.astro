@@ -107,6 +107,19 @@ const showHeading = heading && Boolean(label);
     justify-content: center;
   }
 
+  /*
+    Two-column hero: its top padding only has to clear the fixed header bar
+    (4rem). The section rhythm above that pushed the product cards half out of
+    view at 1440 × 900 — the cut-in-half state that reads as neither "there's
+    more below" nor "this is the whole hero". The space comes out of the
+    padding, never the mark.
+  */
+  @media (min-width: 861px) {
+    .section--hero {
+      padding-top: 3.75rem;
+    }
+  }
+
   .section--strip {
     padding-block: 0;
     padding-inline: 0;

@@ -20,6 +20,9 @@ tools/fonts-src/
 raw-media/*
 !raw-media/README.md
 
+# screenshots written by AI design sessions — reference, not source
+Claude outputs/
+
 # os
 .DS_Store
 Thumbs.db

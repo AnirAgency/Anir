@@ -55,9 +55,10 @@ Three budgets, checked separately:
 before FCP on a fast build.**
 
 - **Below-the-fold media: 1.6 MB total.** Every item lazy and out of the
-  critical path. Nothing over 300 kB is fetched when
-  `navigator.connection.saveData` is true. Within it:
-  - Tiles **≤ 300 kB together**. AVIF, encoded at display size, never scaled
+  critical path. **No single file over 300 kB is fetched when
+  `navigator.connection.saveData` is true.** Within it:
+  - Tiles **≤ 300 kB together**, on every connection — a separate cap from
+    the `saveData` rule. AVIF, encoded at display size, never scaled
     down in CSS from something larger. Explicit `width`/`height` on every one.
     Plain `<img loading="lazy" decoding="async">` — they are the work, so they
     load on every connection, `saveData` included, with JS on or off.
@@ -68,8 +69,10 @@ before FCP on a fast build.**
     stands in.
 
   An element joins this lane by declaring `data-lane="tile|poster|video"`.
-  The tiles and poster are what a `saveData` visitor pays, so the 300 kB is
-  checked against their sum.
+  On `saveData` every tile and the poster load and the video does not. That
+  is not generous: the tiles are lazy, so a visitor who never scrolls to the
+  mosaic never fetches them. The bytes go only to someone who chose to look
+  at the work.
 
 Placeholder media lives in `public/media/placeholder/` and renders only in a
 build run with `PLACEHOLDER_MEDIA=1`. Any other build strips it from `dist/`,

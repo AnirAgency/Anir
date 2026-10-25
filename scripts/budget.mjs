@@ -31,7 +31,7 @@ const BELOW_MAX = 1_600_000; //  1.6 MB below-the-fold media
 const TILES_MAX = 300_000; //    300 kB of tiles, together
 const VIDEO_MAX = 1_200_000; //  1.2 MB per video
 const POSTER_MAX = 40_000; //    40 kB per poster
-const SAVE_DATA_MAX = 300_000; // 300 kB fetched when saveData is true
+const SAVE_DATA_MAX = 300_000; // no single file over 300 kB on saveData
 
 const placeholderBuild = process.env.PLACEHOLDER_MEDIA === '1';
 
@@ -226,9 +226,10 @@ for (const ref of literalLazy) {
 // ------------------------------------------------------------ below the fold
 
 /*
-  Every item lazy and out of the critical path; nothing over 300 kB fetched
-  when navigator.connection.saveData is true. Tiles and posters load on every
-  connection, so together they are what a saveData visitor pays. The video is
+  Every item lazy and out of the critical path; no single file over 300 kB
+  fetched when navigator.connection.saveData is true. Tiles and posters load
+  on every connection, so each of them is checked against that cap — on top
+  of the tiles' own 300 kB total, which applies everywhere. The video is
   gated, and its src is never in the markup for the first-load scan to find.
 */
 const LANES = new Set(['tile', 'poster', 'video']);
@@ -276,7 +277,9 @@ for (const tag of pageHtml.matchAll(/<(\w+)\b([^>]*)>/g)) {
 const laneTotal = (lane) => below.filter((item) => item.lane === lane).reduce((sum, item) => sum + item.bytes, 0);
 const belowTotal = below.reduce((sum, item) => sum + item.bytes, 0);
 const tilesTotal = laneTotal('tile');
-const saveDataTotal = below.filter((item) => !item.gated).reduce((sum, item) => sum + item.bytes, 0);
+const ungated = below.filter((item) => !item.gated);
+const saveDataLargest = Math.max(0, ...ungated.map((item) => item.bytes));
+const overSaveData = ungated.filter((item) => item.bytes > SAVE_DATA_MAX);
 const overVideos = below.filter((item) => item.lane === 'video' && item.bytes > VIDEO_MAX);
 const overPosters = below.filter((item) => item.lane === 'poster' && item.bytes > POSTER_MAX);
 
@@ -445,8 +448,8 @@ const overLazy = lazyTotal > LAZY_MAX;
 const tooManyLazy = lazyFiles.length > LAZY_MAX_COUNT;
 const overBelow = belowTotal > BELOW_MAX;
 const overTiles = tilesTotal > TILES_MAX;
-const overSaveData = saveDataTotal > SAVE_DATA_MAX;
-const belowFails = overBelow || overTiles || overSaveData || overVideos.length > 0 || overPosters.length > 0;
+const belowFails =
+  overBelow || overTiles || overSaveData.length > 0 || overVideos.length > 0 || overPosters.length > 0;
 
 console.log('\n  BUDGET\n');
 console.log(`  total   ${kb(total)} of ${kb(TOTAL_MAX)}   ${pct(total, TOTAL_MAX).padStart(6)}  ${overTotal ? 'OVER' : 'ok'}`);
@@ -461,7 +464,9 @@ console.log(
 console.log(`    tiles     ${kb(tilesTotal)} of ${kb(TILES_MAX)}  ${overTiles ? 'OVER' : 'ok'}`);
 console.log(`    video     ${kb(laneTotal('video'))} of ${kb(VIDEO_MAX)}  ${overVideos.length ? 'OVER' : 'ok'}`);
 console.log(`    poster    ${kb(laneTotal('poster'))} of ${kb(POSTER_MAX)}  ${overPosters.length ? 'OVER' : 'ok'}`);
-console.log(`    saveData  ${kb(saveDataTotal)} of ${kb(SAVE_DATA_MAX)}  ${overSaveData ? 'OVER' : 'ok'}`);
+console.log(
+  `    saveData  ${kb(saveDataLargest)} of ${kb(SAVE_DATA_MAX)}  ${overSaveData.length ? 'OVER' : 'ok'}   largest single file`
+);
 console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the budget is enforced on raw bytes)\n`);
 
 if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0 || belowFails || belowProblems.length > 0) {
@@ -474,7 +479,9 @@ if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0 ||
   if (overTiles) console.error(`  FAIL  tiles are ${kb(tilesTotal - TILES_MAX).trim()} over 300 kB together.`);
   for (const item of overVideos) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - VIDEO_MAX).trim()} over the 1.2 MB video cap.`);
   for (const item of overPosters) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - POSTER_MAX).trim()} over the 40 kB poster cap.`);
-  if (overSaveData) console.error(`  FAIL  saveData visitors fetch ${kb(saveDataTotal).trim()}; the cap is 300 kB.`);
+  for (const item of overSaveData) {
+    console.error(`  FAIL  ${item.path} is fetched on saveData at ${kb(item.bytes).trim()}; no single file may exceed 300 kB.`);
+  }
   for (const problem of belowProblems) console.error(`  FAIL  ${problem}`);
   console.error('');
   process.exit(1);

@@ -44,7 +44,8 @@ body {
 /*
   Film grain. Large near-black grounds band on 8-bit panels, and static noise
   dithers the steps away. Fixed, so it reads as the screen itself rather than
-  a texture printed on the page.
+  a texture printed on the page. Scaled nearest-neighbour: smooth upscaling on
+  a 2× or 3× screen melts single-pixel specks into soft blobs.
 
   It lies over the page content, not under it. The hairline grids paint every
   cell in the ground colour (Grid.astro), so a grain beneath content would
@@ -66,6 +67,7 @@ body::after {
   background-image: var(--grain-image);
   background-repeat: repeat;
   background-size: 96px 96px;
+  image-rendering: pixelated;
   opacity: var(--grain-opacity);
 }
 

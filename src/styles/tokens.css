@@ -51,13 +51,19 @@
 
   /*
     Film grain over the whole page, under the nav (base.css > body::after). A
-    96px tile of grey noise in 8 levels; the build inlines it as a data URI, so
-    it costs no request. The opacity is the designer's to pick within 3.5–5% —
-    above that it reads busy. The tokens above pass anywhere in that range;
-    npm run contrast checks the value set here and 5%.
+    96px tile of sparse white specks — 18% of pixels opaque, the rest clear —
+    which the build inlines as a data URI, so it costs no request.
+
+    Sparse, not dense: dense grey noise spends almost all of its opacity
+    lifting the black by the noise's mean and very little on visible texture.
+    Specks give the same lift (about 5 levels on --ink) with nearly four times
+    the speckle. 18% at 11% is the finer of the two cuts; 12% coverage at 17%
+    is chunkier, same lift, but its brightest stroke-sized clusters push --dim
+    on --ink under 4.5:1. npm run contrast measures whichever tile and opacity
+    are set here.
   */
   --grain-image: url('../assets/grain.webp');
-  --grain-opacity: 0.04;
+  --grain-opacity: 0.11;
 
   /* ------------------------------------------------------------------ type */
 

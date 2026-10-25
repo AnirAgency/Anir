@@ -7,7 +7,8 @@
  * everyone pays; the lazy budget — at most one asset requested after first
  * paint on capable desktops; and below-the-fold media, the lazy images and
  * gated video further down the page. Breaking any one fails the run, and so
- * does placeholder media in a build made without PLACEHOLDER_MEDIA=1.
+ * does placeholder media in a build that should not have it
+ * (src/lib/placeholders.mjs).
  *
  * Budgets are decimal bytes, because the constraint they encode is bandwidth
  * (17 Mbps mobile) and link speed is measured decimally.
@@ -18,6 +19,8 @@ import { brotliCompressSync, constants } from 'node:zlib';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { placeholderMode, placeholderReason } from '../src/lib/placeholders.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -33,7 +36,7 @@ const VIDEO_MAX = 1_200_000; //  1.2 MB per video
 const POSTER_MAX = 40_000; //    40 kB per poster
 const SAVE_DATA_MAX = 300_000; // no single file over 300 kB on saveData
 
-const placeholderBuild = process.env.PLACEHOLDER_MEDIA === '1';
+const placeholderBuild = placeholderMode();
 
 const TYPES = {
   '.html': 'html',
@@ -286,10 +289,10 @@ const overPosters = below.filter((item) => item.lane === 'poster' && item.bytes 
 // The backstop behind the showreel's render gate (src/components/Showreel.astro).
 if (!placeholderBuild) {
   if (pageHtml.includes('/media/placeholder/')) {
-    belowProblems.push('the page references /media/placeholder/ in a build without PLACEHOLDER_MEDIA=1.');
+    belowProblems.push('the page references /media/placeholder/ in a production build.');
   }
   if (existsSync(join(dist, 'media', 'placeholder'))) {
-    belowProblems.push('dist/media/placeholder/ exists in a build without PLACEHOLDER_MEDIA=1.');
+    belowProblems.push('dist/media/placeholder/ exists in a production build.');
   }
 }
 
@@ -440,7 +443,7 @@ if (below.length === 0) console.log('  none');
 for (const item of below) {
   console.log(`  ${item.path.padEnd(width)}  ${kb(item.bytes)}  ${item.lane.padEnd(6)}  ${item.gated ? 'gated' : 'always'}`);
 }
-if (placeholderBuild) console.log('\n  PLACEHOLDER BUILD (PLACEHOLDER_MEDIA=1) - measured, never to be deployed');
+if (placeholderBuild) console.log(`\n  PLACEHOLDER BUILD (${placeholderReason()}) - measured, never deployed to production`);
 
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;

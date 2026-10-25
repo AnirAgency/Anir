@@ -2,6 +2,8 @@
 import { rmSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 
+import { placeholderMode, placeholderReason } from './src/lib/placeholders.mjs';
+
 /**
  * /styleguide exists in `astro dev` and nowhere else.
  *
@@ -27,17 +29,18 @@ function devStyleguide() {
 }
 
 /**
- * public/media/placeholder/ is for local work only. Astro copies all of
- * public/ into dist/, so a build without PLACEHOLDER_MEDIA=1 deletes the copy
- * afterwards: the placeholders are never deployed, referenced or not.
+ * public/media/placeholder/ is for dev and preview builds only. Astro copies
+ * all of public/ into dist/, so every other build — production included —
+ * deletes the copy afterwards: the placeholders are never deployed to
+ * production, referenced or not.
  */
 function stripPlaceholders() {
   return {
     name: 'anir:strip-placeholders',
     hooks: {
       'astro:build:done': ({ dir, logger }) => {
-        if (process.env.PLACEHOLDER_MEDIA === '1') {
-          logger.warn('PLACEHOLDER_MEDIA=1 — placeholder media kept in dist/. Never deploy this build.');
+        if (placeholderMode()) {
+          logger.warn(`placeholder media kept in dist/ (${placeholderReason()}). Not a production build.`);
           return;
         }
         rmSync(new URL('media/placeholder/', dir), { recursive: true, force: true });

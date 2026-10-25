@@ -150,11 +150,12 @@ export interface Showreel {
   label: string;
   /**
    * The real work. null until the shoot, and with null the section does not
-   * render at all — so main is always deployable. Must never point inside
-   * /media/placeholder/: the build fails if it does.
+   * render in production at all — so main is always deployable. Must never
+   * point inside /media/placeholder/: the build fails if it does.
    */
   media: ShowreelMedia | null;
-  /** Rendered instead by a build run with PLACEHOLDER_MEDIA=1. Never shipped. */
+  /** Stands in for missing real media in dev and preview builds only
+   *  (src/lib/placeholders.mjs). Never shipped. */
   placeholder: ShowreelMedia;
 }
 

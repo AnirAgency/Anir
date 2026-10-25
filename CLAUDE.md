@@ -74,10 +74,14 @@ before FCP on a fast build.**
   mosaic never fetches them. The bytes go only to someone who chose to look
   at the work.
 
-Placeholder media lives in `public/media/placeholder/` and renders only in a
-build run with `PLACEHOLDER_MEDIA=1`. Any other build strips it from `dist/`,
-and the build fails if real media in `site.ts` points inside that folder.
-Never deploy a `PLACEHOLDER_MEDIA=1` build.
+Placeholder media lives in `public/media/placeholder/`. It stands in for
+missing real media in `astro dev` and on Cloudflare Pages preview builds, so
+a section can be reviewed on a preview URL. Production — the `main` branch —
+never renders it: the build strips the folder from `dist/`, fails if real
+media in `site.ts` points inside it, and fails if `PLACEHOLDER_MEDIA=1` is
+set. A local `npm run build` builds what production ships;
+`PLACEHOLDER_MEDIA=1` adds the placeholders to it. The rule lives in one
+place, `src/lib/placeholders.mjs`.
 
 `scripts/budget.mjs` checks the three budgets separately and must stay blocking.
 Do not make it advisory.

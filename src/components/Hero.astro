@@ -267,11 +267,18 @@ const markStyle = mark
     the wordmark, so its top rises above it — that lift is what keeps it from
     reading as a bullet beside the type, and it falls out of the alignment.
 
+    The wordmark is sized from the N, not the other way round: the N is 64% of
+    the wordmark's width, the relation in the approved mock (ANIR 434px, N
+    279px at 1360). That puts ANIR at 32vw there, and keeps the ratio once the
+    N stops growing at 280px.
+
     This query string is also the script's gate, character for character —
     change one, change both.
   */
   @media (min-width: 861px) {
     .hero__top {
+      --wordmark-w: calc(var(--mark-w) / 0.64);
+
       grid-template-columns: minmax(0, 660px) minmax(var(--mark-w), 1fr);
       align-items: end;
       justify-items: stretch;
@@ -282,7 +289,8 @@ const markStyle = mark
     .hero__stage {
       grid-column: 1;
       grid-row: 1;
-      width: auto;
+      justify-self: start;
+      width: var(--wordmark-w);
     }
 
     .hero__mark {

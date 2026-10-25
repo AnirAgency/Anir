@@ -445,6 +445,13 @@ for (const item of below) {
 }
 if (placeholderBuild) console.log(`\n  PLACEHOLDER BUILD (${placeholderReason()}) - measured, never deployed to production`);
 
+/*
+  The film grain tile is part of the page's ground, so it is inlined into the
+  CSS rather than requested. Vite inlines assets under 4 kB; a tile that grows
+  past that would quietly become a request, so it is caught here.
+*/
+const grainRequests = files.filter((file) => /(^|\/)grain[.-]/i.test(file.path));
+
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;
 const overLazy = lazyTotal > LAZY_MAX;
@@ -472,7 +479,16 @@ console.log(
 );
 console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the budget is enforced on raw bytes)\n`);
 
-if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0 || belowFails || belowProblems.length > 0) {
+if (
+  overTotal ||
+  overJs ||
+  overLazy ||
+  tooManyLazy ||
+  lazyProblems.length > 0 ||
+  belowFails ||
+  belowProblems.length > 0 ||
+  grainRequests.length > 0
+) {
   if (overTotal) console.error(`  FAIL  total is ${kb(total - TOTAL_MAX).trim()} over the 1 MB first-load budget.`);
   if (overJs) console.error(`  FAIL  JS is ${kb(jsTotal - JS_MAX).trim()} over the 200 kB budget.`);
   if (overLazy) console.error(`  FAIL  lazy is ${kb(lazyTotal - LAZY_MAX).trim()} over the 500 kB lazy budget.`);
@@ -486,6 +502,9 @@ if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0 ||
     console.error(`  FAIL  ${item.path} is fetched on saveData at ${kb(item.bytes).trim()}; no single file may exceed 300 kB.`);
   }
   for (const problem of belowProblems) console.error(`  FAIL  ${problem}`);
+  for (const file of grainRequests) {
+    console.error(`  FAIL  ${file.path} is a separate request; keep the grain tile under 4 kB so it is inlined.`);
+  }
   console.error('');
   process.exit(1);
 }

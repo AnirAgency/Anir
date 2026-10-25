@@ -45,6 +45,16 @@
   --line-dark: color-mix(in srgb, var(--paper) 12%, var(--ink));
   --line-light: color-mix(in srgb, var(--ink) 20%, var(--paper));
 
+  /*
+    Film grain over the whole page, under the nav (base.css > body::after). A
+    96px tile of grey noise in 8 levels; the build inlines it as a data URI, so
+    it costs no request. The opacity is the designer's to pick within 3.5–5% —
+    above that it reads busy. The tokens above pass anywhere in that range;
+    npm run contrast checks the value set here and 5%.
+  */
+  --grain-image: url('../assets/grain.webp');
+  --grain-opacity: 0.04;
+
   /* ------------------------------------------------------------------ type */
 
   /*

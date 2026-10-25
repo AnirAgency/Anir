@@ -1,7 +1,8 @@
 ---
 /*
   The alternating section wrapper. Sections run light, dark, light, dark — never
-  two of the same in a row (CLAUDE.md > Layout).
+  two of the same in a row, except the showreel and process, both dark by
+  decision (CLAUDE.md > Layout).
 
   Its real job is to set the tone variables. Everything inside a section reads
   --bg / --fg / --muted / --line / --plate and never touches --ink or --paper
@@ -17,8 +18,11 @@ interface Props {
     default — normal block: inset, vertical rhythm, corner ticks.
     hero    — fills the viewport and centres its contents.
     strip   — thin, full-bleed, no ticks. The marquee.
+    bleed   — full-bleed, no padding, no ticks, and no overflow clipping:
+              overflow: hidden would make the section a scroll container and
+              freeze every view() timeline inside it. The showreel mosaic.
   */
-  layout?: 'default' | 'hero' | 'strip';
+  layout?: 'default' | 'hero' | 'strip' | 'bleed';
   /**
    * Whether to emit the visually-hidden <h2> naming the section. Turn it off
    * where the section supplies its own heading — the hero, which owns the h1.
@@ -40,6 +44,7 @@ const {
 } = Astro.props;
 
 const showHeading = heading && Boolean(label);
+const ticks = layout !== 'strip' && layout !== 'bleed';
 ---
 
 <section
@@ -53,7 +58,7 @@ const showHeading = heading && Boolean(label);
   {showHeading && <h2 id={`${id}-label`} class="visually-hidden">{label}</h2>}
 
   {
-    layout !== 'strip' && (
+    ticks && (
       <Fragment>
         {/* Blueprint corner ticks. Decorative — never announced. */}
         <span class="section__tick section__tick--tl" aria-hidden="true" />
@@ -74,7 +79,7 @@ const showHeading = heading && Boolean(label);
     appear where they stay.
   */}
   {
-    layout !== 'strip' && (
+    ticks && (
       <Fragment>
         <span class="section__tick section__tick--bl" aria-hidden="true" />
         <span class="section__tick section__tick--br" aria-hidden="true" />
@@ -155,6 +160,11 @@ const showHeading = heading && Boolean(label);
     padding-block: 0;
     padding-inline: 0;
     overflow: hidden;
+  }
+
+  .section--bleed {
+    padding-block: 0;
+    padding-inline: 0;
   }
 
   /* The boundary rule between two sections. */
@@ -257,7 +267,8 @@ const showHeading = heading && Boolean(label);
       --tick: 7px;
     }
 
-    .section--strip {
+    .section--strip,
+    .section--bleed {
       padding-inline: 0;
     }
   }

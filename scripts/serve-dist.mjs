@@ -26,6 +26,7 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
   '.webm': 'video/webm',
+  '.mp4': 'video/mp4',
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.avif': 'image/avif',

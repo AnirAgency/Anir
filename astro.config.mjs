@@ -1,4 +1,5 @@
 // @ts-check
+import { rmSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 
 /**
@@ -25,13 +26,33 @@ function devStyleguide() {
   };
 }
 
+/**
+ * public/media/placeholder/ is for local work only. Astro copies all of
+ * public/ into dist/, so a build without PLACEHOLDER_MEDIA=1 deletes the copy
+ * afterwards: the placeholders are never deployed, referenced or not.
+ */
+function stripPlaceholders() {
+  return {
+    name: 'anir:strip-placeholders',
+    hooks: {
+      'astro:build:done': ({ dir, logger }) => {
+        if (process.env.PLACEHOLDER_MEDIA === '1') {
+          logger.warn('PLACEHOLDER_MEDIA=1 — placeholder media kept in dist/. Never deploy this build.');
+          return;
+        }
+        rmSync(new URL('media/placeholder/', dir), { recursive: true, force: true });
+      },
+    },
+  };
+}
+
 // Static output only. Cloudflare Pages serves dist/ from its Ulaanbaatar PoP and
 // picks up functions/ on its own — no SSR adapter, see README > Cloudflare Pages.
 export default defineConfig({
   site: 'https://aniragency.mn',
   output: 'static',
   compressHTML: true,
-  integrations: [devStyleguide()],
+  integrations: [devStyleguide(), stripPlaceholders()],
   build: {
     assets: '_astro',
     // Small sheets get inlined; anything larger stays a cacheable file.

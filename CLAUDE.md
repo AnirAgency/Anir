@@ -75,7 +75,7 @@ before FCP on a fast build.**
   at the work.
 
 Placeholder media lives in `public/media/placeholder/`. It stands in for
-missing real media in `astro dev` and on Cloudflare Pages preview builds, so
+missing real media in `astro dev` and on Workers Builds preview builds, so
 a section can be reviewed on a preview URL. Production — the `main` branch —
 never renders it: the build strips the folder from `dist/`, fails if real
 media in `site.ts` points inside it, and fails if `PLACEHOLDER_MEDIA=1` is

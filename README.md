@@ -21,7 +21,8 @@ npm run dev          # http://localhost:4321
 | `npm run dev` | Dev server with HMR |
 | `npm run build` | Static build into `dist/` |
 | `npm run preview` | Serves the built `dist/` locally |
-| `npm run budget` | Builds, then enforces the weight budget. **Exits non-zero if the page is over.** |
+| `npm run budget` | Builds, then enforces the weight budget and the contrast table. **Exits non-zero if the page is over or a pair fails.** |
+| `npm run contrast` | Measures the CLAUDE.md contrast table under the film grain, from `tokens.css` and the shipped tile |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
 
@@ -188,9 +189,10 @@ site from `dist/` as static files and answers the contact form at
    about a minute later. Nobody deploys by hand.
 
 If a build fails, nothing goes live — the last good version keeps serving. The
-build runs `npm run budget`, so a page over its weight budget fails on purpose.
-To see why: Workers & Pages → **anir** → Deployments → the failed build → read
-the last lines of the log. Fix it on the branch and push again.
+build runs `npm run budget`, so a page over its weight budget, or a text colour
+that no longer clears its contrast bar, fails on purpose. To see why: Workers &
+Pages → **anir** → Deployments → the failed build → read the last lines of the
+log. Fix it on the branch and push again.
 
 Run the same check on your own computer before pushing: `npm run budget`.
 

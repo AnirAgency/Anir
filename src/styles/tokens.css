@@ -13,17 +13,22 @@
   --ink-2: #121519; /* deep surface, hover ground */
   --paper: #eef0f3; /* light background           */
   --paper-2: #dce0e5; /* plates — where imagery sits */
-  --dim: #767c85; /* secondary text on dark     */
-  --dim-2: #656b75; /* secondary text on light    */
+  --dim: #7c828b; /* secondary text on dark     */
+  --dim-2: #5d636d; /* secondary text on light    */
   --orange: #ff3300; /* active state ONLY          */
 
   /*
-    --dim is tone-split because one grey cannot serve both grounds, measured:
+    --dim is tone-split because one grey cannot serve both grounds, measured
+    with the film grain over text and ground, read as stroke-sized boxes at
+    the worst box (npm run contrast):
 
-      #767C85 on --ink    4.74:1  passes AA
-      #767C85 on --paper  3.68:1  fails
-      #656B75 on --paper  4.70:1  passes AA
-      #656B75 on --ink    3.71:1  fails
+      #7C828B on --ink    4.52:1  passes AA
+      #7C828B on --paper  3.03:1  fails
+      #5D636D on --paper  4.54:1  passes AA
+      #5D636D on --ink    2.90:1  fails
+
+    Phase 16 moved --dim and --dim-2 a few levels so these still pass under
+    the grain; CLAUDE.md > Contrast has the detail.
 
     Each value passes on its own ground and fails on the other, so there is no
     single grey to pick. Section.astro maps --muted to the right one; never
@@ -44,6 +49,22 @@
   */
   --line-dark: color-mix(in srgb, var(--paper) 12%, var(--ink));
   --line-light: color-mix(in srgb, var(--ink) 20%, var(--paper));
+
+  /*
+    Film grain over the whole page, under the nav (base.css > body::after). A
+    96px tile of sparse white specks — 12% of pixels opaque, the rest clear —
+    which the build inlines as a data URI, so it costs no request. The tile
+    IS that spec, not a supplied file: any tile built to it (96 × 96, 12% of
+    pixels opaque white at random, the rest transparent) is the asset.
+
+    Sparse, not dense: dense grey noise spends almost all of its opacity
+    lifting the black by the noise's mean and very little on visible texture.
+    At 10% these specks lift --ink by about 3 levels, against 5 for the dense
+    tile that read as nothing, with about three times its speckle. npm run
+    contrast measures whichever tile and opacity are set here.
+  */
+  --grain-image: url('../assets/grain.webp');
+  --grain-opacity: 0.1;
 
   /* ------------------------------------------------------------------ type */
 

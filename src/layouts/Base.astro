@@ -104,10 +104,17 @@ const jsonLd = {
       flash. Inline and tiny on purpose: as an external file it would race the
       first paint. Adds nothing when the visitor asked for reduced motion, which
       is what keeps that page completely static.
+
+      .shimmer lets the film grain move (base.css): a fine pointer, no
+      saveData, more than four cores — the same gates as the hero mark. The
+      grain runs continuously, so a phone would pay for it in battery.
     */}
     <script is:inline>
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion');
+        if (matchMedia('(pointer: fine)').matches && !navigator.connection?.saveData && (navigator.hardwareConcurrency || 8) > 4) {
+          document.documentElement.classList.add('shimmer');
+        }
       }
     </script>
   </head>

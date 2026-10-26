@@ -117,9 +117,11 @@ export interface ShowreelTile {
   width: number;
   height: number;
   /**
-   * Its span on the desktop mosaic: four columns, and rows 9/32 of a column
-   * tall. A landscape is 1 × 3, a portrait 1 × 5; the video takes 2 × 4. Any
-   * number of tiles packs, so add or drop work by editing this list alone.
+   * Its span on the desktop mosaic, in cells. The mosaic fills the screen:
+   * four columns, and as many rows as the tiles need, all one height. A
+   * landscape is 1 × 1, a tall portrait 1 × 2; the video takes two cells of
+   * one row. Any number of tiles packs, so add or drop work by editing this
+   * list alone — but a full grid has no holes, so make the cells add up.
    */
   cols: number;
   rows: number;
@@ -135,7 +137,7 @@ export interface ShowreelVideo {
   label: string;
   width: number;
   height: number;
-  /** Its place on the desktop mosaic — the middle of the tiles around it. */
+  /** Its place on the desktop mosaic: the left of its two cells, and its row. */
   col: number;
   row: number;
 }
@@ -450,18 +452,19 @@ export const site: Site = {
     /*
       Placeholders, labelled ОРЛУУЛАХ so they cannot pass for work. Tiles pack
       in list order around the video, so the order is the layout: these eight
-      fill four columns by ten rows exactly, with the video in the middle.
+      fill four columns by three rows exactly, with the video in the middle of
+      row 2.
     */
     placeholder: {
       tiles: [
-        { src: '/media/placeholder/tile-05.avif', alt: 'Түр зураг 05', width: 600, height: 800, cols: 1, rows: 5 },
-        { src: '/media/placeholder/tile-01.avif', alt: 'Түр зураг 01', width: 800, height: 600, cols: 1, rows: 3 },
-        { src: '/media/placeholder/tile-02.avif', alt: 'Түр зураг 02', width: 800, height: 600, cols: 1, rows: 3 },
-        { src: '/media/placeholder/tile-06.avif', alt: 'Түр зураг 06', width: 600, height: 800, cols: 1, rows: 5 },
-        { src: '/media/placeholder/tile-07.avif', alt: 'Түр зураг 07', width: 600, height: 800, cols: 1, rows: 5 },
-        { src: '/media/placeholder/tile-08.avif', alt: 'Түр зураг 08', width: 600, height: 800, cols: 1, rows: 5 },
-        { src: '/media/placeholder/tile-03.avif', alt: 'Түр зураг 03', width: 800, height: 600, cols: 1, rows: 3 },
-        { src: '/media/placeholder/tile-04.avif', alt: 'Түр зураг 04', width: 800, height: 600, cols: 1, rows: 3 },
+        { src: '/media/placeholder/tile-05.avif', alt: 'Түр зураг 05', width: 600, height: 800, cols: 1, rows: 2 },
+        { src: '/media/placeholder/tile-01.avif', alt: 'Түр зураг 01', width: 800, height: 600, cols: 1, rows: 1 },
+        { src: '/media/placeholder/tile-02.avif', alt: 'Түр зураг 02', width: 800, height: 600, cols: 1, rows: 1 },
+        { src: '/media/placeholder/tile-06.avif', alt: 'Түр зураг 06', width: 600, height: 800, cols: 1, rows: 2 },
+        { src: '/media/placeholder/tile-07.avif', alt: 'Түр зураг 07', width: 600, height: 800, cols: 1, rows: 1 },
+        { src: '/media/placeholder/tile-03.avif', alt: 'Түр зураг 03', width: 800, height: 600, cols: 1, rows: 1 },
+        { src: '/media/placeholder/tile-04.avif', alt: 'Түр зураг 04', width: 800, height: 600, cols: 1, rows: 1 },
+        { src: '/media/placeholder/tile-08.avif', alt: 'Түр зураг 08', width: 600, height: 800, cols: 1, rows: 1 },
       ],
       video: {
         src: '/media/placeholder/showreel.mp4',
@@ -470,7 +473,7 @@ export const site: Site = {
         width: 1280,
         height: 720,
         col: 2,
-        row: 4,
+        row: 2,
       },
     },
   },

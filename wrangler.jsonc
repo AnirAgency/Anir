@@ -32,10 +32,24 @@
   ],
 
   // Drains ENQUIRY_BUFFER into Supabase (worker/index.ts > scheduled).
-  "triggers": { "crons": ["*/15 * * * *"] }
+  "triggers": { "crons": ["*/15 * * * *"] },
 
   // Notification secrets, set with `npx wrangler secret put`, never here:
   // RESEND_API_KEY + NOTIFY_EMAIL for email, or TELEGRAM_BOT_TOKEN +
   // TELEGRAM_CHAT_ID for a Telegram chat. Either, both, or — until set — a
   // warning in the logs on every enquiry.
+
+  // Pull-request builds run `wrangler preview`, and a Preview inherits none
+  // of the vars or bindings above — only what is listed here. So a preview
+  // has no database (an empty URL, and no secrets are set for previews) and
+  // KV namespaces of its own: an enquiry sent from a preview waits in the
+  // preview buffer and expires there after 30 days. Previews run no crons, so
+  // nothing drains it into the production table, and nobody is notified.
+  "previews": {
+    "vars": { "SUPABASE_URL": "" },
+    "kv_namespaces": [
+      { "binding": "RATE_LIMIT", "id": "33f352be599f470aa066d51b930afad1" },
+      { "binding": "ENQUIRY_BUFFER", "id": "308a7466ea7340d0b01f136f90a1e910" }
+    ]
+  }
 }

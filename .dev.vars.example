@@ -1,0 +1,10 @@
+# Local secrets for `wrangler dev`: copy to .dev.vars (gitignored) and fill in.
+# In production these are Worker secrets — `npx wrangler secret put <NAME>` or
+# Workers & Pages > anir > Settings > Variables and Secrets. Never commit them.
+#
+# SUPABASE_URL is public and lives in wrangler.jsonc under "vars".
+
+# Service role key. Bypasses row level security, so it is the ONLY way to write
+# to `enquiries` — and the reason it must never reach the browser. It is read
+# solely by worker/enquiry.ts.
+SUPABASE_SERVICE_ROLE_KEY=

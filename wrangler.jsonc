@@ -8,6 +8,10 @@
   "main": "./worker/index.ts",
   "assets": { "directory": "./dist", "binding": "ASSETS" },
 
+  // anir.<account>.workers.dev stays on: it is the live address until
+  // aniragency.mn is registered, and the base for preview URLs after.
+  "workers_dev": true,
+
   // Every non-production build gets its own URL — each PR is reviewable live.
   "preview_urls": true,
   "observability": { "enabled": true },
@@ -20,5 +24,5 @@
 
   // The enquiry rate limiter. Without this binding it fails OPEN — the form
   // works but is unthrottled — so a missing binding is silent. Do not remove.
-  "kv_namespaces": [{ "binding": "RATE_LIMIT", "id": "a467dd6487a3486a955039347f1958bd" }]
+  "kv_namespaces": [{ "binding": "RATE_LIMIT", "id": "9f75dcfba28142c8a3df1b8f47ab7bfc" }]
 }

@@ -125,6 +125,16 @@ const both = `${sides.client} · ${sides.studio}`;
       diameter, centre and offset is a fraction of this width.
     */
     --spine-w: min(84vw, 1680px, 100vw - 2 * var(--rail));
+    /*
+      The ratio table was taken from a 1520px prototype; at 84vw a 1440 screen
+      gives a 1210px section, which shrank the chain by 1210/1520. 1.25 puts
+      the largest circle back at about 223px at 1440 (310px at the 1680 cap).
+      The chain is ~25% taller for it; that is the cost of the size. Never
+      buy the height back by tightening the overlap: the 0.58 spacing has to
+      stay under the 0.70 bloom floor or the chain breaks.
+    */
+    --d-scale: 1.25;
+    --chain: calc(var(--spine-w) * var(--d-scale));
     width: var(--spine-w);
     margin-left: calc((100% - var(--spine-w) + var(--inset-right) - var(--inset)) / 2);
     --spine: 50%;
@@ -143,7 +153,7 @@ const both = `${sides.client} · ${sides.studio}`;
     margin-bottom: clamp(2rem, 1rem + 3vw, 3.5rem);
     color: var(--muted);
     /* Over the first row's text, which starts this far from the spine. */
-    --head-off: calc(var(--r-first) * var(--spine-w) + var(--gap) + var(--rule) + var(--rule-gap));
+    --head-off: calc(var(--r-first) * var(--chain) + var(--gap) + var(--rule) + var(--rule-gap));
   }
 
   .process__side {
@@ -162,7 +172,7 @@ const both = `${sides.client} · ${sides.studio}`;
   /* The chain and the labels share one coordinate system: y from its top. */
   .process__body {
     position: relative;
-    height: calc(var(--h) * var(--spine-w));
+    height: calc(var(--h) * var(--chain));
   }
 
   .chain {
@@ -178,8 +188,8 @@ const both = `${sides.client} · ${sides.studio}`;
   .dot {
     position: absolute;
     left: var(--spine);
-    top: calc(var(--y) * var(--spine-w));
-    width: calc(var(--d) * var(--spine-w));
+    top: calc(var(--y) * var(--chain));
+    width: calc(var(--d) * var(--chain));
     aspect-ratio: 1;
     translate: -50% -50%;
     border: 1.5px solid color-mix(in srgb, var(--orange) 82%, transparent);
@@ -200,12 +210,12 @@ const both = `${sides.client} · ${sides.studio}`;
   /* A zero-height anchor on the circle's centre line. */
   .event {
     position: absolute;
-    top: calc(var(--y) * var(--spine-w));
+    top: calc(var(--y) * var(--chain));
     left: 0;
     right: 0;
     height: 0;
     /* Clear of the circle at its base size; the bloom only ever shrinks it. */
-    --off: calc(var(--r) * var(--spine-w) + var(--gap));
+    --off: calc(var(--r) * var(--chain) + var(--gap));
   }
 
   /*
@@ -364,7 +374,8 @@ const both = `${sides.client} · ${sides.studio}`;
 
     .process {
       --spine-w: 1100px;
-      --spine: calc(var(--r-max) * var(--spine-w));
+      --d-scale: 1;
+      --spine: calc(var(--r-max) * var(--chain));
       width: auto;
       max-width: 52rem;
       margin-left: 0;
@@ -378,7 +389,7 @@ const both = `${sides.client} · ${sides.studio}`;
 
     .process__body {
       height: auto;
-      min-height: calc(var(--h) * var(--spine-w));
+      min-height: calc(var(--h) * var(--chain));
     }
 
     .events {
@@ -386,7 +397,7 @@ const both = `${sides.client} · ${sides.studio}`;
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
-      padding-left: calc(2 * var(--r-max) * var(--spine-w) + var(--gap));
+      padding-left: calc(2 * var(--r-max) * var(--chain) + var(--gap));
     }
 
     .event {
@@ -447,7 +458,7 @@ const both = `${sides.client} · ${sides.studio}`;
     }
 
     .events {
-      padding-left: calc(var(--r-max) * var(--spine-w) - var(--inset-mobile) + var(--gap));
+      padding-left: calc(var(--r-max) * var(--chain) - var(--inset-mobile) + var(--gap));
     }
   }
 </style>

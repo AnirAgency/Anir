@@ -53,7 +53,9 @@
   /*
     Film grain over the whole page, under the nav (base.css > body::after). A
     96px tile of sparse white specks — 12% of pixels opaque, the rest clear —
-    which the build inlines as a data URI, so it costs no request.
+    which the build inlines as a data URI, so it costs no request. The tile
+    IS that spec, not a supplied file: any tile built to it (96 × 96, 12% of
+    pixels opaque white at random, the rest transparent) is the asset.
 
     Sparse, not dense: dense grey noise spends almost all of its opacity
     lifting the black by the noise's mean and very little on visible texture.

@@ -31,6 +31,12 @@ export interface Media {
   label?: string;
   /** Shown on the placeholder: the format we expect back from the shoot. */
   format?: string;
+  /**
+   * A stand-in under /media/placeholder/, shown in dev and preview builds
+   * while `name` is null — cropped to this slot's size. Never in production:
+   * there the labelled plate shows instead (src/lib/placeholders.mjs).
+   */
+  placeholder?: string;
 }
 
 export interface Link {
@@ -163,6 +169,43 @@ export interface Showreel {
   placeholder: ShowreelMedia;
 }
 
+/* ---------------------------------------------------------------- products */
+
+/** One of Anir's own products: a slide in the products reel. */
+export interface Product {
+  /** ASCII. The slide's anchor is #product-<id>; the hero cards link to it. */
+  id: string;
+  name: string;
+  tagline: string;
+  description: string;
+  spec: {
+    role: string;
+    tech: string;
+    year: string;
+  };
+  /** Its own site, once it has a public one. */
+  href?: string;
+  /** A screen of the product. A labelled plate until it is shot. */
+  shot: Media;
+}
+
+export interface Products {
+  intro: SectionIntro;
+  specLabels: {
+    role: string;
+    tech: string;
+    year: string;
+  };
+  /** The reel's accessible names and its pause button. */
+  controls: {
+    label: string;
+    slide: string;
+    pause: string;
+    play: string;
+  };
+  items: Product[];
+}
+
 /* ---------------------------------------------------------------- services */
 
 /** One service: a row in the list, then a section of its own below it. */
@@ -174,8 +217,9 @@ export interface Service {
   line: string;
   /** Exactly three, each a row led by an arrow. */
   points: [string, string, string];
-  /** The mockup beside the text. A labelled plate until it is made. */
-  plate: Media;
+  /** Beside the text, side by side at one height: a landscape, then a
+   *  portrait. Labelled plates until they are made. */
+  images: [Media, Media];
 }
 
 export interface Services {
@@ -336,6 +380,7 @@ export interface Site {
   hero: Hero;
   marquee: Marquee;
   showreel: Showreel;
+  products: Products;
   services: Services;
   pricing: Pricing;
   process: Process;
@@ -387,27 +432,28 @@ export const site: Site = {
       width: 1280,
       height: 720,
     },
-    // The cards linked to the Work section, which Phase 19 removed. Give a
-    // card an href — its product's own site, once it has one — and it becomes
-    // a link again, CTA and hover included.
+    // Each card opens its product's slide in the products reel.
     products: [
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ezmath',
         tagline: 'Математикаа бэлд',
         cta: 'Үзэх +',
+        href: '#product-ezmath',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ethos',
         tagline: 'Зөв хандив',
         cta: 'Үзэх +',
+        href: '#product-ethos',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Olymo',
         tagline: 'Боловсролын мэдээлэл',
         cta: 'Үзэх +',
+        href: '#product-olymo',
       },
     ],
   },
@@ -449,6 +495,91 @@ export const site: Site = {
     },
   },
   /*
+    The three products. Names, taglines, descriptions and specs are the old
+    Work section's proofread copy; the reel's control labels are new —
+    Bat-Enkh to proofread those.
+  */
+  products: {
+    intro: {
+      label: 'Бүтээгдэхүүн',
+      eyebrow: 'Сонгосон ажил',
+      title: 'Өөрсдийн бүтээгдэхүүн',
+    },
+    specLabels: {
+      role: 'Үүрэг',
+      tech: 'Технологи',
+      year: 'Он',
+    },
+    controls: {
+      label: 'Бүтээгдэхүүний слайд',
+      slide: 'слайд',
+      pause: 'Түр зогсоох',
+      play: 'Үргэлжлүүлэх',
+    },
+    items: [
+      {
+        id: 'ezmath',
+        name: 'Ezmath',
+        tagline: 'Математикаа бэлд. Шалгалтаа дав.',
+        description: 'Математикийн мэдлэгээ бататгах хүртэлх таны ухаалаг туслах.',
+        spec: {
+          role: 'Бүтээгдэхүүн, брэнд, хөгжүүлэлт',
+          tech: 'Next · Supabase',
+          year: '2026',
+        },
+        shot: {
+          name: null,
+          alt: 'Ezmath — дэлгэцийн зураг',
+          width: 1600,
+          height: 1000,
+          label: 'Ezmath',
+          format: 'Дэлгэцийн зураг · 16:10',
+          placeholder: '/media/placeholder/tile-07.avif',
+        },
+      },
+      {
+        id: 'ethos',
+        name: 'Ethos',
+        tagline: 'Зөв хандив. Бодит тус.',
+        description: 'Бодит сайн үйлсийг холбож, сайн дурын оролцоог дэмжинэ.',
+        spec: {
+          role: 'Бүтээгдэхүүн, хөгжүүлэлт',
+          tech: 'Next · Supabase',
+          year: '2026',
+        },
+        shot: {
+          name: null,
+          alt: 'Ethos — дэлгэцийн зураг',
+          width: 1600,
+          height: 1000,
+          label: 'Ethos',
+          format: 'Дэлгэцийн зураг · 16:10',
+          placeholder: '/media/placeholder/tile-04.avif',
+        },
+      },
+      {
+        id: 'olymo',
+        name: 'Olymo',
+        tagline: 'Боловсролын шинэ мэдээлэл бүхнийг нэг дороос.',
+        description: 'Олимпиад, боловсролын хамгийн хэрэгтэй мэдээллийг нэг дороос шуурхай хүргэнэ.',
+        spec: {
+          role: 'Бүтээгдэхүүн, эдиториал',
+          tech: 'Astro · CMS',
+          year: '2026',
+        },
+        shot: {
+          name: null,
+          alt: 'Olymo — дэлгэцийн зураг',
+          width: 1600,
+          height: 1000,
+          label: 'Olymo',
+          format: 'Дэлгэцийн зураг · 16:10',
+          placeholder: '/media/placeholder/tile-08.avif',
+        },
+      },
+    ],
+  },
+  /*
     Phase 19. The names and lines come from the brief; the three points under
     each are new — drafted in the same voice, partly from the proofread copy
     of the old disciplines. Bat-Enkh to proofread all of it before it ships.
@@ -470,7 +601,10 @@ export const site: Site = {
           'Төсөв, хугацааны бодит үнэлгээ гаргана',
           'Эхний алхмыг тодорхой төлөвлөгөө болгоно',
         ],
-        plate: { name: null, alt: 'Макет — Зөвлөгөө', width: 1200, height: 900, label: 'Макет 01', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Зөвлөгөө', width: 1200, height: 900, label: 'Макет 01', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-04.avif' },
+          { name: null, alt: 'Утасны макет — Зөвлөгөө', width: 900, height: 1200, label: 'Макет 01', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-01.avif' },
+        ],
       },
       {
         index: '02',
@@ -481,7 +615,10 @@ export const site: Site = {
           'Зах зээл, өрсөлдөгчдийг судална',
           'Хэмжиж болохуйц зорилт тавина',
         ],
-        plate: { name: null, alt: 'Макет — Стратеги', width: 1200, height: 900, label: 'Макет 02', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Стратеги', width: 1200, height: 900, label: 'Макет 02', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-05.avif' },
+          { name: null, alt: 'Утасны макет — Стратеги', width: 900, height: 1200, label: 'Макет 02', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-02.avif' },
+        ],
       },
       {
         index: '03',
@@ -492,7 +629,10 @@ export const site: Site = {
           'Загвар, прототипоор урьдчилан туршина',
           'Гар утсанд эхлээд тохируулна',
         ],
-        plate: { name: null, alt: 'Макет — Хэрэглэгчийн туршлага', width: 1200, height: 900, label: 'Макет 03', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Хэрэглэгчийн туршлага', width: 1200, height: 900, label: 'Макет 03', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-06.avif' },
+          { name: null, alt: 'Утасны макет — Хэрэглэгчийн туршлага', width: 900, height: 1200, label: 'Макет 03', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-03.avif' },
+        ],
       },
       {
         index: '04',
@@ -503,7 +643,10 @@ export const site: Site = {
           'Монголын мобайл сүлжээнд зориулж оновчилно',
           'Хайлтын системд зөв харагдахаар бүтээнэ',
         ],
-        plate: { name: null, alt: 'Макет — Вэб хөгжүүлэлт', width: 1200, height: 900, label: 'Макет 04', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Вэб хөгжүүлэлт', width: 1200, height: 900, label: 'Макет 04', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-07.avif' },
+          { name: null, alt: 'Утасны макет — Вэб хөгжүүлэлт', width: 900, height: 1200, label: 'Макет 04', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-01.avif' },
+        ],
       },
       {
         index: '05',
@@ -514,7 +657,10 @@ export const site: Site = {
           'Өөрсдийн гурван бүтээгдэхүүний туршлагад тулгуурлана',
           'Эхний хувилбараа хурдан гаргаж, хэрэглэгчээр туршина',
         ],
-        plate: { name: null, alt: 'Макет — Аппликейшн', width: 1200, height: 900, label: 'Макет 05', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Аппликейшн', width: 1200, height: 900, label: 'Макет 05', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-08.avif' },
+          { name: null, alt: 'Утасны макет — Аппликейшн', width: 900, height: 1200, label: 'Макет 05', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-02.avif' },
+        ],
       },
       {
         index: '06',
@@ -525,7 +671,10 @@ export const site: Site = {
           'Арга хэмжээ, кампанит ажлын постер',
           'Хэвлэхэд бэлэн, өнгө нь ялгагдсан файл',
         ],
-        plate: { name: null, alt: 'Макет — Брэндинг ба постер', width: 1200, height: 900, label: 'Макет 06', format: 'Хэвлэлийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Брэндинг ба постер', width: 1200, height: 900, label: 'Макет 06', format: 'Хэвлэл · 4:3', placeholder: '/media/placeholder/tile-04.avif' },
+          { name: null, alt: 'Постерын макет — Брэндинг ба постер', width: 900, height: 1200, label: 'Макет 06', format: 'Постер · 3:4', placeholder: '/media/placeholder/tile-03.avif' },
+        ],
       },
       {
         index: '07',
@@ -536,7 +685,10 @@ export const site: Site = {
           'Багц бүр хөдөлгөөнгүй зураг, богино давталттай',
           'Боловсруулалт, өнгө засвар багтсан',
         ],
-        plate: { name: null, alt: 'Макет — Гэрэл зураг', width: 1200, height: 900, label: 'Макет 07', format: 'Зураг' },
+        images: [
+          { name: null, alt: 'Зураг авалт — Гэрэл зураг', width: 1200, height: 900, label: 'Зураг 07', format: 'Зураг · 4:3', placeholder: '/media/placeholder/tile-05.avif' },
+          { name: null, alt: 'Хөрөг — Гэрэл зураг', width: 900, height: 1200, label: 'Зураг 07', format: 'Зураг · 3:4', placeholder: '/media/placeholder/tile-01.avif' },
+        ],
       },
       {
         index: '08',
@@ -547,7 +699,10 @@ export const site: Site = {
           'Аюулгүй байдлын шинэчлэлийг тогтмол хийнэ',
           'Шинэ хэсэг, контентыг үе шаттай нэмнэ',
         ],
-        plate: { name: null, alt: 'Макет — Арчилгаа ба өсөлт', width: 1200, height: 900, label: 'Макет 08', format: 'Дэлгэцийн макет' },
+        images: [
+          { name: null, alt: 'Макет — Арчилгаа ба өсөлт', width: 1200, height: 900, label: 'Макет 08', format: 'Дэлгэц · 4:3', placeholder: '/media/placeholder/tile-06.avif' },
+          { name: null, alt: 'Утасны макет — Арчилгаа ба өсөлт', width: 900, height: 1200, label: 'Макет 08', format: 'Утас · 3:4', placeholder: '/media/placeholder/tile-02.avif' },
+        ],
       },
     ],
   },

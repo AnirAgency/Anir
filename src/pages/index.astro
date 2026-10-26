@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import Hero from '../components/Hero.astro';
 import Marquee from '../components/Marquee.astro';
 import Showreel from '../components/Showreel.astro';
+import Products from '../components/Products.astro';
 import Process from '../components/Process.astro';
 import Services from '../components/Services.astro';
 import Contact from '../components/Contact.astro';
@@ -11,14 +12,15 @@ import Footer from '../components/Footer.astro';
 
 <Base>
   {/*
-    The process, then what each step can be, then the form. Where two darks
-    meet — the full showreel mosaic, then the sparse process — density tells
-    them apart (CLAUDE.md > Layout); where two lights meet, the services'
-    orange bands do. The showreel renders only once real media exists.
+    The work, then Anir's own products, then how a project runs, what it can
+    be made of, and the form. Where two darks meet — the sparse process, then
+    the ruled services — density tells them apart (CLAUDE.md > Layout). The
+    showreel renders only once real media exists.
   */}
   <Hero />
   <Marquee />
   <Showreel />
+  <Products />
   <Process />
   <Services />
   <Contact />

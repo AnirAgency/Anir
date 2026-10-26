@@ -127,13 +127,13 @@ const both = `${sides.client} · ${sides.studio}`;
     --spine-w: min(84vw, 1680px, 100vw - 2 * var(--rail));
     /*
       The ratio table was taken from a 1520px prototype; at 84vw a 1440 screen
-      gives a 1210px section, which shrank the chain by 1210/1520. 1.25 puts
-      the largest circle back at about 223px at 1440 (310px at the 1680 cap).
-      The chain is ~25% taller for it; that is the cost of the size. Never
-      buy the height back by tightening the overlap: the 0.58 spacing has to
-      stay under the 0.70 bloom floor or the chain breaks.
+      gives a 1210px section. 1.875 — the original 1.25, made half as big again
+      after review — puts the largest circle at about 335px at 1440 (465px at
+      the 1680 cap), and the section is as much taller. That is the cost of
+      the size. Never buy the height back by tightening the overlap: the 0.58
+      spacing has to stay under the 0.70 bloom floor or the chain breaks.
     */
-    --d-scale: 1.25;
+    --d-scale: 1.875;
     --chain: calc(var(--spine-w) * var(--d-scale));
     width: var(--spine-w);
     margin-left: calc((100% - var(--spine-w) + var(--inset-right) - var(--inset)) / 2);
@@ -374,7 +374,7 @@ const both = `${sides.client} · ${sides.studio}`;
 
     .process {
       --spine-w: 1100px;
-      --d-scale: 1;
+      --d-scale: 1.5;
       --spine: calc(var(--r-max) * var(--chain));
       width: auto;
       max-width: 52rem;
@@ -450,9 +450,12 @@ const both = `${sides.client} · ${sides.studio}`;
     }
   }
 
+  /* Phones keep the original size: half as big again, the half-circles on
+     the screen's edge would leave the labels about 170px at 390. */
   @media (max-width: 860px) {
     .process {
       --spine-w: 1520px;
+      --d-scale: 1;
       --spine: calc(-1 * var(--inset-mobile));
       max-width: none;
     }

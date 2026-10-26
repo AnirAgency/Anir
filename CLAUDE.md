@@ -144,12 +144,12 @@ gates on. The shimmer only moves the tile, so the set of boxes never changes.
 | `--orange` on `--paper` | 3.21 : 1 | 3.06 : 1 | **fails** for text below large size |
 | `--ink` on `--orange` | 5.43 : 1 | 4.78 : 1 | passes AA |
 | white on `--orange` | 3.67 : 1 | 3.50 : 1 | **fails** |
-| `--ink` at `--rest-opacity` (0.48) on `--paper` | 3.41 : 1 | 3.05 : 1 | passes 3:1, large text only |
+| `--paper` at `--rest-opacity` (0.40) on `--ink` | 3.43 : 1 | 3.02 : 1 | passes 3:1, large text only |
 
 The last row is the Services list at rest: rows sit at `--rest-opacity` and
-the active one goes to full. 0.48 is the floor — at 0.47 the worst pairing is
-2.96. Opacity is never a way to dim text below 24px; that is what `--muted` is
-for.
+the hovered or open one goes to full. 0.40 is the floor — at 0.39 the worst
+pairing is 2.92. Opacity is never a way to dim text below 24px; that is what
+`--muted` is for.
 
 Phase 16 moved the two greys and nothing else: `--dim` #767C85 → #7C828B,
 `--dim-2` #656B75 → #5D636D. At the Phase 02 values the brightest boxes take
@@ -233,9 +233,8 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 - Sections alternate light and dark. Where two dark sections have to meet,
   one is full and the other sparse, so density separates them where tone
   cannot: the edge-to-edge showreel mosaic after the hero (a glowing video
-  needs dark ground), and the sparse process after the mosaic (low-alpha
-  orange needs dark ground). Where two lights meet — Services, then the
-  form — the services' orange bands do the separating.
+  needs dark ground), and the ruled services list after the sparse process
+  (low-alpha orange needs dark ground).
 - **A fluid layout that mixes scaled graphics with fixed-minimum text has a
   breakpoint, and it has to be found by measurement, not derived.** The
   process spine is the case that taught it: its circles scale with the

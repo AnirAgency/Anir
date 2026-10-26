@@ -5,23 +5,20 @@ import SectionHead from './SectionHead.astro';
 import { site } from '../content/site';
 
 /*
-  What Anir does: a list, then a section for each service.
+  What Anir does: eight rows of large type, each one a disclosure. Click a
+  row and it opens on its detail — a band of the service's name running
+  across the screen, then the line, three points and two pictures; opening
+  another closes it. Native <details> sharing one name: the browser does the
+  opening, the keyboard and the announcing, and it works with JS off.
 
-  The list is eight rows of large type at rest; the active row goes to full.
-  On a device that can hover, hover activates a row, and keyboard focus does
-  everywhere. A touch screen has no hover, so there the row crossing the
-  middle of the screen is the active one, through a view timeline — the list
-  still answers a phone. Opacity only, so the compositor runs it.
-  --rest-opacity is the lowest that keeps this large type above 3:1 on
-  --paper under the grain (npm run contrast measures it).
+  Rows rest at --rest-opacity and go to full when hovered or open.
+  --rest-opacity is the lowest that keeps this large type above 3:1 on --ink
+  under the grain (npm run contrast measures it).
 
-  Each section opens on a band of its name, repeating, that slides left as
-  you scroll past. Scroll-driven, not timed: a timed marquee runs forever and
-  never lets the compositor idle, and there are eight of these; this one moves
-  only while it is in view, at the reader's own pace. Its content is two
-  identical copies, each wider than any screen, and it travels -50%, so at
-  the end of its range the second copy sits exactly where the first began —
-  never a gap.
+  The band runs constantly, on a timer, while its row is open. A closed row's
+  detail is not rendered, so at most one band is ever moving, and its
+  pictures are not fetched until it opens. Its content is two identical
+  copies and it travels -50% per loop, so the loop is seamless.
 
   The band is orange because it is a graphic surface, not text claiming
   interactivity — the same line as the process circles (CLAUDE.md > The
@@ -31,91 +28,84 @@ import { site } from '../content/site';
 const { intro, items } = site.services;
 
 /*
-  Enough repeats that one copy outruns a 2560px screen at Display/XL's 92px.
-  Oswald's capitals run under half an em; 0.4em a character, the dash and
-  spaces included, errs toward too many.
+  Enough repeats that one copy outruns a 2560px screen at Display/XL's 92px —
+  Oswald's capitals measure about 0.54em each, dash and spaces included — and
+  a loop long enough to run at about 120px a second at that size.
 */
-const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length + 3) * 0.4 * 92)));
+const EM = 0.54;
+const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length + 3) * EM * 92)));
+const secondsFor = (name: string) => Math.round((repeatsFor(name) * (name.length + 3) * EM * 92) / 120);
 ---
 
-<Section tone="light" id="services" label={intro.label} heading={false}>
+<Section tone="dark" id="services" label={intro.label} heading={false}>
   <SectionHead intro={intro} id="services-title" />
 
-  <ol class="list">
+  <div class="list">
     {
       items.map((item) => (
-        <li class="list__item">
-          <a class="row" href={`#service-${item.index}`}>
+        <details class="service" name="service" id={`service-${item.index}`}>
+          <summary class="row">
             <span class="row__index t-mono-label">{item.index}</span>
-            <span class="row__name t-display-l">{item.name}</span>
-            <svg class="row__arrow" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 18 18 6M8.5 6H18v9.5" />
+            <h3 class="row__name t-display-l">{item.name}</h3>
+            <svg class="row__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4v16M4 12h16" />
             </svg>
-          </a>
-        </li>
-      ))
-    }
-  </ol>
+          </summary>
 
-  {
-    items.map((item) => (
-      <article class="detail" id={`service-${item.index}`} aria-labelledby={`service-${item.index}-title`}>
-        <div class="band" aria-hidden="true">
-          <div class="band__track">
-            {[0, 1].map(() => (
-              <span class="band__copy t-display-xl">
-                {Array.from({ length: repeatsFor(item.name) }, () => (
-                  <span class="band__name">
-                    {item.name}
-                    <span class="band__dash">—</span>
+          <div class="detail">
+            <div class="band" aria-hidden="true" style={`--loop: ${secondsFor(item.name)}s`}>
+              <div class="band__track">
+                {[0, 1].map(() => (
+                  <span class="band__copy t-display-xl">
+                    {Array.from({ length: repeatsFor(item.name) }, () => (
+                      <span class="band__name">
+                        {item.name}
+                        <span class="band__dash">—</span>
+                      </span>
+                    ))}
                   </span>
                 ))}
-              </span>
-            ))}
-          </div>
-        </div>
+              </div>
+            </div>
 
-        <div class="detail__body">
-          <div class="detail__text" data-reveal>
-            <p class="detail__index t-mono-label">{item.index}</p>
-            <h3 id={`service-${item.index}-title`} class="detail__title t-display-m">
-              {item.name}
-            </h3>
-            <p class="detail__line t-serif-italic">{item.line}</p>
-            <ul class="points">
-              {item.points.map((point) => (
-                <li class="point t-mono-body">
-                  <svg class="point__arrow" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 12h15M13 6l6 6-6 6" />
-                  </svg>
-                  <span>{point}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+            <div class="detail__body">
+              <div class="detail__text">
+                <p class="detail__line t-serif-italic">{item.line}</p>
+                <ul class="points">
+                  {item.points.map((point) => (
+                    <li class="point t-mono-body">
+                      <svg class="point__arrow" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 12h15M13 6l6 6-6 6" />
+                      </svg>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-          <div class="detail__plate" data-reveal>
-            <Plate media={item.plate} ratio="4 / 3" kind="image" />
+              <div class="detail__images">
+                {item.images.map((image) => (
+                  <div class="detail__image" style={`--aspect: ${image.width / image.height}`}>
+                    <Plate media={image} ratio={`${image.width} / ${image.height}`} kind="image" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </article>
-    ))
-  }
+        </details>
+      ))
+    }
+  </div>
 </Section>
 
 <style>
-  /* ------------------------------------------------------------------ list */
+  /* ------------------------------------------------------------------ rows */
 
   .list {
-    margin: 0 0 clamp(4rem, 2rem + 6vw, 8rem);
-    padding: 0;
-    list-style: none;
     border-top: var(--hairline) solid var(--line);
   }
 
-  /* The rule is on the item, not the link, so it stays put while the link's
-     opacity changes. */
-  .list__item {
+  .service {
     border-bottom: var(--hairline) solid var(--line);
   }
 
@@ -126,8 +116,13 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
     gap: 1rem;
     padding-block: clamp(0.85rem, 0.5rem + 1.1vw, 1.5rem);
     color: var(--fg);
-    text-decoration: none;
+    list-style: none;
+    cursor: pointer;
     opacity: var(--rest-opacity);
+  }
+
+  .row::-webkit-details-marker {
+    display: none;
   }
 
   .row__index {
@@ -135,23 +130,32 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
   }
 
   .row__name {
+    margin: 0;
     text-wrap: balance;
   }
 
-  .row__arrow {
+  /* A plus that turns to a cross: the row's state, so it takes the orange
+     when the row is open or about to be. */
+  .row__icon {
     width: clamp(1.25rem, 0.9rem + 1.2vw, 2.25rem);
     height: auto;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
+    transition: rotate 0.4s ease;
   }
 
+  .service[open] > .row,
   .row:focus-visible {
     opacity: 1;
   }
 
-  /* The arrow is the clickable mark, so it alone takes the orange. */
+  .service[open] .row__icon {
+    rotate: 45deg;
+    stroke: var(--orange);
+  }
+
   @media (hover: hover) {
     .row {
       transition: opacity 0.35s ease;
@@ -161,16 +165,12 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
       opacity: 1;
     }
 
-    .row:hover .row__arrow {
+    .row:hover .row__icon {
       stroke: var(--orange);
     }
   }
 
-  /* --------------------------------------------------------------- details */
-
-  .detail {
-    scroll-margin-top: var(--header-h);
-  }
+  /* ---------------------------------------------------------------- detail */
 
   /* Edge to edge, out of the section's inset. */
   .band {
@@ -200,38 +200,23 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
 
   .detail__body {
     display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
     gap: clamp(1.75rem, 0.5rem + 3.5vw, 4rem);
-    padding-block: clamp(2.5rem, 1.5rem + 3vw, 4.5rem) clamp(4rem, 2rem + 5vw, 7.5rem);
-  }
-
-  .detail:last-child .detail__body {
-    padding-bottom: 0;
+    padding-block: clamp(2rem, 1rem + 3vw, 3.5rem) clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
   }
 
   .detail__text {
     display: flex;
     flex-direction: column;
-    align-items: start;
-    gap: 1rem;
-  }
-
-  .detail__index {
-    color: var(--muted);
-  }
-
-  .detail__title {
-    max-width: 18ch;
-    text-wrap: balance;
+    gap: 1.25rem;
   }
 
   .detail__line {
-    max-width: 34ch;
+    max-width: 30ch;
   }
 
   .points {
-    width: 100%;
-    margin: 0.75rem 0 0;
+    margin: 0;
     padding: 0;
     list-style: none;
     border-top: var(--hairline) solid var(--line);
@@ -255,6 +240,20 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
     vector-effect: non-scaling-stroke;
   }
 
+  /* Side by side at one height: each takes width in proportion to its
+     aspect ratio. A 1px gap of hairline between them. */
+  .detail__images {
+    display: flex;
+    gap: var(--hairline);
+    align-self: start;
+    background: var(--line);
+  }
+
+  .detail__image {
+    flex: var(--aspect) 1 0;
+    min-width: 0;
+  }
+
   @media (max-width: 860px) {
     .band {
       margin-inline: calc(-1 * var(--inset-mobile));
@@ -267,41 +266,40 @@ const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length 
 
   /* ---------------------------------------------------------------- motion */
 
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      .band__track {
-        animation: slide linear both;
-        animation-timeline: view();
-        animation-range: entry 0% exit 100%;
-      }
+  @media (prefers-reduced-motion: no-preference) {
+    .band__track {
+      animation: band-run var(--loop) linear infinite;
     }
 
-    @media (hover: none) and (prefers-reduced-motion: no-preference) {
-      .row {
-        animation: row-live linear both;
-        animation-timeline: view();
-        animation-range: cover 40% cover 60%;
+    /* Opening slides the detail down rather than snapping it open, where the
+       browser can animate to an auto height. */
+    @supports (interpolate-size: allow-keywords) {
+      .service {
+        interpolate-size: allow-keywords;
+      }
+
+      /* Clipped top to bottom only: the band runs out past the sides. */
+      .service::details-content {
+        block-size: 0;
+        overflow-x: visible;
+        overflow-y: clip;
+        transition:
+          block-size 0.55s cubic-bezier(0.7, 0, 0.2, 1),
+          content-visibility 0.55s allow-discrete;
+      }
+
+      .service[open]::details-content {
+        block-size: auto;
       }
     }
+  }
 
-    @keyframes slide {
-      from {
-        translate: 0;
-      }
-      to {
-        translate: -50%;
-      }
+  @keyframes band-run {
+    from {
+      translate: 0;
     }
-
-    @keyframes row-live {
-      0%,
-      100% {
-        opacity: var(--rest-opacity);
-      }
-      30%,
-      70% {
-        opacity: 1;
-      }
+    to {
+      translate: -50%;
     }
   }
 </style>

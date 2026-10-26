@@ -119,10 +119,10 @@ const colours = {
   white: [255, 255, 255],
 };
 
-// The Services list at rest: --ink drawn at --rest-opacity over --paper is
+// The Services list at rest: --paper drawn at --rest-opacity over --ink is
 // that mix, before the grain lands on top of both.
 const rest = Number(token('rest-opacity'));
-colours['--ink at rest'] = colours['--ink'].map((c, i) => c * rest + colours['--paper'][i] * (1 - rest));
+colours['--paper at rest'] = colours['--paper'].map((c, i) => c * rest + colours['--ink'][i] * (1 - rest));
 
 /*
   [text, ground, bar, must pass]. The failing pairs are listed because the
@@ -139,7 +139,7 @@ const pairs = [
   ['white', '--orange', 4.5, false],
   ['--paper', '--ink', 4.5, true],
   ['--ink', '--paper', 4.5, true],
-  ['--ink at rest', '--paper', 3, true], // large text only: the Services list
+  ['--paper at rest', '--ink', 3, true], // large text only: the Services list
 ];
 
 const lift = (w) => under(colours['--ink'], w)[0] - colours['--ink'][0];

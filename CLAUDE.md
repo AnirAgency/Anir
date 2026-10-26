@@ -114,6 +114,12 @@ This rule exists because the logo ships in exactly two states — all black or
 all orange, never mixed. Scattering orange across headings turns a restrained
 palette into a fast-food one within a week.
 
+**The process circles are a graphic mark, not a UI surface claiming
+interactivity.** That is the same distinction the `border-radius` rule draws,
+and it is what lets orange circles and a neutral heading live under one rule:
+headings, column heads and labels stay neutral; the chain is the brand's
+mark, drawn in its colour.
+
 ### Contrast — measured, not assumed
 
 Measured in Phase 02; re-measured in Phase 16 with the film grain in place.

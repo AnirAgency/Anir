@@ -114,6 +114,12 @@ This rule exists because the logo ships in exactly two states — all black or
 all orange, never mixed. Scattering orange across headings turns a restrained
 palette into a fast-food one within a week.
 
+**The process circles are a graphic mark, not a UI surface claiming
+interactivity.** That is the same distinction the `border-radius` rule draws,
+and it is what lets orange circles and a neutral heading live under one rule:
+headings, column heads and labels stay neutral; the chain is the brand's
+mark, drawn in its colour.
+
 ### Contrast — measured, not assumed
 
 Measured in Phase 02; re-measured in Phase 16 with the film grain in place.
@@ -222,6 +228,11 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   cannot: the edge-to-edge showreel mosaic after the hero (a glowing video
   needs dark ground), and the sparse process after the ruled work rows
   (low-alpha orange needs dark ground).
+- **A fluid layout that mixes scaled graphics with fixed-minimum text has a
+  breakpoint, and it has to be found by measurement, not derived.** The
+  process spine is the case that taught it: its circles scale with the
+  viewport, its labels cannot shrink below legibility, and two columns stop
+  fitting below 1280px — measured by overlapping label boxes, not computed.
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
   hairline colour. Corner ticks on section boundaries.

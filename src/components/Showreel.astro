@@ -4,22 +4,29 @@ import { site, type ShowreelMedia } from '../content/site';
 import { placeholderMode } from '../lib/placeholders.mjs';
 
 /*
-  The showreel mosaic: the work as an edge-to-edge grid of tiles, with one
-  video in the middle that grows from tile size until it fills its slot as the
-  section scrolls through.
+  The showreel mosaic: the work as a grid of tiles that fills the screen, with
+  one video in two of its cells. The section pins as it arrives, and as you
+  keep scrolling the video opens out of its cells until it covers the screen;
+  then the pin lets go. No scroll handler — a tall track with a sticky child —
+  so keyboard, trackpad momentum, find-in-page and screen readers all scroll
+  exactly as they do anywhere else.
+
+  The video is screen-sized from the start and clipped back to its cells, so
+  opening it is just opening the clip. The clip is computed from the same
+  columns, rows, gap and top padding as the grid, so at rest it lands exactly
+  on the cell edges at every size. Base style is that rest state: without
+  scroll-driven animation, under reduced motion and with JS off, the mosaic
+  is not pinned and the video sits in its cells.
 
   Render-gated on real media. In production, with nothing real in site.ts the
   section is not emitted at all — no markup, no script — so main is
   deployable before the shoot, and the day the manifest is filled in, the
-  section appears. Dev and Cloudflare preview builds render the placeholders
-  where real media is missing, so the section can be reviewed on a preview
-  URL (src/lib/placeholders.mjs has the rule).
+  section appears. Dev and preview builds render the placeholders where real
+  media is missing (src/lib/placeholders.mjs has the rule).
 
   The tiles are the portfolio's content, so they are plain lazy <img>s that
   load on every connection, saveData included, with JS on or off. Only the
-  video is gated (the script below). The growth is CSS scroll-driven
-  animation; the base style is the finished state, so without support, under
-  reduced motion and with JS off the video's poster sits at full size.
+  video is gated (the script below); without it, the poster opens instead.
 */
 
 const PLACEHOLDER_DIR = '/media/placeholder/';
@@ -41,9 +48,12 @@ if (leaked.length > 0) {
 const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placeholder : null);
 
 /*
-  Phones: two square columns, with the video a full-width row after half the
-  tiles. An odd last tile takes the whole row rather than leaving a hole.
+  Desktop: four columns, as many rows as the tiles' cells and the video's two
+  need. Phones: two columns, every tile one cell, the video a full row after
+  half of them; an odd last tile takes a whole row rather than leaving a hole.
 */
+const rows = reel ? Math.ceil((reel.tiles.reduce((sum, tile) => sum + tile.cols * tile.rows, 0) + 2) / 4) : 0;
+const mobileRows = reel ? Math.ceil(reel.tiles.length / 2) + 1 : 0;
 const mobileRow = reel ? Math.floor(Math.ceil(reel.tiles.length / 2) / 2) + 1 : 0;
 const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
 ---
@@ -51,55 +61,56 @@ const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
 {
   reel && (
     <Section tone="dark" id="showreel" label={label} layout="bleed">
-      <div class="frame">
-        <div
-          class="mosaic"
-          style={`--video-col: ${reel.video.col}; --video-row: ${reel.video.row}; --video-row-mobile: ${mobileRow};`}
-        >
+      <div
+        class="track"
+        style={`--desktop-rows: ${rows}; --desktop-c: ${reel.video.col}; --desktop-r: ${reel.video.row}; --phone-rows: ${mobileRows}; --phone-r: ${mobileRow};`}
+      >
+        <div class="pin">
           {/*
-            First in source order and explicitly placed, so tiles that arrive
-            late in a stalled stream pack around it without ever moving it.
+            First in source order and absolutely placed, so tiles that arrive
+            late in a stalled stream can never move it.
           */}
-          <div class="slot">
-            <div class="showreel">
-              <img
-                class="showreel__poster"
-                src={reel.video.poster}
-                width={reel.video.width}
-                height={reel.video.height}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                data-lane="poster"
-              />
-              <video
-                class="showreel__video"
-                width={reel.video.width}
-                height={reel.video.height}
-                aria-label={reel.video.label}
-                muted
-                playsinline
-                loop
-                preload="none"
-                data-lane="video"
-                data-defer={reel.video.src}
-              />
-            </div>
-          </div>
-
-          {reel.tiles.map((tile, i) => (
+          <div class="showreel">
             <img
-              class:list={['tile', { 'tile--fill': oddLast && i === reel.tiles.length - 1 }]}
-              src={tile.src}
-              width={tile.width}
-              height={tile.height}
-              alt={tile.alt}
+              class="showreel__poster"
+              src={reel.video.poster}
+              width={reel.video.width}
+              height={reel.video.height}
+              alt=""
               loading="lazy"
               decoding="async"
-              data-lane="tile"
-              style={`--tile-cols: ${tile.cols}; --tile-rows: ${tile.rows};`}
+              data-lane="poster"
             />
-          ))}
+            <video
+              class="showreel__video"
+              width={reel.video.width}
+              height={reel.video.height}
+              aria-label={reel.video.label}
+              muted
+              playsinline
+              loop
+              preload="none"
+              data-lane="video"
+              data-defer={reel.video.src}
+            />
+          </div>
+
+          <div class="mosaic">
+            <div class="slot" aria-hidden="true" />
+            {reel.tiles.map((tile, i) => (
+              <img
+                class:list={['tile', { 'tile--fill': oddLast && i === reel.tiles.length - 1 }]}
+                src={tile.src}
+                width={tile.width}
+                height={tile.height}
+                alt={tile.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+                style={`--tile-cols: ${tile.cols}; --tile-rows: ${tile.rows};`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -144,25 +155,50 @@ const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
 }
 
 <style>
-  /* The container the row height is measured against. */
-  .frame {
-    container-type: inline-size;
+  /*
+    The grid's geometry, once, for the grid and the clip alike: 1px hairline
+    gutters, edge to edge, the first row starting below the nav bar.
+
+    --col-step and --row-step are one column and one row plus a gutter. They
+    hold a bare 100%, which resolves where they are used: against the width
+    in a left or right inset, the height in a top or bottom one. So --slot is
+    the video's two cells as insets of the screen-sized layer, exact at every
+    viewport size.
+  */
+  /* The per-instance numbers arrive inline as --desktop-* and --phone-*; the
+     breakpoint picks which become the working --cols, --rows, --c and --r. */
+  .track {
+    --cols: 4;
+    --rows: var(--desktop-rows);
+    --c: var(--desktop-c);
+    --r: var(--desktop-r);
+    --g: var(--hairline);
+    --pt: var(--header-h);
+    --col-step: calc((100% - (var(--cols) - 1) * var(--g)) / var(--cols) + var(--g));
+    --row-step: calc((100% - var(--pt) - (var(--rows) - 1) * var(--g)) / var(--rows) + var(--g));
+    --slot: inset(
+      calc(var(--pt) + (var(--r) - 1) * var(--row-step))
+        calc((var(--cols) - var(--c) - 1) * var(--col-step))
+        calc((var(--rows) - var(--r)) * var(--row-step))
+        calc((var(--c) - 1) * var(--col-step))
+    );
   }
 
-  /*
-    Four columns; rows 9/32 of a column. At that unit a landscape tile is
-    1 × 3, a portrait 1 × 5, and the video 2 × 4 — exactly 16:9. Row heights
-    come from the width alone, never from an image arriving, so nothing in the
-    grid can shift. Built as a 1px-gap grid on the hairline colour.
-  */
-  .mosaic {
-    --row: calc((100cqi - 3 * var(--hairline)) / 4 * 9 / 32);
+  .pin {
+    position: relative;
+    height: 100svh;
+    padding-top: var(--pt);
+    overflow: hidden;
+    background: var(--bg);
+  }
 
+  .mosaic {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-rows: var(--row);
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
     grid-auto-flow: row dense;
-    gap: var(--hairline);
+    gap: var(--g);
+    height: 100%;
     background: var(--line);
   }
 
@@ -172,25 +208,29 @@ const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
     display: block;
     width: 100%;
     height: 100%;
+    min-height: 0;
     object-fit: cover;
     background: var(--plate);
   }
 
-  /* The video's grid area. It does not scale, so the ground stays put. */
+  /* Holds the video's two cells open in the grid; the video draws over it. */
   .slot {
-    grid-column: var(--video-col) / span 2;
-    grid-row: var(--video-row) / span 4;
-    position: relative;
-    z-index: 2;
-    background: var(--bg);
+    grid-column: var(--c) / span 2;
+    grid-row: var(--r);
+    background: var(--plate);
   }
 
+  /*
+    Screen-sized, clipped to its cells. cover, never contain, on both the
+    video and the poster: the media fills the clip at every size and can never
+    letterbox.
+  */
   .showreel {
-    position: relative;
-    z-index: 2;
-    width: 100%;
-    height: 100%;
-    scale: 1; /* base state = finished */
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: var(--plate);
+    clip-path: var(--slot);
   }
 
   .showreel__poster,
@@ -203,51 +243,95 @@ const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
     object-fit: cover;
   }
 
+  /*
+    The pin and the opening, only where both work. 340svh is the one knob for
+    how long the visitor is held: the video opens across the 240svh during
+    which the track covers the screen (contain 0% to 100%).
+
+    The nav yields while the video holds the screen: it fades out as the clip
+    passes three quarters open, stays out while the video covers everything,
+    and comes back as the pin lets go — so footage never runs under a bar,
+    and the bar is there again for the rest of the page.
+  */
   @supports (animation-timeline: view()) {
-    .showreel {
-      animation: showreel-grow linear both;
-      animation-timeline: view();
-      animation-range: entry 20% cover 60%;
+    @media (prefers-reduced-motion: no-preference) {
+      :global(html) {
+        timeline-scope: --sr;
+      }
+
+      .track {
+        height: 340svh;
+        view-timeline: --sr block;
+      }
+
+      .pin {
+        position: sticky;
+        top: 0;
+      }
+
+      .showreel {
+        animation: showreel-open linear both;
+        animation-timeline: --sr;
+        animation-range: contain 0% contain 100%;
+      }
+
+      :global(.header) {
+        animation: nav-yield linear both;
+        animation-timeline: --sr;
+        animation-range: contain 55% exit 30%;
+      }
     }
 
-    @keyframes showreel-grow {
+    @keyframes showreel-open {
       from {
-        scale: 0.42;
+        clip-path: var(--slot);
       }
       to {
-        scale: 1;
+        clip-path: inset(0 0 0 0);
       }
     }
-  }
 
-  @media (prefers-reduced-motion: reduce) {
-    .showreel {
-      animation: none;
+    /* contain 55% to exit 30%: 26% is the clip three quarters open, 78% is
+       contain 100% — the video covering the screen as the pin lets go. */
+    @keyframes nav-yield {
+      0% {
+        opacity: 1;
+        visibility: visible;
+      }
+      26% {
+        opacity: 0;
+        visibility: hidden;
+      }
+      78% {
+        opacity: 0;
+        visibility: hidden;
+      }
+      100% {
+        opacity: 1;
+        visibility: visible;
+      }
     }
   }
 
   @media (max-width: 860px) {
-    .mosaic {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-auto-rows: auto;
+    .track {
+      --cols: 2;
+      --c: 1;
+      --rows: var(--phone-rows);
+      --r: var(--phone-r);
     }
 
     .tile {
       grid-column: auto;
       grid-row: auto;
-      height: auto;
-      aspect-ratio: 1;
     }
 
     .tile--fill {
       grid-column: 1 / -1;
-      aspect-ratio: 2;
     }
 
     .slot {
       grid-column: 1 / -1;
-      grid-row: var(--video-row-mobile);
-      aspect-ratio: 16 / 9;
     }
   }
 </style>

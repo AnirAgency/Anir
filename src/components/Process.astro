@@ -23,9 +23,13 @@ const { intro, sides, events } = site.process;
   matched to the events one for one. Fillers sit between consecutive events
   and are load-bearing: the label spacing comes from the diameters, and
   without them neighbouring labels nearly collide.
+
+  Every diameter is a fraction of the section's width, --spine-w, and so is
+  every centre and offset derived from them: the chain scales as one piece
+  on every screen.
 */
-const EVENT_D = [118, 62, 150, 88, 196, 74, 128, 224, 92, 166, 58, 140, 80, 108];
-const FILLER_D = [46, 88, 40, 96, 36, 104, 44, 92, 38, 100, 42, 86, 50];
+const EVENT_D = [0.0776, 0.0408, 0.0987, 0.0579, 0.1289, 0.0487, 0.0842, 0.1474, 0.0605, 0.1092, 0.0382, 0.0921, 0.0526, 0.0711];
+const FILLER_D = [0.0303, 0.0579, 0.0263, 0.0632, 0.0237, 0.0684, 0.0289, 0.0605, 0.025, 0.0658, 0.0276, 0.0566, 0.0329];
 
 if (EVENT_D.length !== events.length || FILLER_D.length !== events.length - 1) {
   throw new Error(
@@ -52,9 +56,9 @@ const circles = sequence.map(({ d, event }, i) => {
   const r = d / 2;
   y = i === 0 ? r : y + (previous + r) * SPACING;
   previous = r;
-  return { d, y: Math.round(y * 10) / 10, event };
+  return { d, y: Math.round(y * 1e5) / 1e5, event };
 });
-const height = Math.ceil(y + previous);
+const height = Math.round((y + previous) * 1e5) / 1e5;
 const centres = circles.filter((circle) => circle.event !== null).map((circle) => circle.y);
 
 const rows = events.map((event, i) => {
@@ -115,8 +119,24 @@ const both = `${sides.client} · ${sides.studio}`;
 
 <style>
   .process {
-    /* Chain scale: every diameter, centre and offset is multiplied by it. */
-    --k: 1;
+    /*
+      The section breaks out of the content column: centred on the page, as
+      wide as 84vw, never wider than 1680px, and never under the rail. Every
+      diameter, centre and offset is a fraction of this width.
+    */
+    --spine-w: min(84vw, 1680px, 100vw - 2 * var(--rail));
+    /*
+      The ratio table was taken from a 1520px prototype; at 84vw a 1440 screen
+      gives a 1210px section, which shrank the chain by 1210/1520. 1.25 puts
+      the largest circle back at about 223px at 1440 (310px at the 1680 cap).
+      The chain is ~25% taller for it; that is the cost of the size. Never
+      buy the height back by tightening the overlap: the 0.58 spacing has to
+      stay under the 0.70 bloom floor or the chain breaks.
+    */
+    --d-scale: 1.25;
+    --chain: calc(var(--spine-w) * var(--d-scale));
+    width: var(--spine-w);
+    margin-left: calc((100% - var(--spine-w) + var(--inset-right) - var(--inset)) / 2);
     --spine: 50%;
     /* A label starts this far clear of its circle's edge... */
     --gap: 16px;
@@ -133,7 +153,7 @@ const both = `${sides.client} · ${sides.studio}`;
     margin-bottom: clamp(2rem, 1rem + 3vw, 3.5rem);
     color: var(--muted);
     /* Over the first row's text, which starts this far from the spine. */
-    --head-off: calc(var(--r-first) * var(--k) * 1px + var(--gap) + var(--rule) + var(--rule-gap));
+    --head-off: calc(var(--r-first) * var(--chain) + var(--gap) + var(--rule) + var(--rule-gap));
   }
 
   .process__side {
@@ -152,7 +172,7 @@ const both = `${sides.client} · ${sides.studio}`;
   /* The chain and the labels share one coordinate system: y from its top. */
   .process__body {
     position: relative;
-    height: calc(var(--h) * var(--k) * 1px);
+    height: calc(var(--h) * var(--chain));
   }
 
   .chain {
@@ -168,8 +188,8 @@ const both = `${sides.client} · ${sides.studio}`;
   .dot {
     position: absolute;
     left: var(--spine);
-    top: calc(var(--y) * var(--k) * 1px);
-    width: calc(var(--d) * var(--k) * 1px);
+    top: calc(var(--y) * var(--chain));
+    width: calc(var(--d) * var(--chain));
     aspect-ratio: 1;
     translate: -50% -50%;
     border: 1.5px solid color-mix(in srgb, var(--orange) 82%, transparent);
@@ -190,12 +210,12 @@ const both = `${sides.client} · ${sides.studio}`;
   /* A zero-height anchor on the circle's centre line. */
   .event {
     position: absolute;
-    top: calc(var(--y) * var(--k) * 1px);
+    top: calc(var(--y) * var(--chain));
     left: 0;
     right: 0;
     height: 0;
     /* Clear of the circle at its base size; the bloom only ever shrinks it. */
-    --off: calc(var(--r) * var(--k) * 1px + var(--gap));
+    --off: calc(var(--r) * var(--chain) + var(--gap));
   }
 
   /*
@@ -311,16 +331,16 @@ const both = `${sides.client} · ${sides.studio}`;
 
     @keyframes process-lab {
       0% {
-        scale: 0.88;
-        opacity: 0.3;
+        scale: 0.94;
+        opacity: 0.45;
       }
       50% {
         scale: 1;
         opacity: 1;
       }
       100% {
-        scale: 0.88;
-        opacity: 0.3;
+        scale: 0.94;
+        opacity: 0.45;
       }
     }
   }
@@ -333,21 +353,32 @@ const both = `${sides.client} · ${sides.studio}`;
   }
 
   /*
-    Phones. Two label columns either side of a centred spine leave about 65px
-    of text at 390, and labels hung off the chain in one column collide: the
-    five events with a label on each track need about 130px, and the chain
-    gives 40–80px. So the labels go into reading order in one column, each
-    tagged with whose step it is, and the chain becomes the left edge of the
-    section — centred on the screen's edge, half of every circle showing.
+    Below 1280px, one column. The chain's spacing shrinks with the section
+    width but the labels do not, so the two-sided layout runs out of room:
+    measured, neighbouring labels collide below about 1240px and are a few
+    pixels apart at 1280. Two label columns either side of a centred spine
+    leave about 65px of text at 390, and labels hung off the chain in one
+    column collide too — the five events with a label on each track need
+    about 130px, and the chain gives 40–80px. So the labels go into reading
+    order, each tagged with whose step it is, beside the chain.
+
+    861–1279: whole circles in a column at the content's left edge, clear of
+    the rail. Phones: the chain on the screen's edge, half of every circle
+    showing. Each keeps its own scale — the one that roughly matches the
+    label list beside it.
   */
-  @media (max-width: 860px) {
+  @media (max-width: 1279px) {
     :global(#process) {
       overflow-x: clip;
     }
 
     .process {
-      --k: 1;
-      --spine: calc(-1 * var(--inset-mobile));
+      --spine-w: 1100px;
+      --d-scale: 1;
+      --spine: calc(var(--r-max) * var(--chain));
+      width: auto;
+      max-width: 52rem;
+      margin-left: 0;
     }
 
     .process__sides,
@@ -358,7 +389,7 @@ const both = `${sides.client} · ${sides.studio}`;
 
     .process__body {
       height: auto;
-      min-height: calc(var(--h) * var(--k) * 1px);
+      min-height: calc(var(--h) * var(--chain));
     }
 
     .events {
@@ -366,7 +397,7 @@ const both = `${sides.client} · ${sides.studio}`;
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
-      padding-left: calc(var(--r-max) * var(--k) * 1px - var(--inset-mobile) + var(--gap));
+      padding-left: calc(2 * var(--r-max) * var(--chain) + var(--gap));
     }
 
     .event {
@@ -416,6 +447,18 @@ const both = `${sides.client} · ${sides.studio}`;
     .lab__desc {
       grid-area: 2 / 1 / 3 / 3;
       margin-top: 0.35rem;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .process {
+      --spine-w: 1520px;
+      --spine: calc(-1 * var(--inset-mobile));
+      max-width: none;
+    }
+
+    .events {
+      padding-left: calc(var(--r-max) * var(--chain) - var(--inset-mobile) + var(--gap));
     }
   }
 </style>

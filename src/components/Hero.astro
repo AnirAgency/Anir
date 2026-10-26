@@ -106,14 +106,17 @@ const topStyle = mark ? `--mark-cell-w: ${mark.grid.cell[0]}; --mark-cell-h: ${m
     <div class="hero__products">
       <Grid cols={3}>
         {
-          hero.products.map((product) => (
-            <a class="card" href={product.href}>
-              <span class="card__eyebrow t-mono-label">{product.eyebrow}</span>
-              <span class="card__name t-display-m">{product.name}</span>
-              <span class="card__tagline t-mono-spec">{product.tagline}</span>
-              <span class="card__cta t-mono-label">{product.cta}</span>
-            </a>
-          ))
+          hero.products.map((product) => {
+            const Card = product.href ? 'a' : 'div';
+            return (
+              <Card class="card" href={product.href}>
+                <span class="card__eyebrow t-mono-label">{product.eyebrow}</span>
+                <span class="card__name t-display-m">{product.name}</span>
+                <span class="card__tagline t-mono-spec">{product.tagline}</span>
+                {product.href && <span class="card__cta t-mono-label">{product.cta}</span>}
+              </Card>
+            );
+          })
         }
       </Grid>
     </div>
@@ -351,20 +354,21 @@ const topStyle = mark ? `--mark-cell-w: ${mark.grid.cell[0]}; --mark-cell-h: ${m
 
   /*
     Hover fills the cell with --plate and turns the whole card --orange. Colour
-    and background only — CLAUDE.md rules out transforms on hover.
+    and background only — CLAUDE.md rules out transforms on hover. Only a card
+    that links anywhere gets it: orange marks what is clickable.
   */
-  .card:hover,
-  .card:focus-visible {
+  a.card:hover,
+  a.card:focus-visible {
     background: var(--plate);
     color: var(--orange);
   }
 
-  .card:hover .card__eyebrow,
-  .card:hover .card__tagline,
-  .card:hover .card__cta,
-  .card:focus-visible .card__eyebrow,
-  .card:focus-visible .card__tagline,
-  .card:focus-visible .card__cta {
+  a.card:hover .card__eyebrow,
+  a.card:hover .card__tagline,
+  a.card:hover .card__cta,
+  a.card:focus-visible .card__eyebrow,
+  a.card:focus-visible .card__tagline,
+  a.card:focus-visible .card__cta {
     color: var(--orange);
   }
 

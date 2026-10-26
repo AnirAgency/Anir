@@ -44,9 +44,9 @@ const jsonLd = {
   },
   areaServed: site.meta.country,
   knowsLanguage: 'mn',
-  makesOffer: site.disciplines.items.map((item) => ({
+  makesOffer: site.services.items.map((item) => ({
     '@type': 'Offer',
-    itemOffered: { '@type': 'Service', name: item.title },
+    itemOffered: { '@type': 'Service', name: item.name },
   })),
 };
 ---

@@ -1,0 +1,307 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  What Anir does: a list, then a section for each service.
+
+  The list is eight rows of large type at rest; the active row goes to full.
+  On a device that can hover, hover activates a row, and keyboard focus does
+  everywhere. A touch screen has no hover, so there the row crossing the
+  middle of the screen is the active one, through a view timeline — the list
+  still answers a phone. Opacity only, so the compositor runs it.
+  --rest-opacity is the lowest that keeps this large type above 3:1 on
+  --paper under the grain (npm run contrast measures it).
+
+  Each section opens on a band of its name, repeating, that slides left as
+  you scroll past. Scroll-driven, not timed: a timed marquee runs forever and
+  never lets the compositor idle, and there are eight of these; this one moves
+  only while it is in view, at the reader's own pace. Its content is two
+  identical copies, each wider than any screen, and it travels -50%, so at
+  the end of its range the second copy sits exactly where the first began —
+  never a gap.
+
+  The band is orange because it is a graphic surface, not text claiming
+  interactivity — the same line as the process circles (CLAUDE.md > The
+  orange rule). Text on it is --ink, never white. The headings stay neutral.
+*/
+
+const { intro, items } = site.services;
+
+/*
+  Enough repeats that one copy outruns a 2560px screen at Display/XL's 92px.
+  Oswald's capitals run under half an em; 0.4em a character, the dash and
+  spaces included, errs toward too many.
+*/
+const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length + 3) * 0.4 * 92)));
+---
+
+<Section tone="light" id="services" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="services-title" />
+
+  <ol class="list">
+    {
+      items.map((item) => (
+        <li class="list__item">
+          <a class="row" href={`#service-${item.index}`}>
+            <span class="row__index t-mono-label">{item.index}</span>
+            <span class="row__name t-display-l">{item.name}</span>
+            <svg class="row__arrow" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 18 18 6M8.5 6H18v9.5" />
+            </svg>
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+
+  {
+    items.map((item) => (
+      <article class="detail" id={`service-${item.index}`} aria-labelledby={`service-${item.index}-title`}>
+        <div class="band" aria-hidden="true">
+          <div class="band__track">
+            {[0, 1].map(() => (
+              <span class="band__copy t-display-xl">
+                {Array.from({ length: repeatsFor(item.name) }, () => (
+                  <span class="band__name">
+                    {item.name}
+                    <span class="band__dash">—</span>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div class="detail__body">
+          <div class="detail__text" data-reveal>
+            <p class="detail__index t-mono-label">{item.index}</p>
+            <h3 id={`service-${item.index}-title`} class="detail__title t-display-m">
+              {item.name}
+            </h3>
+            <p class="detail__line t-serif-italic">{item.line}</p>
+            <ul class="points">
+              {item.points.map((point) => (
+                <li class="point t-mono-body">
+                  <svg class="point__arrow" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 12h15M13 6l6 6-6 6" />
+                  </svg>
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div class="detail__plate" data-reveal>
+            <Plate media={item.plate} ratio="4 / 3" kind="image" />
+          </div>
+        </div>
+      </article>
+    ))
+  }
+</Section>
+
+<style>
+  /* ------------------------------------------------------------------ list */
+
+  .list {
+    margin: 0 0 clamp(4rem, 2rem + 6vw, 8rem);
+    padding: 0;
+    list-style: none;
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  /* The rule is on the item, not the link, so it stays put while the link's
+     opacity changes. */
+  .list__item {
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: clamp(2.5rem, 1.5rem + 3vw, 4.5rem) minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+    padding-block: clamp(0.85rem, 0.5rem + 1.1vw, 1.5rem);
+    color: var(--fg);
+    text-decoration: none;
+    opacity: var(--rest-opacity);
+  }
+
+  .row__index {
+    padding-top: 0.45em;
+  }
+
+  .row__name {
+    text-wrap: balance;
+  }
+
+  .row__arrow {
+    width: clamp(1.25rem, 0.9rem + 1.2vw, 2.25rem);
+    height: auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .row:focus-visible {
+    opacity: 1;
+  }
+
+  /* The arrow is the clickable mark, so it alone takes the orange. */
+  @media (hover: hover) {
+    .row {
+      transition: opacity 0.35s ease;
+    }
+
+    .row:hover {
+      opacity: 1;
+    }
+
+    .row:hover .row__arrow {
+      stroke: var(--orange);
+    }
+  }
+
+  /* --------------------------------------------------------------- details */
+
+  .detail {
+    scroll-margin-top: var(--header-h);
+  }
+
+  /* Edge to edge, out of the section's inset. */
+  .band {
+    margin-inline: calc(-1 * var(--inset)) calc(-1 * var(--inset-right));
+    padding-block: clamp(0.4rem, 0.2rem + 0.6vw, 0.85rem);
+    overflow: clip;
+    background: var(--orange);
+    color: var(--ink);
+  }
+
+  .band__track {
+    display: flex;
+    width: max-content;
+  }
+
+  .band__copy {
+    display: flex;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .band__name {
+    display: inline-flex;
+    gap: 0.3em;
+    padding-right: 0.3em;
+  }
+
+  .detail__body {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: clamp(1.75rem, 0.5rem + 3.5vw, 4rem);
+    padding-block: clamp(2.5rem, 1.5rem + 3vw, 4.5rem) clamp(4rem, 2rem + 5vw, 7.5rem);
+  }
+
+  .detail:last-child .detail__body {
+    padding-bottom: 0;
+  }
+
+  .detail__text {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .detail__index {
+    color: var(--muted);
+  }
+
+  .detail__title {
+    max-width: 18ch;
+    text-wrap: balance;
+  }
+
+  .detail__line {
+    max-width: 34ch;
+  }
+
+  .points {
+    width: 100%;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .point {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding-block: 0.85rem;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .point__arrow {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  @media (max-width: 860px) {
+    .band {
+      margin-inline: calc(-1 * var(--inset-mobile));
+    }
+
+    .detail__body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* ---------------------------------------------------------------- motion */
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .band__track {
+        animation: slide linear both;
+        animation-timeline: view();
+        animation-range: entry 0% exit 100%;
+      }
+    }
+
+    @media (hover: none) and (prefers-reduced-motion: no-preference) {
+      .row {
+        animation: row-live linear both;
+        animation-timeline: view();
+        animation-range: cover 40% cover 60%;
+      }
+    }
+
+    @keyframes slide {
+      from {
+        translate: 0;
+      }
+      to {
+        translate: -50%;
+      }
+    }
+
+    @keyframes row-live {
+      0%,
+      100% {
+        opacity: var(--rest-opacity);
+      }
+      30%,
+      70% {
+        opacity: 1;
+      }
+    }
+  }
+</style>

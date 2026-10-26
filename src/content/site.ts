@@ -67,7 +67,9 @@ export interface ProductCard {
   name: string;
   tagline: string;
   cta: string;
-  href: string;
+  /** Optional: none of the three products has a public URL yet. Without one
+   *  the card renders as a plain block, with no CTA and no hover. */
+  href?: string;
 }
 
 /**
@@ -114,17 +116,10 @@ export interface ShowreelTile {
   src: string;
   /** Mongolian alt text. */
   alt: string;
+  /** Its real pixel size. The desktop mosaic shows every tile at its own
+   *  aspect ratio, so these set the shape of the column it sits in. */
   width: number;
   height: number;
-  /**
-   * Its span on the desktop mosaic, in cells. The mosaic fills the screen:
-   * four columns, and as many rows as the tiles need, all one height. A
-   * landscape is 1 × 1, a tall portrait 1 × 2; the video takes two cells of
-   * one row. Any number of tiles packs, so add or drop work by editing this
-   * list alone — but a full grid has no holes, so make the cells add up.
-   */
-  cols: number;
-  rows: number;
 }
 
 export interface ShowreelVideo {
@@ -137,13 +132,20 @@ export interface ShowreelVideo {
   label: string;
   width: number;
   height: number;
-  /** Its place on the desktop mosaic: the left of its two cells, and its row. */
-  col: number;
-  row: number;
 }
 
+/**
+ * The desktop mosaic is three columns. The sides are stacks of work, top to
+ * bottom, that drift upward as the camera moves in; the centre is one image
+ * above the video and one below it, at the video's width, and holds still.
+ * Mix portrait and landscape down each side — the stagger reads from the
+ * seams between tiles, and the two columns need comparable heights.
+ */
 export interface ShowreelMedia {
-  tiles: ShowreelTile[];
+  left: ShowreelTile[];
+  right: ShowreelTile[];
+  above: ShowreelTile;
+  below: ShowreelTile;
   video: ShowreelVideo;
 }
 
@@ -161,22 +163,24 @@ export interface Showreel {
   placeholder: ShowreelMedia;
 }
 
-/* ------------------------------------------------------------- disciplines */
+/* ---------------------------------------------------------------- services */
 
-export interface Discipline {
-  /** ВЭБ / ДИЗАЙН / ЗУРАГ / АПП. A marker, not a sequence number. */
-  code: string;
-  title: string;
-  /** The single word inside `title` set in italic. Must appear in `title`. */
-  italicWord: string;
-  tags: string[];
-  body: string;
+/** One service: a row in the list, then a section of its own below it. */
+export interface Service {
+  /** 01, 02 … — displayed as written. */
+  index: string;
+  name: string;
+  /** One sentence beneath the heading. */
+  line: string;
+  /** Exactly three, each a row led by an arrow. */
+  points: [string, string, string];
+  /** The mockup beside the text. A labelled plate until it is made. */
   plate: Media;
 }
 
-export interface Disciplines {
+export interface Services {
   intro: SectionIntro;
-  items: Discipline[];
+  items: Service[];
 }
 
 /* ----------------------------------------------------------------- pricing */
@@ -203,37 +207,6 @@ export interface PricingGroup {
 export interface Pricing {
   intro: SectionIntro;
   groups: PricingGroup[];
-}
-
-/* ---------------------------------------------------------------- projects */
-
-export interface Project {
-  /** 001, 002, 003 — displayed as written. */
-  index: string;
-  name: string;
-  tagline: string;
-  description: string;
-  spec: {
-    role: string;
-    tech: string;
-    year: string;
-  };
-  /** Optional: none of the three products has a public URL yet. When one
-   *  does, the row renders as a link instead of a plain block. */
-  href?: string;
-}
-
-/** Labels for the project spec list. Mongolian, so they live here. */
-export interface ProjectSpecLabels {
-  role: string;
-  tech: string;
-  year: string;
-}
-
-export interface Projects {
-  intro: SectionIntro;
-  specLabels: ProjectSpecLabels;
-  items: Project[];
 }
 
 /* ----------------------------------------------------------------- process */
@@ -363,9 +336,8 @@ export interface Site {
   hero: Hero;
   marquee: Marquee;
   showreel: Showreel;
-  disciplines: Disciplines;
+  services: Services;
   pricing: Pricing;
-  projects: Projects;
   process: Process;
   team: Team;
   contact: Contact;
@@ -394,7 +366,6 @@ export const site: Site = {
     wordmark: 'ANIR',
     links: [
       { label: 'Үйлчилгээ', href: '#services' },
-      { label: 'Ажил', href: '#work' },
       { label: 'Холбоо +', href: '#contact', accent: true },
     ],
   },
@@ -416,27 +387,27 @@ export const site: Site = {
       width: 1280,
       height: 720,
     },
+    // The cards linked to the Work section, which Phase 19 removed. Give a
+    // card an href — its product's own site, once it has one — and it becomes
+    // a link again, CTA and hover included.
     products: [
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ezmath',
         tagline: 'Математикаа бэлд',
         cta: 'Үзэх +',
-        href: '#work',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ethos',
         tagline: 'Зөв хандив',
         cta: 'Үзэх +',
-        href: '#work',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Olymo',
         tagline: 'Боловсролын мэдээлэл',
         cta: 'Үзэх +',
-        href: '#work',
       },
     ],
   },
@@ -450,34 +421,40 @@ export const site: Site = {
     // The real work goes here the day the shoot lands, and the section appears.
     media: null,
     /*
-      Placeholders, labelled ОРЛУУЛАХ so they cannot pass for work. Tiles pack
-      in list order around the video, so the order is the layout: these eight
-      fill four columns by three rows exactly, with the video in the middle of
-      row 2.
+      Placeholders: device mockups rendered at real weight, each marked
+      ОРЛУУЛАХ · NN so it cannot pass for work. Phones and laptops alternate
+      down each side, so the two columns are of comparable height and their
+      seams interleave; the two wide laptops go above and below the video.
     */
     placeholder: {
-      tiles: [
-        { src: '/media/placeholder/tile-05.avif', alt: 'Түр зураг 05', width: 600, height: 800, cols: 1, rows: 2 },
-        { src: '/media/placeholder/tile-01.avif', alt: 'Түр зураг 01', width: 800, height: 600, cols: 1, rows: 1 },
-        { src: '/media/placeholder/tile-02.avif', alt: 'Түр зураг 02', width: 800, height: 600, cols: 1, rows: 1 },
-        { src: '/media/placeholder/tile-06.avif', alt: 'Түр зураг 06', width: 600, height: 800, cols: 1, rows: 2 },
-        { src: '/media/placeholder/tile-07.avif', alt: 'Түр зураг 07', width: 600, height: 800, cols: 1, rows: 1 },
-        { src: '/media/placeholder/tile-03.avif', alt: 'Түр зураг 03', width: 800, height: 600, cols: 1, rows: 1 },
-        { src: '/media/placeholder/tile-04.avif', alt: 'Түр зураг 04', width: 800, height: 600, cols: 1, rows: 1 },
-        { src: '/media/placeholder/tile-08.avif', alt: 'Түр зураг 08', width: 600, height: 800, cols: 1, rows: 1 },
+      left: [
+        { src: '/media/placeholder/tile-01.avif', alt: 'Түр зураг 01', width: 750, height: 1000 },
+        { src: '/media/placeholder/tile-04.avif', alt: 'Түр зураг 04', width: 1000, height: 750 },
+        { src: '/media/placeholder/tile-02.avif', alt: 'Түр зураг 02', width: 750, height: 1000 },
       ],
+      right: [
+        { src: '/media/placeholder/tile-05.avif', alt: 'Түр зураг 05', width: 1000, height: 750 },
+        { src: '/media/placeholder/tile-03.avif', alt: 'Түр зураг 03', width: 750, height: 1000 },
+        { src: '/media/placeholder/tile-06.avif', alt: 'Түр зураг 06', width: 1000, height: 750 },
+      ],
+      above: { src: '/media/placeholder/tile-07.avif', alt: 'Түр зураг 07', width: 1100, height: 660 },
+      below: { src: '/media/placeholder/tile-08.avif', alt: 'Түр зураг 08', width: 1100, height: 660 },
       video: {
         src: '/media/placeholder/showreel.mp4',
         poster: '/media/placeholder/showreel-poster.avif',
         label: 'Анир багийн ажлын давталт',
         width: 1280,
         height: 720,
-        col: 2,
-        row: 2,
       },
     },
   },
-  disciplines: {
+  /*
+    Phase 19. The names and lines come from the brief; the three points under
+    each are new — drafted in the same voice, partly from the proofread copy
+    of the old disciplines. Bat-Enkh to proofread all of it before it ships.
+    The section heading and label reuse the old section's proofread ones.
+  */
+  services: {
     intro: {
       label: 'Үйлчилгээ',
       eyebrow: '',
@@ -485,72 +462,92 @@ export const site: Site = {
     },
     items: [
       {
-        code: 'ВЭБ',
-        title: 'Хурдан ачаалагддаг сайт',
-        italicWord: 'Хурдан',
-        tags: ['Astro', 'Next', 'Webflow', 'CMS'],
-        body:
-          'Статик болгож бэлдээд ирмэг сүлжээнээс түгээдэг. Учир нь зочдын ихэнх нь ' +
-          'монголын мобайл холболт дээр байдаг. Эхний ачаалалт нэг мегабайтаас доош.',
-        plate: {
-          name: 'plate-01',
-          alt: 'Вэб төслийн дэлгэцийн бичлэг',
-          width: 1280,
-          height: 800,
-          label: 'Плейт 01',
-          format: 'Видео давталт · 720p',
-        },
+        index: '01',
+        name: 'Зөвлөгөө',
+        line: 'Төслийн зорилго, боломжийг тодорхойлж, эхлэх замыг зурна.',
+        points: [
+          'Одоогийн байдал, зорилгоо хамтдаа тодорхойлно',
+          'Төсөв, хугацааны бодит үнэлгээ гаргана',
+          'Эхний алхмыг тодорхой төлөвлөгөө болгоно',
+        ],
+        plate: { name: null, alt: 'Макет — Зөвлөгөө', width: 1200, height: 900, label: 'Макет 01', format: 'Дэлгэцийн макет' },
       },
       {
-        code: 'ДИЗАЙН',
-        title: 'Хэвлэлийн бүтээл',
-        italicWord: 'Хэвлэлийн',
-        tags: ['Постер', 'Айдентити', 'Carousel', 'Хэвлэх файл'],
-        body:
-          'Эхлээд үсгийн урлаг. Арга хэмжээ, шинэ бүтээгдэхүүн, кампанит ажлын постер — ' +
-          'хэвлэхэд бэлэн, өнгө нь ялгагдсан файлаар хүлээлгэн өгнө.',
-        plate: {
-          name: 'plate-02',
-          alt: 'Хөдөлгөөнт постерын давталт',
-          width: 1280,
-          height: 800,
-          label: 'Плейт 02',
-          format: 'Хөдөлгөөнт постер',
-        },
+        index: '02',
+        name: 'Стратеги',
+        line: 'Хэнд, юуг, яаж хэлэхээ шийдэж, төлөвлөгөө болгоно.',
+        points: [
+          'Зорилтот хэрэглэгч, тэдний хэрэгцээг тодорхойлно',
+          'Зах зээл, өрсөлдөгчдийг судална',
+          'Хэмжиж болохуйц зорилт тавина',
+        ],
+        plate: { name: null, alt: 'Макет — Стратеги', width: 1200, height: 900, label: 'Макет 02', format: 'Дэлгэцийн макет' },
       },
       {
-        code: 'ЗУРАГ',
-        title: 'Зураг ба видео',
-        italicWord: 'видео',
-        tags: ['Бүтээгдэхүүн', 'Хөрөг', 'Эвент', 'Reel'],
-        body:
-          'Эхлээд вэбд зориулж буудна. Багц бүр хөдөлгөөнгүй зураг, богино шахагдсан ' +
-          'давталт хоёулаа болж ирнэ — хуудсанд тавихад хагас мегабайт идэхгүй.',
-        plate: {
-          name: 'plate-03',
-          alt: 'Бүтээгдэхүүний зураг авалтын давталт',
-          width: 1280,
-          height: 800,
-          label: 'Плейт 03',
-          format: 'Видео давталт · 720p',
-        },
+        index: '03',
+        name: 'Хэрэглэгчийн туршлага',
+        line: 'Хүн төвтэй бүтэц, ойлгомжтой урсгалыг зохионо.',
+        points: [
+          'Хуудасны бүтэц, навигацийг төлөвлөнө',
+          'Загвар, прототипоор урьдчилан туршина',
+          'Гар утсанд эхлээд тохируулна',
+        ],
+        plate: { name: null, alt: 'Макет — Хэрэглэгчийн туршлага', width: 1200, height: 900, label: 'Макет 03', format: 'Дэлгэцийн макет' },
       },
       {
-        code: 'АПП',
-        title: 'Аппликейшн, эхнээс нь дуустал',
-        italicWord: 'дуустал',
-        tags: ['React', 'Supabase', 'Нэвтрэлт', 'Төлбөр'],
-        body:
-          'Бид өөрсдийн гурван бүтээгдэхүүнийг гаргаад одоо ажиллуулж байна. Тань дээр ' +
-          'ажиллахдаа дараа нь засварлаж арчлах талд нь суугаад ажилладаг.',
-        plate: {
-          name: 'plate-04',
-          alt: 'Аппликейшны дэлгэцийн бичлэг',
-          width: 1280,
-          height: 800,
-          label: 'Плейт 04',
-          format: 'Дэлгэцийн бичлэг',
-        },
+        index: '04',
+        name: 'Вэб хөгжүүлэлт',
+        line: 'Хурдан ачаалагддаг, арчлахад хялбар сайт бүтээнэ.',
+        points: [
+          'Эхний ачаалалт нэг мегабайтаас доош',
+          'Монголын мобайл сүлжээнд зориулж оновчилно',
+          'Хайлтын системд зөв харагдахаар бүтээнэ',
+        ],
+        plate: { name: null, alt: 'Макет — Вэб хөгжүүлэлт', width: 1200, height: 900, label: 'Макет 04', format: 'Дэлгэцийн макет' },
+      },
+      {
+        index: '05',
+        name: 'Аппликейшн',
+        line: 'Гар утасны болон вэб аппликейшн хөгжүүлнэ.',
+        points: [
+          'Нэвтрэлт, төлбөр, мэдэгдлийг холбоно',
+          'Өөрсдийн гурван бүтээгдэхүүний туршлагад тулгуурлана',
+          'Эхний хувилбараа хурдан гаргаж, хэрэглэгчээр туршина',
+        ],
+        plate: { name: null, alt: 'Макет — Аппликейшн', width: 1200, height: 900, label: 'Макет 05', format: 'Дэлгэцийн макет' },
+      },
+      {
+        index: '06',
+        name: 'Брэндинг ба постер',
+        line: 'Лого, өнгө, үсгийн хэв, хэвлэлийн материал.',
+        points: [
+          'Лого болон брэндийн гарын авлага',
+          'Арга хэмжээ, кампанит ажлын постер',
+          'Хэвлэхэд бэлэн, өнгө нь ялгагдсан файл',
+        ],
+        plate: { name: null, alt: 'Макет — Брэндинг ба постер', width: 1200, height: 900, label: 'Макет 06', format: 'Хэвлэлийн макет' },
+      },
+      {
+        index: '07',
+        name: 'Гэрэл зураг',
+        line: 'Бүтээгдэхүүн, баг, орчны зураг авалт.',
+        points: [
+          'Эхлээд вэбд зориулж буудна',
+          'Багц бүр хөдөлгөөнгүй зураг, богино давталттай',
+          'Боловсруулалт, өнгө засвар багтсан',
+        ],
+        plate: { name: null, alt: 'Макет — Гэрэл зураг', width: 1200, height: 900, label: 'Макет 07', format: 'Зураг' },
+      },
+      {
+        index: '08',
+        name: 'Арчилгаа ба өсөлт',
+        line: 'Нийтэлсний дараа хэмжиж, сайжруулж, тогтмол арчилна.',
+        points: [
+          'Хурд, хандалтыг сар бүр хэмжинэ',
+          'Аюулгүй байдлын шинэчлэлийг тогтмол хийнэ',
+          'Шинэ хэсэг, контентыг үе шаттай нэмнэ',
+        ],
+        plate: { name: null, alt: 'Макет — Арчилгаа ба өсөлт', width: 1200, height: 900, label: 'Макет 08', format: 'Дэлгэцийн макет' },
       },
     ],
   },
@@ -623,54 +620,6 @@ export const site: Site = {
             unit: 'ярилцъя',
           },
         ],
-      },
-    ],
-  },
-  projects: {
-    intro: {
-      label: 'Ажил',
-      eyebrow: 'Сонгосон ажил',
-      title: 'Өөрсдийн бүтээгдэхүүн',
-    },
-    specLabels: {
-      role: 'Үүрэг',
-      tech: 'Технологи',
-      year: 'Он',
-    },
-    items: [
-      {
-        index: '001',
-        name: 'Ezmath',
-        tagline: 'Математикаа бэлд. Шалгалтаа дав.',
-        description: 'Математикийн мэдлэгээ бататгах хүртэлх таны ухаалаг туслах.',
-        spec: {
-          role: 'Бүтээгдэхүүн, брэнд, хөгжүүлэлт',
-          tech: 'Next · Supabase',
-          year: '2026',
-        },
-      },
-      {
-        index: '002',
-        name: 'Ethos',
-        tagline: 'Зөв хандив. Бодит тус.',
-        description: 'Бодит сайн үйлсийг холбож, сайн дурын оролцоог дэмжинэ.',
-        spec: {
-          role: 'Бүтээгдэхүүн, хөгжүүлэлт',
-          tech: 'Next · Supabase',
-          year: '2026',
-        },
-      },
-      {
-        index: '003',
-        name: 'Olymo',
-        tagline: 'Боловсролын шинэ мэдээлэл бүхнийг нэг дороос.',
-        description:
-          'Олимпиад, боловсролын хамгийн хэрэгтэй мэдээллийг нэг дороос шуурхай хүргэнэ.',
-        spec: {
-          role: 'Бүтээгдэхүүн, эдиториал',
-          tech: 'Astro · CMS',
-          year: '2026',
-        },
       },
     ],
   },

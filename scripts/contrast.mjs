@@ -119,6 +119,11 @@ const colours = {
   white: [255, 255, 255],
 };
 
+// The Services list at rest: --ink drawn at --rest-opacity over --paper is
+// that mix, before the grain lands on top of both.
+const rest = Number(token('rest-opacity'));
+colours['--ink at rest'] = colours['--ink'].map((c, i) => c * rest + colours['--paper'][i] * (1 - rest));
+
 /*
   [text, ground, bar, must pass]. The failing pairs are listed because the
   table documents them; nothing on the page uses them.
@@ -134,6 +139,7 @@ const pairs = [
   ['white', '--orange', 4.5, false],
   ['--paper', '--ink', 4.5, true],
   ['--ink', '--paper', 4.5, true],
+  ['--ink at rest', '--paper', 3, true], // large text only: the Services list
 ];
 
 const lift = (w) => under(colours['--ink'], w)[0] - colours['--ink'][0];
@@ -142,7 +148,7 @@ console.log(
   `\n  CONTRAST - grain read as ${BOX} × ${BOX} stroke boxes over the ${width}px tile at ${opacity * 100}%` +
     `\n  lift on --ink: mean ${lift(meanBox).toFixed(1)}, brightest box ${Math.max(...lifts).toFixed(1)}\n`
 );
-console.log(`  ${'pair'.padEnd(22)} ${'flat'.padStart(6)} ${'mean'.padStart(6)} ${'worst'.padStart(6)}   bar`);
+console.log(`  ${'pair'.padEnd(26)} ${'flat'.padStart(6)} ${'mean'.padStart(6)} ${'worst'.padStart(6)}   bar`);
 
 const failures = [];
 for (const [text, ground, bar, mustPass] of pairs) {
@@ -153,7 +159,7 @@ for (const [text, ground, bar, mustPass] of pairs) {
   const low = worst(t, g);
   const verdict = low >= bar ? 'pass' : mustPass ? 'FAIL' : 'fails (documented, unused)';
   console.log(
-    `  ${`${text} on ${ground}`.padEnd(22)} ${flat.toFixed(2).padStart(6)} ${mean.toFixed(2).padStart(6)} ${low.toFixed(2).padStart(6)}   ${bar}  ${verdict}`
+    `  ${`${text} on ${ground}`.padEnd(26)} ${flat.toFixed(2).padStart(6)} ${mean.toFixed(2).padStart(6)} ${low.toFixed(2).padStart(6)}   ${bar}  ${verdict}`
   );
   if (mustPass && low < bar) failures.push(`${text} on ${ground} is ${low.toFixed(2)}:1 against a ${bar}:1 bar.`);
 }

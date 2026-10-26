@@ -3,9 +3,11 @@
  *
  * `astro preview` ignores _headers, so it cannot tell you whether the CSP you
  * are about to deploy breaks the site. This can: it parses dist/_headers, walks
- * the rules in order, and applies every match — the same way Cloudflare Pages
- * does — so a policy that blocks your own inline script fails here instead of
- * on aniragency.mn.
+ * the rules in order, and applies every match, so a policy that blocks your
+ * own inline script fails here instead of on aniragency.mn. It is an
+ * approximation: where two rules set the same header the later one wins here,
+ * while Workers Static Assets joins them with a comma. For the exact behaviour
+ * — and the Worker's own /api/enquiry replies — use `npm run dev:worker`.
  *
  *   node scripts/serve-dist.mjs [port]
  */

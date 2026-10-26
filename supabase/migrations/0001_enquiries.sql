@@ -1,6 +1,6 @@
 -- Enquiries from the contact form on aniragency.mn.
 --
--- Written by the Pages Function at functions/api/enquiry.ts, which connects
+-- Written by the Worker at worker/enquiry.ts, which connects
 -- with the service_role key. service_role bypasses row level security, so the
 -- table needs no policy at all — and having none is the point: with RLS on and
 -- zero policies, anon and authenticated can do nothing here.

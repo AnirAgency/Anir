@@ -1,7 +1,7 @@
 /**
  * Exercises the real enquiry Function without Wrangler or a live Supabase.
  *
- * It imports functions/api/enquiry.ts unchanged and calls onRequestPost with
+ * It imports worker/enquiry.ts unchanged and calls onRequestPost with
  * constructed Requests, stubbing global fetch to stand in for Supabase and
  * a Map to stand in for the KV binding. What this proves: validation, the
  * honeypot, rate limiting, content negotiation, and the exact row the Function
@@ -12,7 +12,7 @@
  */
 import assert from 'node:assert/strict';
 
-import { onRequestPost } from '../functions/api/enquiry.ts';
+import { onRequestPost } from '../worker/enquiry.ts';
 
 type Row = Record<string, unknown>;
 

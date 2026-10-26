@@ -15,7 +15,7 @@
 
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type
 // stripping both resolve it, so the test harness can import this file directly.
-import { site } from '../../src/content/site.ts';
+import { site } from '../src/content/site.ts';
 
 interface KVNamespace {
   get(key: string): Promise<string | null>;

@@ -47,28 +47,60 @@ body {
   a texture printed on the page. Scaled nearest-neighbour: smooth upscaling on
   a 2× or 3× screen melts single-pixel specks into soft blobs.
 
-  It lies over the page content, not under it. The hairline grids paint every
-  cell in the ground colour (Grid.astro), so a grain beneath content would
-  vanish across the cards and rows and show a texture step at every cell
-  edge. Over everything, the page is one even surface; the contrast table in
-  CLAUDE.md is measured with grain on text and ground alike. It stays under
-  the nav (40) and rail (41); the nav carries its own copy of the tile so it
-  does not read darker than the page.
+  It lies over everything, the nav included: one layer, so there is nothing
+  to keep in step. The hairline grids paint every cell in the ground colour
+  (Grid.astro), so a grain beneath content would vanish across the cards and
+  rows; over everything, the page is one even surface, and the contrast table
+  in CLAUDE.md is measured with grain on text and ground alike.
 
-  It never animates. A moving grain repaints the whole viewport every frame;
-  a still one is one composited layer that never repaints.
+  On capable desktops it shimmers — the layer jumps to a new offset about seven
+  times a second, like film frames. That is a transform of an already
+  rasterised layer: compositor work, the same class as the scroll animations,
+  never a repaint. Never animate background-position here; that is the repaint.
+  The layer bleeds one tile past the viewport on every side and every offset is
+  under 96px, so no edge ever shows; the offsets are not multiples of 96, or
+  the pattern would land back on itself. Phones, saveData, slow devices and
+  reduced motion get the same grain, still (html.shimmer, set in Base.astro).
 */
 body::after {
   content: '';
   position: fixed;
-  inset: 0;
-  z-index: 30;
+  inset: -96px;
+  z-index: 60;
   pointer-events: none;
   background-image: var(--grain-image);
   background-repeat: repeat;
   background-size: 96px 96px;
   image-rendering: pixelated;
   opacity: var(--grain-opacity);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.shimmer body::after {
+    will-change: transform;
+    animation: grain-shimmer 0.84s steps(1, end) infinite;
+  }
+}
+
+@keyframes grain-shimmer {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  16% {
+    transform: translate3d(-31px, 19px, 0);
+  }
+  33% {
+    transform: translate3d(47px, -23px, 0);
+  }
+  50% {
+    transform: translate3d(-13px, -41px, 0);
+  }
+  66% {
+    transform: translate3d(29px, 37px, 0);
+  }
+  83% {
+    transform: translate3d(-53px, -7px, 0);
+  }
 }
 
 h1,

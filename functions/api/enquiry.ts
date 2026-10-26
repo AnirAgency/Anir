@@ -78,7 +78,7 @@ const html = (status: number, heading: string, ok: boolean) =>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${ok ? 'Хүсэлт хүлээн авлаа' : 'Алдаа'} — Anir</title>
 <style>
-:root{--ink:#08090b;--paper:#f7f9fc;--dim:#80868f;--orange:#f30}
+:root{--ink:#08090b;--paper:#eef0f3;--dim:#7c828b;--orange:#f30}
 body{margin:0;min-height:100vh;display:grid;place-items:center;padding:2rem;
 background:var(--ink);color:var(--paper);
 font:400 14px/1.8 ui-monospace,Consolas,"Liberation Mono",monospace;text-align:center}

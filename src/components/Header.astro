@@ -61,24 +61,6 @@ const cta = site.nav.links.find((link) => link.accent);
     color: var(--paper);
   }
 
-  /*
-    The bar sits above the film grain (base.css > body::after), so it carries
-    its own copy: without it the bar reads darker than the grained page below.
-    Both tiles start at the viewport origin, so the two line up pixel for
-    pixel.
-  */
-  .header::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background-image: var(--grain-image);
-    background-size: 96px 96px;
-    image-rendering: pixelated;
-    opacity: var(--grain-opacity);
-  }
-
   .header__mark {
     display: inline-flex;
     align-items: center;

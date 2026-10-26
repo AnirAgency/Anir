@@ -1,16 +1,19 @@
 ---
 import Section from './Section.astro';
 import { site, type ShowreelMedia } from '../content/site';
+import { placeholderMode } from '../lib/placeholders.mjs';
 
 /*
   The showreel mosaic: the work as an edge-to-edge grid of tiles, with one
   video in the middle that grows from tile size until it fills its slot as the
   section scrolls through.
 
-  Render-gated on real media. With nothing real in site.ts the section is not
-  emitted at all — no markup, no script — so main is deployable before the
-  shoot, and the day the manifest is filled in, the section appears. A build
-  run with PLACEHOLDER_MEDIA=1 renders the placeholders instead, for local work.
+  Render-gated on real media. In production, with nothing real in site.ts the
+  section is not emitted at all — no markup, no script — so main is
+  deployable before the shoot, and the day the manifest is filled in, the
+  section appears. Dev and Cloudflare preview builds render the placeholders
+  where real media is missing, so the section can be reviewed on a preview
+  URL (src/lib/placeholders.mjs has the rule).
 
   The tiles are the portfolio's content, so they are plain lazy <img>s that
   load on every connection, saveData included, with JS on or off. Only the
@@ -31,11 +34,11 @@ const leaked = media ? paths(media).filter((path) => path.startsWith(PLACEHOLDER
 if (leaked.length > 0) {
   throw new Error(
     `site.showreel.media points inside ${PLACEHOLDER_DIR}: ${leaked.join(', ')}. ` +
-      'Real media only — placeholders render through site.showreel.placeholder with PLACEHOLDER_MEDIA=1.'
+      'Real media only — site.showreel.placeholder stands in for it in dev and preview builds.'
   );
 }
 
-const reel = process.env.PLACEHOLDER_MEDIA === '1' ? placeholder : media;
+const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placeholder : null);
 
 /*
   Phones: two square columns, with the video a full-width row after half the

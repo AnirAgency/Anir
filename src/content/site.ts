@@ -105,6 +105,59 @@ export interface Marquee {
   text: string;
 }
 
+/* ---------------------------------------------------------------- showreel */
+
+/** One piece of work in the mosaic. */
+export interface ShowreelTile {
+  /** Public path, extension included. AVIF, encoded at the size it displays —
+   *  never scaled down in CSS from something larger. */
+  src: string;
+  /** Mongolian alt text. */
+  alt: string;
+  width: number;
+  height: number;
+  /**
+   * Its span on the desktop mosaic: four columns, and rows 9/32 of a column
+   * tall. A landscape is 1 × 3, a portrait 1 × 5; the video takes 2 × 4. Any
+   * number of tiles packs, so add or drop work by editing this list alone.
+   */
+  cols: number;
+  rows: number;
+}
+
+export interface ShowreelVideo {
+  /** H.264 MP4: AV1 hardware decode is not universal on budget Android. */
+  src: string;
+  /** AVIF, 40 kB at most. Shown until the video plays, and instead of it on
+   *  saveData, slow devices and reduced motion. */
+  poster: string;
+  /** Mongolian. The video is silent and wordless, so this is all of it. */
+  label: string;
+  width: number;
+  height: number;
+  /** Its place on the desktop mosaic — the middle of the tiles around it. */
+  col: number;
+  row: number;
+}
+
+export interface ShowreelMedia {
+  tiles: ShowreelTile[];
+  video: ShowreelVideo;
+}
+
+export interface Showreel {
+  /** Rail marker and the section's accessible name. */
+  label: string;
+  /**
+   * The real work. null until the shoot, and with null the section does not
+   * render at all — so main is always deployable. Must never point inside
+   * /media/placeholder/: the build fails if it does.
+   */
+  media: ShowreelMedia | null;
+  /** Rendered instead by a build run with PLACEHOLDER_MEDIA=1. Never shipped. */
+  placeholder: ShowreelMedia;
+}
+
 /* ------------------------------------------------------------- disciplines */
 
 export interface Discipline {
@@ -183,15 +236,17 @@ export interface Projects {
 /* ----------------------------------------------------------------- process */
 
 export interface ProcessStep {
-  /** A real sequence, unlike the disciplines — so numbering is legitimate,
-   *  and CLAUDE.md's orange rule lists step numbers as a permitted use. */
-  number: string;
+  /** Who does this step: the client, or the studio. Steps alternate sides. */
+  side: 'client' | 'studio';
   title: string;
   description: string;
 }
 
 export interface Process {
   intro: SectionIntro;
+  /** The two column heads: what the client gives, what the studio does. */
+  sides: { client: string; studio: string };
+  /** In order. The sequence is the content, so the step number is derived. */
   items: ProcessStep[];
 }
 
@@ -296,6 +351,7 @@ export interface Site {
   nav: Nav;
   hero: Hero;
   marquee: Marquee;
+  showreel: Showreel;
   disciplines: Disciplines;
   pricing: Pricing;
   projects: Projects;
@@ -375,6 +431,39 @@ export const site: Site = {
   },
   marquee: {
     text: 'Жижиг баг — Бүтэн анхаарал —',
+  },
+  showreel: {
+    // New Mongolian — Bat-Enkh to proofread. The video label reuses the hero
+    // video's proofread alt text.
+    label: 'Бүтээл',
+    // The real work goes here the day the shoot lands, and the section appears.
+    media: null,
+    /*
+      Placeholders, labelled ОРЛУУЛАХ so they cannot pass for work. Tiles pack
+      in list order around the video, so the order is the layout: these eight
+      fill four columns by ten rows exactly, with the video in the middle.
+    */
+    placeholder: {
+      tiles: [
+        { src: '/media/placeholder/tile-05.avif', alt: 'Түр зураг 05', width: 600, height: 800, cols: 1, rows: 5 },
+        { src: '/media/placeholder/tile-01.avif', alt: 'Түр зураг 01', width: 800, height: 600, cols: 1, rows: 3 },
+        { src: '/media/placeholder/tile-02.avif', alt: 'Түр зураг 02', width: 800, height: 600, cols: 1, rows: 3 },
+        { src: '/media/placeholder/tile-06.avif', alt: 'Түр зураг 06', width: 600, height: 800, cols: 1, rows: 5 },
+        { src: '/media/placeholder/tile-07.avif', alt: 'Түр зураг 07', width: 600, height: 800, cols: 1, rows: 5 },
+        { src: '/media/placeholder/tile-08.avif', alt: 'Түр зураг 08', width: 600, height: 800, cols: 1, rows: 5 },
+        { src: '/media/placeholder/tile-03.avif', alt: 'Түр зураг 03', width: 800, height: 600, cols: 1, rows: 3 },
+        { src: '/media/placeholder/tile-04.avif', alt: 'Түр зураг 04', width: 800, height: 600, cols: 1, rows: 3 },
+      ],
+      video: {
+        src: '/media/placeholder/showreel.mp4',
+        poster: '/media/placeholder/showreel-poster.avif',
+        label: 'Анир багийн ажлын давталт',
+        width: 1280,
+        height: 720,
+        col: 2,
+        row: 4,
+      },
+    },
   },
   disciplines: {
     intro: {
@@ -573,33 +662,65 @@ export const site: Site = {
       },
     ],
   },
+  /*
+    New Mongolian, from the Phase 14 brief — Bat-Enkh to proofread before it
+    ships. The heading reuses the old three-step section's proofread eyebrow.
+  */
   process: {
     intro: {
-      label: 'Гурван үе шат',
-      eyebrow: 'Хэрхэн явагддаг',
-      title: 'Гурван үе шат',
+      label: 'Процесс',
+      eyebrow: 'Процесс',
+      title: 'Хэрхэн явагддаг',
+    },
+    sides: {
+      client: 'Та',
+      studio: 'Бид',
     },
     items: [
       {
-        number: '01',
-        title: 'Хэлэлцэх',
-        description:
-          'Нэг уулзалт, дараа нь тогтсон үнэ, хугацаа бүхий бичгэн санал. ' +
-          'Хэрэв бид тохирохгүй бол яг энд хэлнэ.',
+        side: 'studio',
+        title: 'Үнэгүй зөвлөгөө',
+        description: 'Төслийн зорилго, шаардлагыг хамтдаа тодорхойлно.',
       },
       {
-        number: '02',
-        title: 'Хийх',
-        description:
-          'Эхний долоо хоногоос амьд холбоос өгнө. Төгсгөлд нь гайхшруулахыг ' +
-          'хүлээхгүй, бүтэхийг нь харж явна.',
+        side: 'client',
+        title: 'Материал өгөх',
+        description: 'Текст, зураг, лого болон бусад контентоо өгнө.',
       },
       {
-        number: '03',
-        title: 'Хүлээлгэн өгөх',
-        description:
-          'Код, эх файл, заавар бүгд тань дээр очно. Юу ч бидэнд түгжигдэхгүй, ' +
-          'хүсвэл дэмжлэг үргэлжилнэ.',
+        side: 'studio',
+        title: 'Санал ба үнэ',
+        description: 'Ажлын хүрээ, хугацаа, төсвийг дэлгэрэнгүй гаргана.',
+      },
+      {
+        side: 'client',
+        title: 'Гэрээ байгуулах',
+        description: 'Нөхцөлийг зөвшөөрч, ажлыг эхлүүлнэ.',
+      },
+      {
+        side: 'studio',
+        title: 'Загвар гаргах',
+        description: 'Өнгө, үсгийн хэв, нүүр хуудсыг зохионо.',
+      },
+      {
+        side: 'client',
+        title: 'Загварын шүүмж',
+        description: 'Загварыг хянаж, санал хүсэлтээ хэлнэ.',
+      },
+      {
+        side: 'studio',
+        title: 'Хөгжүүлэлт',
+        description: 'Сайтыг кодоор бүтээж, агуулгыг оруулна.',
+      },
+      {
+        side: 'client',
+        title: 'Эцсийн хяналт',
+        description: 'Бэлэн сайтыг шалгаж, баталгаажуулна.',
+      },
+      {
+        side: 'studio',
+        title: 'Нийтлэх ба дэмжлэг',
+        description: 'Сайтыг олны хүртээл болгож, цаашид арчилна.',
       },
     ],
   },

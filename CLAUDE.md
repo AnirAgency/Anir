@@ -29,10 +29,10 @@ These are not preferences. Breaking one is a bug.
 | Constraint | Value |
 |---|---|
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
-| First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset allowed on top. |
+| First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
 | Output | **Static.** No SSR, no server runtime except the one contact-form function. |
-| 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 35 pre-rendered frames in one image; the tilt is a `background-position` lookup. |
+| 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
 | Node | **Pin to 22** via `.nvmrc`. Workers Builds is set to Node 22 (`NODE_VERSION`); building locally on a different major than CI is a needless risk on a static site. |
 | Motion | Must fully disable under `prefers-reduced-motion: reduce`. |
@@ -42,7 +42,7 @@ kilobyte is felt.
 
 ### Budget
 
-Two budgets, checked separately:
+Three budgets, checked separately:
 
 - **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
 - **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
@@ -54,7 +54,32 @@ Two budgets, checked separately:
 **A lazy asset waits for first contentful paint, not for `load`. `load` fires
 before FCP on a fast build.**
 
-`scripts/budget.mjs` checks the two budgets separately and must stay blocking.
+- **Below-the-fold media: 1.6 MB total.** Every item lazy and out of the
+  critical path. **No single file over 300 kB is fetched when
+  `navigator.connection.saveData` is true.** Within it:
+  - Tiles **≤ 300 kB together**, on every connection — a separate cap from
+    the `saveData` rule. AVIF, encoded at display size, never scaled
+    down in CSS from something larger. Explicit `width`/`height` on every one.
+    Plain `<img loading="lazy" decoding="async">` — they are the work, so they
+    load on every connection, `saveData` included, with JS on or off.
+  - Video **≤ 1.2 MB**, `preload="none"`, `muted`, `playsinline`, `loop`,
+    explicit dimensions, poster **≤ 40 kB**. Its `src` is attached by script
+    only when the section is within one viewport, behind the same `saveData`
+    and `hardwareConcurrency` gates as the lazy asset; otherwise the poster
+    stands in.
+
+  An element joins this lane by declaring `data-lane="tile|poster|video"`.
+  On `saveData` every tile and the poster load and the video does not. That
+  is not generous: the tiles are lazy, so a visitor who never scrolls to the
+  mosaic never fetches them. The bytes go only to someone who chose to look
+  at the work.
+
+Placeholder media lives in `public/media/placeholder/` and renders only in a
+build run with `PLACEHOLDER_MEDIA=1`. Any other build strips it from `dist/`,
+and the build fails if real media in `site.ts` points inside that folder.
+Never deploy a `PLACEHOLDER_MEDIA=1` build.
+
+`scripts/budget.mjs` checks the three budgets separately and must stay blocking.
 Do not make it advisory.
 
 ---
@@ -105,8 +130,8 @@ Three rules follow:
    `#656B75` on light.
 2. On light sections, orange fails the 4.5:1 small-text bar (3.21:1) but
    passes the 3:1 large-text bar. It may be used as text only at >=24px
-   regular or >=18.66px bold — the Гурван үе шат step numbers at 56px
-   qualify. Below that it is a mark, not a text colour: use --muted and
+   regular or >=18.66px bold — the enquiry email at Display/M (26–34px)
+   qualifies. Below that it is a mark, not a text colour: use --muted and
    return the orange as a 2px rule or dot.
 3. **Text on an orange fill is `--ink`, never white.** White on orange fails.
 
@@ -164,11 +189,17 @@ Mono/Spec      JB Mono 400  10.5px / 185%
 ### Layout
 
 - Desktop canvas 1440. Content inset: **144px left** (an 88px rail + 56px pad), 56px right.
-- Sections alternate light and dark. Never two of the same in a row.
+- Sections alternate light and dark. Where two dark sections have to meet,
+  one is full and the other sparse, so density separates them where tone
+  cannot: the edge-to-edge showreel mosaic after the hero (a glowing video
+  needs dark ground), and the sparse process after the ruled work rows
+  (low-alpha orange needs dark ground).
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
   hairline colour. Corner ticks on section boundaries.
-- Nothing has a border radius except the small eyebrow pills (100px).
+- No `border-radius` on UI surfaces: buttons, inputs, cards, media frames,
+  the enquiry form. Geometric marks that are circular by nature are not UI
+  surfaces. The eyebrow pills (100px) are the one rounded UI element.
 
 ---
 
@@ -190,7 +221,7 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   Ethos and Ezmath, so this is not a new dependency.
 
 No React. No Tailwind. No UI library. Plain `.astro` components and CSS custom
-properties — the site is nine sections, a framework earns nothing here.
+properties — the site is one static page, a framework earns nothing here.
 
 ---
 
@@ -203,7 +234,9 @@ properties — the site is nine sections, a framework earns nothing here.
 - Prices are data, not markup. They change; they live in `site.ts`.
 - Every image ships with explicit `width`/`height` to prevent layout shift.
 - Every video: `muted`, `playsinline`, `loop`, `preload="none"`, a `poster`
-  frame, and `loading="lazy"` on anything below the fold.
+  frame, and `loading="lazy"` on anything below the fold. Below the fold the
+  poster is a lazy `<img>` under the video, not the `poster` attribute —
+  browsers fetch that eagerly, whatever `preload` says.
 
 ---
 

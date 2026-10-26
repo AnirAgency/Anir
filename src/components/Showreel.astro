@@ -1,0 +1,250 @@
+---
+import Section from './Section.astro';
+import { site, type ShowreelMedia } from '../content/site';
+
+/*
+  The showreel mosaic: the work as an edge-to-edge grid of tiles, with one
+  video in the middle that grows from tile size until it fills its slot as the
+  section scrolls through.
+
+  Render-gated on real media. With nothing real in site.ts the section is not
+  emitted at all — no markup, no script — so main is deployable before the
+  shoot, and the day the manifest is filled in, the section appears. A build
+  run with PLACEHOLDER_MEDIA=1 renders the placeholders instead, for local work.
+
+  The tiles are the portfolio's content, so they are plain lazy <img>s that
+  load on every connection, saveData included, with JS on or off. Only the
+  video is gated (the script below). The growth is CSS scroll-driven
+  animation; the base style is the finished state, so without support, under
+  reduced motion and with JS off the video's poster sits at full size.
+*/
+
+const PLACEHOLDER_DIR = '/media/placeholder/';
+
+const { label, media, placeholder } = site.showreel;
+
+const paths = (reel: ShowreelMedia) => [reel.video.src, reel.video.poster, ...reel.tiles.map((tile) => tile.src)];
+
+// The backstop. The real manifest pointing at the placeholders would ship
+// ОРЛУУЛАХ tiles to clients the moment someone forgets the flag is off.
+const leaked = media ? paths(media).filter((path) => path.startsWith(PLACEHOLDER_DIR)) : [];
+if (leaked.length > 0) {
+  throw new Error(
+    `site.showreel.media points inside ${PLACEHOLDER_DIR}: ${leaked.join(', ')}. ` +
+      'Real media only — placeholders render through site.showreel.placeholder with PLACEHOLDER_MEDIA=1.'
+  );
+}
+
+const reel = process.env.PLACEHOLDER_MEDIA === '1' ? placeholder : media;
+
+/*
+  Phones: two square columns, with the video a full-width row after half the
+  tiles. An odd last tile takes the whole row rather than leaving a hole.
+*/
+const mobileRow = reel ? Math.floor(Math.ceil(reel.tiles.length / 2) / 2) + 1 : 0;
+const oddLast = reel ? reel.tiles.length % 2 === 1 : false;
+---
+
+{
+  reel && (
+    <Section tone="dark" id="showreel" label={label} layout="bleed">
+      <div class="frame">
+        <div
+          class="mosaic"
+          style={`--video-col: ${reel.video.col}; --video-row: ${reel.video.row}; --video-row-mobile: ${mobileRow};`}
+        >
+          {/*
+            First in source order and explicitly placed, so tiles that arrive
+            late in a stalled stream pack around it without ever moving it.
+          */}
+          <div class="slot">
+            <div class="showreel">
+              <img
+                class="showreel__poster"
+                src={reel.video.poster}
+                width={reel.video.width}
+                height={reel.video.height}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                data-lane="poster"
+              />
+              <video
+                class="showreel__video"
+                width={reel.video.width}
+                height={reel.video.height}
+                aria-label={reel.video.label}
+                muted
+                playsinline
+                loop
+                preload="none"
+                data-lane="video"
+                data-defer={reel.video.src}
+              />
+            </div>
+          </div>
+
+          {reel.tiles.map((tile, i) => (
+            <img
+              class:list={['tile', { 'tile--fill': oddLast && i === reel.tiles.length - 1 }]}
+              src={tile.src}
+              width={tile.width}
+              height={tile.height}
+              alt={tile.alt}
+              loading="lazy"
+              decoding="async"
+              data-lane="tile"
+              style={`--tile-cols: ${tile.cols}; --tile-rows: ${tile.rows};`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <script>
+        /*
+          Attaches the video's src once the section is within one viewport —
+          never on saveData, a slow device or reduced motion, where the poster
+          grows instead. The same gates as the hero mark. No scroll handler:
+          the observer plays it near the viewport and pauses it away from it.
+
+          It starts watching only after load. On a desktop the section begins
+          within a viewport of the top, so watching from the start would put
+          the video on the wire with the first load.
+        */
+        const video = document.querySelector<HTMLVideoElement>('[data-defer]');
+        const src = video?.dataset.defer;
+        const data = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+
+        if (
+          video &&
+          src &&
+          !data?.saveData &&
+          (navigator.hardwareConcurrency || 8) > 4 &&
+          !matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          const watch = () =>
+            new IntersectionObserver(
+              ([entry]) => {
+                if (!entry.isIntersecting) return video.pause();
+                if (!video.src) video.src = src;
+                video.play().catch(() => {});
+              },
+              { rootMargin: '100% 0px' }
+            ).observe(video.closest('section') ?? video);
+
+          if (document.readyState === 'complete') watch();
+          else addEventListener('load', watch, { once: true });
+        }
+      </script>
+    </Section>
+  )
+}
+
+<style>
+  /* The container the row height is measured against. */
+  .frame {
+    container-type: inline-size;
+  }
+
+  /*
+    Four columns; rows 9/32 of a column. At that unit a landscape tile is
+    1 × 3, a portrait 1 × 5, and the video 2 × 4 — exactly 16:9. Row heights
+    come from the width alone, never from an image arriving, so nothing in the
+    grid can shift. Built as a 1px-gap grid on the hairline colour.
+  */
+  .mosaic {
+    --row: calc((100cqi - 3 * var(--hairline)) / 4 * 9 / 32);
+
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: var(--row);
+    grid-auto-flow: row dense;
+    gap: var(--hairline);
+    background: var(--line);
+  }
+
+  .tile {
+    grid-column: span var(--tile-cols);
+    grid-row: span var(--tile-rows);
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: var(--plate);
+  }
+
+  /* The video's grid area. It does not scale, so the ground stays put. */
+  .slot {
+    grid-column: var(--video-col) / span 2;
+    grid-row: var(--video-row) / span 4;
+    position: relative;
+    z-index: 2;
+    background: var(--bg);
+  }
+
+  .showreel {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    scale: 1; /* base state = finished */
+  }
+
+  .showreel__poster,
+  .showreel__video {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @supports (animation-timeline: view()) {
+    .showreel {
+      animation: showreel-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 60%;
+    }
+
+    @keyframes showreel-grow {
+      from {
+        scale: 0.42;
+      }
+      to {
+        scale: 1;
+      }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .showreel {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .mosaic {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-auto-rows: auto;
+    }
+
+    .tile {
+      grid-column: auto;
+      grid-row: auto;
+      height: auto;
+      aspect-ratio: 1;
+    }
+
+    .tile--fill {
+      grid-column: 1 / -1;
+      aspect-ratio: 2;
+    }
+
+    .slot {
+      grid-column: 1 / -1;
+      grid-row: var(--video-row-mobile);
+      aspect-ratio: 16 / 9;
+    }
+  }
+</style>

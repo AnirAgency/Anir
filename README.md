@@ -218,7 +218,7 @@ npm run deploy         # runs the budget, then uploads
 
 ### When an enquiry arrives
 
-Every enquiry sends a notification (email, Telegram, or both — see setup step 7)
+Every enquiry sends a notification (Telegram now, email too once the domain exists — see setup step 7)
 that starts with one of two lines:
 
 - **"Stored in Supabase."** — the normal case. It is in the `enquiries` table.
@@ -272,21 +272,30 @@ Redirect Rule (the zone → Rules → Redirect Rules) sending it to
 served before any Worker code runs. Wait until the certificate shows **Active**
 before announcing the address.
 
-**7. Notifications.** Pick whatever the team actually reads; either or both:
+**7. Notifications — Telegram now, email once the domain exists.** Telegram is
+where the team already talks, a bot is free and takes minutes, and it needs no
+domain.
 
-- **Email** — make a free account at resend.com, create an API key, then
-  `npx wrangler secret put RESEND_API_KEY` and
-  `npx wrangler secret put NOTIFY_EMAIL` (comma-separate several addresses).
-  Until `aniragency.mn` is verified in Resend, mail comes from Resend's test
-  sender and can only go to the address the Resend account was made with.
-- **Telegram** — message @BotFather, `/newbot`, keep the token; add the bot to
-  the team's group; get the group's chat id (send a message in the group, then
-  open `https://api.telegram.org/bot<token>/getUpdates` and find `chat.id`).
-  Then `npx wrangler secret put TELEGRAM_BOT_TOKEN` and
-  `npx wrangler secret put TELEGRAM_CHAT_ID`.
+1. In Telegram, message **@BotFather** → `/newbot` → give it a name. Keep the
+   token it replies with; it is a secret.
+2. Add the bot to the team's group, then send `/start` in the group (bots only
+   see commands until you change their privacy setting).
+3. Open `https://api.telegram.org/bot<token>/getUpdates` in a browser and find
+   `"chat":{"id":-100…}` — the group's id, minus sign included.
+4. In the project folder: `npx wrangler secret put TELEGRAM_BOT_TOKEN`, then
+   `npx wrangler secret put TELEGRAM_CHAT_ID`.
+5. Send one enquiry through the live form. The group should get it within
+   seconds, starting "Stored in Supabase."
 
-Until one is set, every enquiry logs "no channel configured" — and nobody hears
-about it. Test by sending one enquiry through the live form.
+**Email, later.** The Worker already sends email through Resend when
+`RESEND_API_KEY` and `NOTIFY_EMAIL` are set — leave them unset until
+`aniragency.mn` is registered and verified in Resend with SPF, DKIM and DMARC
+records, then set `NOTIFY_FROM` to an address on the domain. Mail from an
+unauthenticated sender is how a new domain starts life in spam folders. Once
+it works, keep both: one channel is a single point of failure.
+
+Until a channel is set, every enquiry logs "no channel configured" — and nobody
+hears about it.
 
 ### Headers
 

@@ -54,7 +54,7 @@ src/
 public/
   fonts/         the six subset woff2 files (committed)
   media/         video loops, plates, portraits (Phase 08 fills this)
-functions/       Cloudflare Pages Functions — the contact endpoint only
+worker/          the Worker — the contact endpoint; everything else is static
 scripts/
   budget.mjs     the weight budget
   fonts.mjs      the font subsetting pipeline
@@ -175,101 +175,128 @@ and update `src/styles/fonts.css` to match.
 
 ## Deploy runbook
 
+The site runs on **Cloudflare Workers**. One Worker, `anir`, serves the built
+site from `dist/` as static files and answers the contact form at
+`/api/enquiry`. Cloudflare builds and deploys it from GitHub by itself.
+
 ### Redeploying (the normal case)
 
-Push to `main`. Cloudflare Pages builds and deploys it. That is the whole loop.
+1. Make your change on a branch and open a pull request.
+2. Cloudflare builds the branch and gives it a **preview URL** — it appears on
+   the pull request. Open it on a phone and a laptop and check what you changed.
+3. Merge the pull request into `main`. Cloudflare builds `main` and it is live
+   about a minute later. Nobody deploys by hand.
 
-Before pushing, run `npm run budget` — it builds and fails if the page is over
-1 MB or 200 kB of JS. A red build is cheaper than a slow site.
+If a build fails, nothing goes live — the last good version keeps serving. The
+build runs `npm run budget`, so a page over its weight budget fails on purpose.
+To see why: Workers & Pages → **anir** → Deployments → the failed build → read
+the last lines of the log. Fix it on the branch and push again.
 
-### First-time setup
+Run the same check on your own computer before pushing: `npm run budget`.
 
-Steps 1–4 need the Cloudflare dashboard and cannot be scripted from this repo.
+### Checking a deploy
 
-**1. Create the Pages project.** Workers & Pages → Create → Pages → connect to
-GitHub → `AnirAgency/Anir`.
+```bash
+npm run test:headers -- https://<the preview or live URL>
+```
+
+Checks that every page **and the contact endpoint** carry the security headers,
+and that the caching rules landed. Run it on the preview before merging anything
+that touches `scripts/headers.mjs` or `worker/`.
+
+### Rolling back
+
+Workers & Pages → **anir** → Deployments → the last good version → **Rollback**.
+Then fix the problem on `main`; a rollback does not change the code.
+
+### Deploying by hand (only if the automatic build is broken)
+
+```bash
+npx wrangler login     # once per computer — opens a browser to sign in
+npm run deploy         # runs the budget, then uploads
+```
+
+### If the contact form shows its error message
+
+Most likely the Supabase project has paused. It is on the free plan, which
+pauses a project after a week without activity — it was paused when the site
+first deployed. Supabase dashboard → project **Anir** → Restore. Nothing is
+lost; it takes a few minutes.
+
+### First-time setup (done once; kept as the record)
+
+**1. The Worker** is defined in `wrangler.jsonc`. The first `npm run deploy`
+created it at `https://anir.<account>.workers.dev`.
+
+**2. The secret.** `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`, value
+from Supabase → Project Settings → API keys → `service_role`. Never commit it.
+`SUPABASE_URL` is public and lives in `wrangler.jsonc`.
+
+**3. Rate limiting** is a KV namespace bound as `RATE_LIMIT` in `wrangler.jsonc`.
+Without the binding the limiter **fails open**: the form still works but nothing
+throttles it, and nothing tells you. 5 submissions per IP per hour; IPs are
+hashed before they are stored.
+
+**4. Builds from GitHub.** Workers & Pages → **anir** → Settings → Build →
+Connect → GitHub → `AnirAgency/Anir`.
 
 | Setting | Value |
 |---|---|
 | Production branch | `main` |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Node version | `22` (`.nvmrc` pins it; set `NODE_VERSION=22` too if the build image ignores it) |
+| Build command | `npm run budget` |
+| Deploy command | `npx wrangler deploy` |
+| Builds for non-production branches | on (`npx wrangler versions upload`) |
+| Build variable | `NODE_VERSION` = `22` |
 
-**2. Environment variables** — Settings → Environment variables → Production:
+**5. The database** — `supabase/migrations/0001_enquiries.sql`, applied 31 August
+2026. RLS on, no policies, all grants revoked from `anon` and `authenticated`:
+an anonymous client can neither read nor write the table.
 
-| Variable | Where it comes from |
-|---|---|
-| `SUPABASE_URL` | `https://tyrzajpotvtirfjmacfm.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role` |
-
-Never commit these. The service_role key bypasses row level security; it is read
-only inside the Pages Function, which runs on the edge.
-
-**3. Apply the database migration.** Paste
-`supabase/migrations/0001_enquiries.sql` into the Supabase SQL editor. Until this
-runs, the form returns its Mongolian error message and stores nothing.
-
-**4. Bind KV for rate limiting.** Create a KV namespace (`anir-rate-limit`) and
-bind it as **`RATE_LIMIT`** under Settings → Functions → KV namespace bindings.
-Without it the limiter **fails open** — the form still works, it just does not
-throttle. 5 requests per IP per hour; IPs are SHA-256 hashed before storage.
-
-**5. Custom domain.** `aniragency.mn` is registered through Datacom. Point its
-nameservers at Cloudflare, then Pages → Custom domains → add `aniragency.mn` and
-`www.aniragency.mn`. Cloudflare issues the certificate automatically; wait for
-"Active" before announcing the URL. Add a redirect rule sending `www` → apex.
+**6. The domain.** `aniragency.mn` is **not registered yet**. Cloudflare does not
+sell `.mn`, so: register it with a Mongolian registrar; add `aniragency.mn` as a
+site in Cloudflare; at the registrar, change the nameservers to the two
+Cloudflare gives you; then Workers & Pages → **anir** → Settings → Domains &
+Routes → add `aniragency.mn`. For `www`, add a proxied `www` DNS record and a
+Redirect Rule (the zone → Rules → Redirect Rules) sending it to
+`https://aniragency.mn` with a 301 — a zone rule, because static files are
+served before any Worker code runs. Wait until the certificate shows **Active**
+before announcing the address.
 
 ### Headers
 
 `dist/_headers` is **generated on every build** by `scripts/headers.mjs` — never
-edit it by hand, it is overwritten. It sets long-cache immutable rules for
-`/_astro/` and `/fonts/`, a week for `/media/`, no cache for HTML or `/api/`,
-and a Content-Security-Policy carrying a SHA-256 hash for every inline script
-Astro emitted. Hand-maintained hashes rot after the first build that changes a
-script; generated ones cannot.
+edit it by hand. It carries the security headers, with a Content-Security-Policy
+holding a SHA-256 hash for every inline script Astro emitted, and the cache
+rules: a year, immutable, for `/_astro/` and `/fonts/`; a week for `/media/`;
+HTML keeps Cloudflare's default (`max-age=0, must-revalidate`).
 
-To check a policy change before it reaches production:
+Two things about `_headers` on Workers that are easy to get wrong:
+
+- **It is not applied to responses the Worker makes.** `/api/enquiry` is Worker
+  code, so it would ship with no security headers at all. The generator writes
+  the same list to `worker/security-headers.generated.json` and the Worker
+  attaches it to its own replies; `npm run test:headers` proves they match.
+- **Every matching rule applies, and a header set twice is joined with a comma.**
+  That is why the catch-all rule sets no `Cache-Control`.
+
+To see exactly what production will serve, locally:
 
 ```bash
-npm run build
-node scripts/serve-dist.mjs           # serves dist/ WITH the _headers applied
-npm run shot -- http://localhost:4331/ --measure 1440 --console
+npm run dev:worker                    # builds, then runs the Worker on :8787
+npm run test:headers -- http://localhost:8787
 ```
 
-`astro preview` ignores `_headers`, so it cannot catch a CSP that blocks your
-own scripts. That command can — `--console` surfaces CSP violations, which are
-otherwise silent.
+## Cloudflare Workers
 
-### Rolling back
-
-Cloudflare Pages keeps every deployment. Deployments → pick the last good one →
-Rollback. Then fix forward on `main`; a rollback does not change the repo.
-
-## Cloudflare Pages
-
-The site is static. `dist/` uploads as plain assets and `functions/` compiles into
-the one Pages Function that serves `/api/*`.
+The site is static. `dist/` uploads as Workers Static Assets: a request that
+matches a file is served without the Worker ever running. Only `POST
+/api/enquiry` reaches `worker/index.ts`, which passes it to the handler in
+`worker/enquiry.ts`; anything else unmatched gets a 404.
 
 **There is deliberately no `@astrojs/cloudflare` adapter.** That adapter exists to
-run Astro on a Worker for SSR; this site has `output: 'static'` and CLAUDE.md
-forbids a server runtime beyond the contact endpoint. Adding it would ship a
-Worker to serve pages that are already files. Cloudflare Pages discovers
-`functions/` on its own — no adapter is involved.
-
-`public/_routes.json` narrows Function invocation to `/api/*`, so every static
-request is served from the edge cache without waking a worker.
-
-Deploy settings (wired up in Phase 11):
-
-| Setting | Value |
-|---|---|
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Node version | pin to 20 or newer |
-
-Secrets — the Supabase service key — are set in the Cloudflare dashboard under
-**Settings → Environment variables**. They are never committed.
+run Astro on a Worker for server rendering; this site has `output: 'static'`
+and CLAUDE.md forbids a server runtime beyond the contact endpoint. The Worker
+is a dozen lines in front of plain files.
 
 ## Media pipeline
 
@@ -367,13 +394,13 @@ else is a static file.
   action="/api/enquiry">`, so it submits with JavaScript switched off. The
   inline script is enhancement only: it swaps a page navigation for an inline
   status message.
-- **`functions/api/enquiry.ts`** — validates, rate-limits by IP, inserts one
+- **`worker/enquiry.ts`** — validates, rate-limits by IP, inserts one
   row into Supabase over the REST endpoint. Answers JSON to `fetch` and a small
   HTML page to a plain browser post.
 - **`supabase/migrations/0001_enquiries.sql`** — the table, with RLS on and
   deliberately **no policies**.
 - **`scripts/test-enquiry.ts`** — `node scripts/test-enquiry.ts` exercises the
-  real Function with a stubbed Supabase and KV. No Wrangler needed.
+  real handler with a stubbed Supabase and KV. No Wrangler needed.
 
 The chip groups are native radio inputs. That is deliberate — a radio group
 gives arrow-key navigation, roving focus and an accessible name from its
@@ -383,25 +410,26 @@ gives arrow-key navigation, roving focus and an accessible name from its
 
 **1. Apply the migration.** Paste `supabase/migrations/0001_enquiries.sql` into
 the project's SQL editor, or `supabase db push`. RLS is enabled with no
-policies, so `anon` and `authenticated` can do nothing; the Function writes with
+policies, so `anon` and `authenticated` can do nothing; the Worker writes with
 the service_role key, which bypasses RLS. Do not add a policy to this table —
 any policy is a way to read other people's contact details.
 
-**2. Set two environment variables** in Cloudflare Pages → Settings →
-Environment variables (see `.env.example`):
+**2. Set the service key** as a Worker secret — `npx wrangler secret put
+SUPABASE_SERVICE_ROLE_KEY` — and in `.dev.vars` for local work (see
+`.dev.vars.example`). `SUPABASE_URL` is in `wrangler.jsonc`:
 
 | Variable | Value |
 |---|---|
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → `service_role` |
+| `SUPABASE_URL` | `https://<project-ref>.supabase.co` (`wrangler.jsonc`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API keys → `service_role` (secret) |
 
 The service_role key must **never** reach the browser. It is read only inside
-the Function, which runs on the edge.
+the Worker, which runs on the edge.
 
-**3. Optional — bind a KV namespace for rate limiting.** Create a KV namespace
-and bind it as `RATE_LIMIT`. Without it the limiter is skipped: it **fails
+**3. Bind the KV namespace for rate limiting — not optional.** It is bound as
+`RATE_LIMIT` in `wrangler.jsonc`. Without it the limiter is skipped: it **fails
 open** on purpose, because losing a real client's message is worse than letting
-an extra submission through. The limit is 5 per IP per hour, and IPs are SHA-256
+an extra submission through — which also means a missing binding is silent. The limit is 5 per IP per hour, and IPs are SHA-256
 hashed before they touch storage.
 
 ### Adding email notification later

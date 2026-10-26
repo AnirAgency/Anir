@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "anir",
+  "compatibility_date": "2026-10-26",
+
+  // The Worker answers /api/enquiry and hands everything else to the static
+  // assets in dist/. Requests that match a file are served without waking it.
+  "main": "./worker/index.ts",
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+
+  // anir.<account>.workers.dev stays on: it is the live address until
+  // aniragency.mn is registered, and the base for preview URLs after.
+  "workers_dev": true,
+
+  // Every non-production build gets its own URL — each PR is reviewable live.
+  "preview_urls": true,
+  "observability": { "enabled": true },
+
+  // Public, and in every Supabase client, so it is not a secret. The
+  // service_role key IS: `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  "vars": {
+    "SUPABASE_URL": "https://tyrzajpotvtirfjmacfm.supabase.co"
+  },
+
+  "kv_namespaces": [
+    // The enquiry rate limiter. Without this binding it fails OPEN — the form
+    // works but is unthrottled — so a missing binding is silent. Do not remove.
+    { "binding": "RATE_LIMIT", "id": "9f75dcfba28142c8a3df1b8f47ab7bfc" },
+    // Where an enquiry waits when Supabase will not take it. Without it a
+    // failed write loses the enquiry. Do not remove.
+    { "binding": "ENQUIRY_BUFFER", "id": "f88d8fe8986e4273a99c041c8e1da8e3" }
+  ],
+
+  // Drains ENQUIRY_BUFFER into Supabase (worker/index.ts > scheduled).
+  "triggers": { "crons": ["*/15 * * * *"] }
+
+  // Notification secrets, set with `npx wrangler secret put`, never here:
+  // RESEND_API_KEY + NOTIFY_EMAIL for email, or TELEGRAM_BOT_TOKEN +
+  // TELEGRAM_CHAT_ID for a Telegram chat. Either, both, or — until set — a
+  // warning in the logs on every enquiry.
+}

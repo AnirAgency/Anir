@@ -16,13 +16,17 @@
     "test:enquiry": "node scripts/test-enquiry.ts",
     "media": "node scripts/media.mjs",
     "test:media": "node scripts/test-media.mjs",
-    "contrast": "node scripts/contrast.mjs"
+    "contrast": "node scripts/contrast.mjs",
+    "dev:worker": "npm run build && wrangler dev",
+    "deploy": "npm run budget && wrangler deploy",
+    "test:headers": "node scripts/test-headers.mjs"
   },
   "dependencies": {
     "astro": "^5.0.0",
     "lenis": "^1.1.13"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "wrangler": "4.152.0"
   }
 }

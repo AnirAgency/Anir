@@ -30,11 +30,11 @@ These are not preferences. Breaking one is a bug.
 |---|---|
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
-| Hosting | **Cloudflare Pages.** Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
+| Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
 | Output | **Static.** No SSR, no server runtime except the one contact-form function. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
-| Node | **Pin to 22** via `.nvmrc`. Cloudflare Pages' V3 build image ships Node 22 by default; building locally on a different major than CI is a needless risk on a static site. |
+| Node | **Pin to 22** via `.nvmrc`. Workers Builds is set to Node 22 (`NODE_VERSION`); building locally on a different major than CI is a needless risk on a static site. |
 | Motion | Must fully disable under `prefers-reduced-motion: reduce`. |
 
 Audience is on ~17 Mbps mobile and ~23 Mbps fixed connections. Assume every
@@ -241,7 +241,10 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   ScrollTrigger. Do not reintroduce GSAP without a real timeline need —
   scrubbing, pinning, sequenced timelines — and none of those is on this site.
 - **Lenis** — smooth scroll. Must no-op under reduced-motion.
-- **Cloudflare Pages** — hosting. **Pages Functions** for the one contact endpoint.
+- **Cloudflare Workers** — hosting. Static Assets serves `dist/`; the Worker
+  (`worker/index.ts`) answers the one contact endpoint. `_headers` is not applied
+  to Worker responses, so the Worker attaches the same security headers itself,
+  from the list `scripts/headers.mjs` generates — `npm run test:headers` checks it.
 - **Supabase** — stores contact submissions. Anir already runs Supabase for
   Ethos and Ezmath, so this is not a new dependency.
 

@@ -6,7 +6,7 @@ import { site } from '../content/site';
   The enquiry form. A real form, not a decoration.
 
   It posts to /api/enquiry with a plain method="post" action, so it works with
-  JavaScript switched off — the Function answers a browser post with an HTML
+  JavaScript switched off — the Worker answers a browser post with an HTML
   page and a fetch with JSON. The script below is enhancement only: it swaps a
   full page navigation for an inline status message.
 
@@ -331,7 +331,7 @@ const { fields, honeypot } = form;
 
 <script>
   /*
-    Enhancement only. Without this the form still posts and the Function
+    Enhancement only. Without this the form still posts and the Worker
     answers with an HTML page; this just keeps the visitor on the page.
   */
   const form = document.querySelector<HTMLFormElement>('[data-enquiry]');

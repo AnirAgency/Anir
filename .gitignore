@@ -26,3 +26,9 @@ Claude outputs/
 # os
 .DS_Store
 Thumbs.db
+
+# Written by scripts/headers.mjs on every build; the Worker imports it.
+worker/*.generated.json
+
+# Local Worker secrets for `wrangler dev` (copy .dev.vars.example).
+.dev.vars

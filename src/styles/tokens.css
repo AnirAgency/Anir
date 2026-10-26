@@ -51,6 +51,15 @@
   --line-light: color-mix(in srgb, var(--ink) 20%, var(--paper));
 
   /*
+    Large type waiting to be made active — the Services list's rows at rest.
+    Not a free choice: it is the lowest opacity at which --paper on --ink
+    still clears the 3:1 large-text bar under the grain (0.39 does not), and
+    npm run contrast fails if it drops below. The list sits on dark; on
+    --paper the floor would be 0.48. Never use it on text below 24px.
+  */
+  --rest-opacity: 0.4;
+
+  /*
     Film grain over the whole page, under the nav (base.css > body::after). A
     96px tile of sparse white specks — 12% of pixels opaque, the rest clear —
     which the build inlines as a data URI, so it costs no request. The tile

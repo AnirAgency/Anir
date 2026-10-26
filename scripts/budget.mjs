@@ -269,7 +269,11 @@ for (const tag of pageHtml.matchAll(/<(\w+)\b([^>]*)>/g)) {
     belowProblems.push(`${label}: does not resolve to a file in dist/.`);
     continue;
   }
+  // A browser fetches a file once however many elements show it, so a file
+  // counts once. Real media is one file per slot; the placeholders repeat.
+  if (below.some((item) => item.target === target)) continue;
   below.push({
+    target,
     lane,
     path: relative(dist, target).split(sep).join(posix.sep),
     bytes: statSync(target).size,

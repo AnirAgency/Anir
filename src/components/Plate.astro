@@ -1,5 +1,6 @@
 ---
 import { resolveImage, resolveVideo } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
 import type { Media } from '../content/site';
 
 /*
@@ -26,6 +27,19 @@ interface Props {
 const { media, ratio = '16 / 10', kind = 'video', class: className } = Astro.props;
 
 const asset = kind === 'video' ? resolveVideo(media) : resolveImage(media);
+
+/*
+  Nothing real yet: dev and preview builds show the stand-in, if the slot has
+  one, so a section can be judged with pictures in it. Production never does —
+  it gets the labelled plate.
+*/
+if (media.placeholder && !media.placeholder.startsWith('/media/placeholder/')) {
+  throw new Error(`${media.alt}: placeholder ${media.placeholder} must live under /media/placeholder/.`);
+}
+const stand =
+  kind === 'image' && !asset.present && media.placeholder && placeholderMode({ dev: import.meta.env.DEV })
+    ? media.placeholder
+    : null;
 ---
 
 <div class:list={['plate', className]} style={`--plate-ratio: ${ratio};`}>
@@ -70,7 +84,22 @@ const asset = kind === 'video' ? resolveVideo(media) : resolveImage(media);
   }
 
   {
-    !asset.present && (
+    stand && (
+      <img
+        class="plate__asset"
+        src={stand}
+        alt={media.alt}
+        width={media.width}
+        height={media.height}
+        loading="lazy"
+        decoding="async"
+        data-lane="tile"
+      />
+    )
+  }
+
+  {
+    !asset.present && !stand && (
       <div class="plate__pending">
         {media.label && <span class="plate__label t-mono-label">{media.label}</span>}
         {media.format && <span class="plate__format t-mono-label">{media.format}</span>}

@@ -1,20 +1,23 @@
-Anir — placeholder media for Phase 14 (showreel mosaic)
+Anir — placeholder media v4 (device mockups)
 
-Put these in:  public/media/placeholder/
+Put in:  public/media/placeholder/
 
-  tile-01..04.avif    800x600  landscape work tiles
-  tile-05..08.avif    600x800  portrait work tiles
-  showreel-poster.avif 1280x720 poster for the centre video
-  showreel.mp4        1280x720, 8s, H.264, silent, loop-safe
+  tile-01..03.avif    750x1000  portrait  — phones, left/right columns
+  tile-04..06.avif   1000x750   landscape — laptops, left/right columns
+  tile-07, tile-08.avif 1100x660 landscape — the two CENTRE tiles, above and
+                                             below the video (video width)
+  showreel-poster.avif 1600x900          — 15 kB
+  showreel.mp4        1280x720, 11.5s, silent, H.264 — 2.20 MB
 
-These are placeholders. They are deliberately ugly, numbered, and labelled
-ОРЛУУЛАХ so they cannot be mistaken for work. The production build must fail
-if anything still references this folder.
+Nine slots: three stacked each side, and image / VIDEO / image down the middle.
 
-They are grained on purpose: a flat panel encodes to about 4 kB and would make
-the budget check meaningless. These compress like photographs, so the
-below-the-fold media lane is tested at something close to real weight.
+Rendered in Blender/Cycles — real lighting, reflections, depth of field. Screens
+carry plausible Mongolian client UI. Grained on purpose so they compress like
+photographs and the budget check measures something real.
 
-H.264, not AV1: AV1 hardware decode is not universal on budget Android, which
-is most of the audience. Software decode on a mid-range phone costs more
-battery and frames than the bytes AV1 would save at this size.
+  8 tiles    780 kB
+  poster      15 kB
+  video    2,250 kB
+  TOTAL     2.97 MB   against a 1.6 MB below-the-fold lane
+
+The video is 76% of the weight. Measure before changing the lane.

@@ -44,9 +44,9 @@ const jsonLd = {
   },
   areaServed: site.meta.country,
   knowsLanguage: 'mn',
-  makesOffer: site.disciplines.items.map((item) => ({
+  makesOffer: site.services.items.map((item) => ({
     '@type': 'Offer',
-    itemOffered: { '@type': 'Service', name: item.title },
+    itemOffered: { '@type': 'Service', name: item.name },
   })),
 };
 ---
@@ -108,8 +108,13 @@ const jsonLd = {
       .shimmer lets the film grain move (base.css): a fine pointer, no
       saveData, more than four cores — the same gates as the hero mark. The
       grain runs continuously, so a phone would pay for it in battery.
+
+      .js is for layouts that a script will drive, like the products reel, so
+      they take their final shape at the first paint instead of when the
+      script arrives — which, with the stream stalled, could be seconds later.
     */}
     <script is:inline>
+      document.documentElement.classList.add('js');
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion');
         if (matchMedia('(pointer: fine)').matches && !navigator.connection?.saveData && (navigator.hardwareConcurrency || 8) > 4) {

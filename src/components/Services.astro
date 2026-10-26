@@ -1,0 +1,305 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  What Anir does: eight rows of large type, each one a disclosure. Click a
+  row and it opens on its detail — a band of the service's name running
+  across the screen, then the line, three points and two pictures; opening
+  another closes it. Native <details> sharing one name: the browser does the
+  opening, the keyboard and the announcing, and it works with JS off.
+
+  Rows rest at --rest-opacity and go to full when hovered or open.
+  --rest-opacity is the lowest that keeps this large type above 3:1 on --ink
+  under the grain (npm run contrast measures it).
+
+  The band runs constantly, on a timer, while its row is open. A closed row's
+  detail is not rendered, so at most one band is ever moving, and its
+  pictures are not fetched until it opens. Its content is two identical
+  copies and it travels -50% per loop, so the loop is seamless.
+
+  The band is orange because it is a graphic surface, not text claiming
+  interactivity — the same line as the process circles (CLAUDE.md > The
+  orange rule). Text on it is --ink, never white. The headings stay neutral.
+*/
+
+const { intro, items } = site.services;
+
+/*
+  Enough repeats that one copy outruns a 2560px screen at Display/XL's 92px —
+  Oswald's capitals measure about 0.54em each, dash and spaces included — and
+  a loop long enough to run at about 120px a second at that size.
+*/
+const EM = 0.54;
+const repeatsFor = (name: string) => Math.max(3, Math.ceil(2800 / ((name.length + 3) * EM * 92)));
+const secondsFor = (name: string) => Math.round((repeatsFor(name) * (name.length + 3) * EM * 92) / 120);
+---
+
+<Section tone="dark" id="services" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="services-title" />
+
+  <div class="list">
+    {
+      items.map((item) => (
+        <details class="service" name="service" id={`service-${item.index}`}>
+          <summary class="row">
+            <span class="row__index t-mono-label">{item.index}</span>
+            <h3 class="row__name t-display-l">{item.name}</h3>
+            <svg class="row__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4v16M4 12h16" />
+            </svg>
+          </summary>
+
+          <div class="detail">
+            <div class="band" aria-hidden="true" style={`--loop: ${secondsFor(item.name)}s`}>
+              <div class="band__track">
+                {[0, 1].map(() => (
+                  <span class="band__copy t-display-xl">
+                    {Array.from({ length: repeatsFor(item.name) }, () => (
+                      <span class="band__name">
+                        {item.name}
+                        <span class="band__dash">—</span>
+                      </span>
+                    ))}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div class="detail__body">
+              <div class="detail__text">
+                <p class="detail__line t-serif-italic">{item.line}</p>
+                <ul class="points">
+                  {item.points.map((point) => (
+                    <li class="point t-mono-body">
+                      <svg class="point__arrow" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 12h15M13 6l6 6-6 6" />
+                      </svg>
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div class="detail__images">
+                {item.images.map((image) => (
+                  <div class="detail__image" style={`--aspect: ${image.width / image.height}`}>
+                    <Plate media={image} ratio={`${image.width} / ${image.height}`} kind="image" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </details>
+      ))
+    }
+  </div>
+</Section>
+
+<style>
+  /* ------------------------------------------------------------------ rows */
+
+  .list {
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .service {
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: clamp(2.5rem, 1.5rem + 3vw, 4.5rem) minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+    padding-block: clamp(0.85rem, 0.5rem + 1.1vw, 1.5rem);
+    color: var(--fg);
+    list-style: none;
+    cursor: pointer;
+    opacity: var(--rest-opacity);
+  }
+
+  .row::-webkit-details-marker {
+    display: none;
+  }
+
+  .row__index {
+    padding-top: 0.45em;
+  }
+
+  .row__name {
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  /* A plus that turns to a cross: the row's state, so it takes the orange
+     when the row is open or about to be. */
+  .row__icon {
+    width: clamp(1.25rem, 0.9rem + 1.2vw, 2.25rem);
+    height: auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    transition: rotate 0.4s ease;
+  }
+
+  .service[open] > .row,
+  .row:focus-visible {
+    opacity: 1;
+  }
+
+  .service[open] .row__icon {
+    rotate: 45deg;
+    stroke: var(--orange);
+  }
+
+  @media (hover: hover) {
+    .row {
+      transition: opacity 0.35s ease;
+    }
+
+    .row:hover {
+      opacity: 1;
+    }
+
+    .row:hover .row__icon {
+      stroke: var(--orange);
+    }
+  }
+
+  /* ---------------------------------------------------------------- detail */
+
+  /* Edge to edge, out of the section's inset. */
+  .band {
+    margin-inline: calc(-1 * var(--inset)) calc(-1 * var(--inset-right));
+    padding-block: clamp(0.4rem, 0.2rem + 0.6vw, 0.85rem);
+    overflow: clip;
+    background: var(--orange);
+    color: var(--ink);
+  }
+
+  .band__track {
+    display: flex;
+    width: max-content;
+  }
+
+  .band__copy {
+    display: flex;
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .band__name {
+    display: inline-flex;
+    gap: 0.3em;
+    padding-right: 0.3em;
+  }
+
+  .detail__body {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(1.75rem, 0.5rem + 3.5vw, 4rem);
+    padding-block: clamp(2rem, 1rem + 3vw, 3.5rem) clamp(2.5rem, 1.5rem + 3vw, 4.5rem);
+  }
+
+  .detail__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .detail__line {
+    max-width: 30ch;
+  }
+
+  .points {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .point {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding-block: 0.85rem;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .point__arrow {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* Side by side at one height: each takes width in proportion to its
+     aspect ratio. A 1px gap of hairline between them. */
+  .detail__images {
+    display: flex;
+    gap: var(--hairline);
+    align-self: start;
+    background: var(--line);
+  }
+
+  .detail__image {
+    flex: var(--aspect) 1 0;
+    min-width: 0;
+  }
+
+  @media (max-width: 860px) {
+    .band {
+      margin-inline: calc(-1 * var(--inset-mobile));
+    }
+
+    .detail__body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* ---------------------------------------------------------------- motion */
+
+  @media (prefers-reduced-motion: no-preference) {
+    .band__track {
+      animation: band-run var(--loop) linear infinite;
+    }
+
+    /* Opening slides the detail down rather than snapping it open, where the
+       browser can animate to an auto height. */
+    @supports (interpolate-size: allow-keywords) {
+      .service {
+        interpolate-size: allow-keywords;
+      }
+
+      /* Clipped top to bottom only: the band runs out past the sides. */
+      .service::details-content {
+        block-size: 0;
+        overflow-x: visible;
+        overflow-y: clip;
+        transition:
+          block-size 0.55s cubic-bezier(0.7, 0, 0.2, 1),
+          content-visibility 0.55s allow-discrete;
+      }
+
+      .service[open]::details-content {
+        block-size: auto;
+      }
+    }
+  }
+
+  @keyframes band-run {
+    from {
+      translate: 0;
+    }
+    to {
+      translate: -50%;
+    }
+  }
+</style>

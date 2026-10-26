@@ -255,8 +255,16 @@ Connect → GitHub → `AnirAgency/Anir`.
 | Production branch | `main` |
 | Build command | `npm run budget` |
 | Deploy command | `npx wrangler deploy` |
-| Builds for non-production branches | on (`npx wrangler versions upload`) |
+| Builds for non-production branches | on |
+| Preview command | `npx wrangler preview` (the default) |
 | Build variable | `NODE_VERSION` = `22` |
+
+Each pull request gets a **Preview** named after its branch; Cloudflare turns
+`feat/x` into `feat-x` in the URL itself. A Preview takes only the bindings in
+the `previews` block of `wrangler.jsonc` — without that block every preview
+build fails. A preview has no database and its own KV, so an enquiry sent from
+one is answered as received but never reaches the `enquiries` table and
+notifies nobody.
 
 **5. The database** — `supabase/migrations/0001_enquiries.sql`, applied 31 August
 2026. RLS on, no policies, all grants revoked from `anon` and `authenticated`:

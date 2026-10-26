@@ -46,8 +46,8 @@ function stripPlaceholders() {
   };
 }
 
-// Static output only. Cloudflare Pages serves dist/ from its Ulaanbaatar PoP and
-// picks up functions/ on its own — no SSR adapter, see README > Cloudflare Pages.
+// Static output only. Workers Static Assets serves dist/, and the Worker in
+// worker/ answers the contact endpoint — no SSR adapter, see README > Cloudflare Workers.
 export default defineConfig({
   site: 'https://aniragency.mn',
   output: 'static',

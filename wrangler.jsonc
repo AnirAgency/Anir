@@ -22,7 +22,20 @@
     "SUPABASE_URL": "https://tyrzajpotvtirfjmacfm.supabase.co"
   },
 
-  // The enquiry rate limiter. Without this binding it fails OPEN — the form
-  // works but is unthrottled — so a missing binding is silent. Do not remove.
-  "kv_namespaces": [{ "binding": "RATE_LIMIT", "id": "9f75dcfba28142c8a3df1b8f47ab7bfc" }]
+  "kv_namespaces": [
+    // The enquiry rate limiter. Without this binding it fails OPEN — the form
+    // works but is unthrottled — so a missing binding is silent. Do not remove.
+    { "binding": "RATE_LIMIT", "id": "9f75dcfba28142c8a3df1b8f47ab7bfc" },
+    // Where an enquiry waits when Supabase will not take it. Without it a
+    // failed write loses the enquiry. Do not remove.
+    { "binding": "ENQUIRY_BUFFER", "id": "f88d8fe8986e4273a99c041c8e1da8e3" }
+  ],
+
+  // Drains ENQUIRY_BUFFER into Supabase (worker/index.ts > scheduled).
+  "triggers": { "crons": ["*/15 * * * *"] }
+
+  // Notification secrets, set with `npx wrangler secret put`, never here:
+  // RESEND_API_KEY + NOTIFY_EMAIL for email, or TELEGRAM_BOT_TOKEN +
+  // TELEGRAM_CHAT_ID for a Telegram chat. Either, both, or — until set — a
+  // warning in the logs on every enquiry.
 }

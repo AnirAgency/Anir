@@ -11,6 +11,13 @@
  * Talks to Supabase over its REST endpoint with fetch rather than the JS SDK:
  * the worker stays a few kB and the project keeps its "lenis, nothing else"
  * runtime dependency list.
+ *
+ * It must never lose an enquiry. If Supabase does not take the row — paused
+ * project, outage, network, a bad key — the enquiry is buffered in KV and the
+ * visitor is told it arrived, because it did; a scheduled drain moves it on
+ * (drain, below). Only if both stores fail does the visitor see an error. And
+ * every enquiry tells the team it arrived, saying which path it took, so a
+ * quiet week is distinguishable from a broken one (notify, below).
  */
 
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type
@@ -20,18 +27,36 @@ import { site } from '../src/content/site.ts';
 interface KVNamespace {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options: { prefix: string; cursor?: string }): Promise<{
+    keys: { name: string }[];
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }
 
-interface Env {
+export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
-  /** Optional. Without it, rate limiting is skipped — see checkRateLimit. */
+  /** Optional. Without it, rate limiting is skipped — see underRateLimit. */
   RATE_LIMIT?: KVNamespace;
+  /** Where an enquiry waits when Supabase will not take it — see buffer. */
+  ENQUIRY_BUFFER?: KVNamespace;
+  /** Email notification through Resend: the key, and comma-separated recipients. */
+  RESEND_API_KEY?: string;
+  NOTIFY_EMAIL?: string;
+  /** Sender. Defaults to Resend's test sender until a domain is verified. */
+  NOTIFY_FROM?: string;
+  /** Chat notification through a Telegram bot. */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 interface Context {
   request: Request;
   env: Env;
+  /** Keeps work running after the reply. Without it, the work is awaited. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 const RATE_LIMIT_MAX = 5;
@@ -138,6 +163,185 @@ async function underRateLimit(env: Env, ip: string): Promise<boolean> {
   }
 }
 
+/* ------------------------------------------------------------------ storage */
+
+/** One enquiry, as Supabase stores it. id and created_at are set only when it
+ *  is buffered: a drained row keeps its real arrival time, and writing it
+ *  twice cannot make two rows. */
+interface Enquiry {
+  id?: string;
+  created_at?: string;
+  service: string;
+  budget: string;
+  timing: string;
+  name: string;
+  contact: string;
+  message: string | null;
+  user_agent: string | null;
+}
+
+type Path = 'live' | 'buffered';
+
+const BUFFER_PREFIX = 'enquiry:';
+/** A backstop for a drain that never runs. */
+const BUFFER_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+async function writeToSupabase(env: Env, row: Enquiry, { drained = false } = {}): Promise<boolean> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
+  try {
+    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/enquiries`, {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        // A drained row carries its own id; if it is already in, skip it.
+        Prefer: drained ? 'return=minimal,resolution=ignore-duplicates' : 'return=minimal',
+      },
+      body: JSON.stringify(row),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The safety net: an enquiry Supabase would not take goes to KV instead. It
+ * has already passed validation and the rate limit, so the buffer only ever
+ * holds enquiries that would have been accepted.
+ */
+async function buffer(env: Env, row: Enquiry): Promise<boolean> {
+  if (!env.ENQUIRY_BUFFER) return false;
+  const now = new Date().toISOString();
+  const entry: Enquiry = { ...row, id: crypto.randomUUID(), created_at: now };
+  try {
+    await env.ENQUIRY_BUFFER.put(`${BUFFER_PREFIX}${now}-${entry.id!.slice(0, 8)}`, JSON.stringify(entry), {
+      expirationTtl: BUFFER_TTL_SECONDS,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Moves every buffered enquiry into Supabase, deleting each once it is in.
+ * Run on a schedule (worker/index.ts). Idempotent: an entry that fails to
+ * write stays for the next run, and one written but not deleted is skipped
+ * by its id when it comes round again.
+ */
+export async function drain(env: Env): Promise<{ buffered: number; written: number; kept: number }> {
+  if (!env.ENQUIRY_BUFFER) {
+    console.warn('enquiry drain: ENQUIRY_BUFFER is not bound');
+    return { buffered: 0, written: 0, kept: 0 };
+  }
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.ENQUIRY_BUFFER.list({ prefix: BUFFER_PREFIX, cursor });
+    keys.push(...page.keys.map((key) => key.name));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  let written = 0;
+  for (const key of keys) {
+    const value = await env.ENQUIRY_BUFFER.get(key);
+    if (!value) continue;
+    let row: Enquiry;
+    try {
+      row = JSON.parse(value) as Enquiry;
+    } catch {
+      console.error(`enquiry drain: ${key} is not valid JSON; left in place`);
+      continue;
+    }
+    if (!(await writeToSupabase(env, row, { drained: true }))) continue;
+    written += 1;
+    try {
+      await env.ENQUIRY_BUFFER.delete(key);
+    } catch {
+      // Written but not deleted: the next run skips it by id.
+    }
+  }
+
+  const result = { buffered: keys.length, written, kept: keys.length - written };
+  console.log(
+    `enquiry drain: ${result.buffered} buffered, ${result.written} written to Supabase, ${result.kept} kept for the next run`
+  );
+  return result;
+}
+
+/* ------------------------------------------------------------- notification */
+
+const labelFor = (group: string, value: string) =>
+  site.contact.form.groups.find((g) => g.name === group)?.options.find((o) => o.value === value)?.label ?? value;
+
+/** The team's copy. Plain text, so a submitted message can never be markup. */
+function describe(row: Enquiry, path: Path) {
+  const where =
+    path === 'live'
+      ? 'Stored in Supabase.'
+      : 'BUFFERED in Cloudflare KV: Supabase did not take it (paused project? outage?). ' +
+        'The drain retries every 15 minutes; if the project is paused, restore it.';
+  return [
+    where,
+    '',
+    `Name:    ${row.name}`,
+    `Contact: ${row.contact}`,
+    `Service: ${labelFor('service', row.service)}`,
+    `Budget:  ${labelFor('budget', row.budget)}`,
+    `Timing:  ${labelFor('timing', row.timing)}`,
+    ...(row.message ? ['', row.message] : []),
+  ].join('\n');
+}
+
+/**
+ * Tells the team an enquiry arrived — by email through Resend, by Telegram,
+ * or both, whichever has its secrets set. Runs after the reply, and no
+ * failure here can reach the visitor: the enquiry is already safe.
+ */
+export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> {
+  const subject = `New enquiry from ${row.name}${path === 'buffered' ? ' (buffered)' : ''}`;
+  const text = describe(row, path);
+  const sends: Array<[string, Promise<Response>]> = [];
+
+  if (env.RESEND_API_KEY && env.NOTIFY_EMAIL) {
+    sends.push([
+      'email',
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: env.NOTIFY_FROM || 'Anir site <onboarding@resend.dev>',
+          to: env.NOTIFY_EMAIL.split(',').map((address) => address.trim()),
+          subject,
+          text,
+        }),
+      }),
+    ]);
+  }
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    sends.push([
+      'telegram',
+      fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: `${subject}\n\n${text}` }),
+      }),
+    ]);
+  }
+
+  if (sends.length === 0) {
+    console.warn(`enquiry notification: no channel configured (${path}). Set RESEND_API_KEY + NOTIFY_EMAIL or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.`);
+    return;
+  }
+  const results = await Promise.allSettled(sends.map(([, send]) => send));
+  results.forEach((result, i) => {
+    const sent = result.status === 'fulfilled' && result.value.ok;
+    console.log(`enquiry notification via ${sends[i][0]}: ${sent ? 'sent' : 'FAILED'} (${path})`);
+  });
+}
+
 /* ------------------------------------------------------------------ handler */
 
 export async function onRequestPost(context: Context): Promise<Response> {
@@ -184,34 +388,32 @@ export async function onRequestPost(context: Context): Promise<Response> {
     return reply(request, 429, false, messages.tooMany);
   }
 
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    return reply(request, 500, false, messages.error);
-  }
+  const row: Enquiry = {
+    service,
+    budget,
+    timing,
+    name,
+    contact,
+    message: message || null,
+    user_agent: clean(request.headers.get('User-Agent'), MAX.userAgent) || null,
+  };
 
-  try {
-    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/enquiries`, {
-      method: 'POST',
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        service,
-        budget,
-        timing,
-        name,
-        contact,
-        message: message || null,
-        user_agent: clean(request.headers.get('User-Agent'), MAX.userAgent) || null,
-      }),
-    });
-
-    if (!response.ok) return reply(request, 502, false, messages.error);
-  } catch {
+  // Supabase, or failing that the KV buffer. Only when neither kept it is the
+  // visitor told something went wrong — and then nothing was kept.
+  let path: Path;
+  if (await writeToSupabase(env, row)) {
+    path = 'live';
+  } else if (await buffer(env, row)) {
+    path = 'buffered';
+    console.warn('enquiry buffered: Supabase did not take the write');
+  } else {
+    console.error('enquiry LOST: Supabase and the KV buffer both failed');
     return reply(request, 502, false, messages.error);
   }
+
+  const told = notify(env, row, path).catch(() => {});
+  if (context.waitUntil) context.waitUntil(told);
+  else await told;
 
   return reply(request, 200, true, messages.success);
 }

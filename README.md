@@ -216,12 +216,22 @@ npx wrangler login     # once per computer — opens a browser to sign in
 npm run deploy         # runs the budget, then uploads
 ```
 
-### If the contact form shows its error message
+### When an enquiry arrives
 
-Most likely the Supabase project has paused. It is on the free plan, which
-pauses a project after a week without activity — it was paused when the site
-first deployed. Supabase dashboard → project **Anir** → Restore. Nothing is
-lost; it takes a few minutes.
+Every enquiry sends a notification (email, Telegram, or both — see setup step 7)
+that starts with one of two lines:
+
+- **"Stored in Supabase."** — the normal case. It is in the `enquiries` table.
+- **"BUFFERED in Cloudflare KV"** — Supabase did not take it, almost always
+  because the free-plan project has **paused** after a week without activity.
+  The enquiry is safe: it waits in KV for up to 30 days, and the visitor was
+  told it arrived. Supabase dashboard → project **Anir** → **Restore**. Within
+  15 minutes of the restore, the drain moves every waiting enquiry into the
+  table, with its original arrival time.
+
+The form only shows its error message if Supabase **and** KV both failed. Then
+look at Workers & Pages → **anir** → Logs: every enquiry, buffer and drain run
+writes a line there.
 
 ### First-time setup (done once; kept as the record)
 
@@ -261,6 +271,22 @@ Redirect Rule (the zone → Rules → Redirect Rules) sending it to
 `https://aniragency.mn` with a 301 — a zone rule, because static files are
 served before any Worker code runs. Wait until the certificate shows **Active**
 before announcing the address.
+
+**7. Notifications.** Pick whatever the team actually reads; either or both:
+
+- **Email** — make a free account at resend.com, create an API key, then
+  `npx wrangler secret put RESEND_API_KEY` and
+  `npx wrangler secret put NOTIFY_EMAIL` (comma-separate several addresses).
+  Until `aniragency.mn` is verified in Resend, mail comes from Resend's test
+  sender and can only go to the address the Resend account was made with.
+- **Telegram** — message @BotFather, `/newbot`, keep the token; add the bot to
+  the team's group; get the group's chat id (send a message in the group, then
+  open `https://api.telegram.org/bot<token>/getUpdates` and find `chat.id`).
+  Then `npx wrangler secret put TELEGRAM_BOT_TOKEN` and
+  `npx wrangler secret put TELEGRAM_CHAT_ID`.
+
+Until one is set, every enquiry logs "no channel configured" — and nobody hears
+about it. Test by sending one enquiry through the live form.
 
 ### Headers
 
@@ -396,7 +422,9 @@ else is a static file.
   status message.
 - **`worker/enquiry.ts`** — validates, rate-limits by IP, inserts one
   row into Supabase over the REST endpoint. Answers JSON to `fetch` and a small
-  HTML page to a plain browser post.
+  HTML page to a plain browser post. If Supabase will not take the row, it
+  buffers the enquiry in KV (`ENQUIRY_BUFFER`) and still answers success; a
+  cron every 15 minutes drains the buffer. Every enquiry notifies the team.
 - **`supabase/migrations/0001_enquiries.sql`** — the table, with RLS on and
   deliberately **no policies**.
 - **`scripts/test-enquiry.ts`** — `node scripts/test-enquiry.ts` exercises the
@@ -429,22 +457,16 @@ the Worker, which runs on the edge.
 **3. Bind the KV namespace for rate limiting — not optional.** It is bound as
 `RATE_LIMIT` in `wrangler.jsonc`. Without it the limiter is skipped: it **fails
 open** on purpose, because losing a real client's message is worse than letting
-an extra submission through — which also means a missing binding is silent. The limit is 5 per IP per hour, and IPs are SHA-256
-hashed before they touch storage.
+an extra submission through — which also means a missing binding is silent.
+The limit is 5 per IP per hour, and IPs are SHA-256 hashed before they touch
+storage.
 
-### Adding email notification later
+### Notifications and the buffer
 
-Nothing about the current code has to change to add it — insert the send between
-a successful Supabase write and the reply:
-
-- **Resend** is the least work: one `fetch` to `https://api.resend.com/emails`
-  with a `RESEND_API_KEY`, no dependency, and `aniragency.mn` verified by DNS
-  (a DKIM and an SPF record) so mail is not filed as spam. Roughly 20 lines.
-- Send it **after** the row is stored and never let a failed send fail the
-  request — the enquiry is already safe in the database, and a client should not
-  see an error because our mail provider blinked.
-- The alternative is a Supabase **database webhook** on insert, which keeps mail
-  out of the request path entirely at the cost of a second moving part.
+Both are live in `worker/enquiry.ts` — see Deploy runbook → "When an enquiry
+arrives" and first-time setup step 7. Once `aniragency.mn` exists, verify it in
+Resend (a DKIM and an SPF record) and set `NOTIFY_FROM`, so mail comes from the
+studio's own address and is not filed as spam.
 
 ## Content
 

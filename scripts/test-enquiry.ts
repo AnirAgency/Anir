@@ -2,29 +2,43 @@
  * Exercises the real enquiry Function without Wrangler or a live Supabase.
  *
  * It imports worker/enquiry.ts unchanged and calls onRequestPost with
- * constructed Requests, stubbing global fetch to stand in for Supabase and
- * a Map to stand in for the KV binding. What this proves: validation, the
- * honeypot, rate limiting, content negotiation, and the exact row the Function
- * would send to Supabase. What it does not prove: that Supabase accepts that
+ * constructed Requests, stubbing global fetch to stand in for Supabase and the
+ * notification channels, and Maps to stand in for the KV bindings. What this
+ * proves: validation, the honeypot, rate limiting, content negotiation, the
+ * exact row the handler would send to Supabase, the KV buffer and its drain,
+ * and the notification. What it does not prove: that Supabase accepts that
  * row — for that the migration has to be applied and the keys set.
  *
  *   node scripts/test-enquiry.ts
  */
 import assert from 'node:assert/strict';
 
-import { onRequestPost } from '../worker/enquiry.ts';
+import { drain, onRequestPost } from '../worker/enquiry.ts';
 
 type Row = Record<string, unknown>;
 
 let captured: Row[] = [];
+let preferHeaders: string[] = [];
 let supabaseStatus = 201;
+let notified: Array<{ channel: string; text: string }> = [];
+let notifyStatus = 200;
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: any, init: any) => {
   const url = String(input);
   if (url.includes('/rest/v1/enquiries')) {
-    captured.push(JSON.parse(String(init.body)));
+    if (supabaseStatus < 300) captured.push(JSON.parse(String(init.body)));
+    preferHeaders.push(init.headers?.Prefer ?? '');
     return new Response('', { status: supabaseStatus });
+  }
+  if (url.startsWith('https://api.telegram.org/')) {
+    notified.push({ channel: 'telegram', text: JSON.parse(String(init.body)).text });
+    return new Response('{}', { status: notifyStatus });
+  }
+  if (url.startsWith('https://api.resend.com/')) {
+    const body = JSON.parse(String(init.body));
+    notified.push({ channel: 'email', text: `${body.subject}\n${body.text}` });
+    return new Response('{}', { status: notifyStatus });
   }
   return realFetch(input, init);
 }) as typeof fetch;
@@ -33,8 +47,14 @@ globalThis.fetch = (async (input: any, init: any) => {
 function kv() {
   const store = new Map<string, string>();
   return {
+    store,
     get: async (key: string) => store.get(key) ?? null,
     put: async (key: string, value: string) => void store.set(key, value),
+    delete: async (key: string) => void store.delete(key),
+    list: async ({ prefix }: { prefix: string }) => ({
+      keys: [...store.keys()].filter((key) => key.startsWith(prefix)).sort().map((name) => ({ name })),
+      list_complete: true,
+    }),
   };
 }
 
@@ -42,7 +62,15 @@ const env = () => ({
   SUPABASE_URL: 'https://stub.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key',
   RATE_LIMIT: kv(),
+  ENQUIRY_BUFFER: kv(),
 });
+
+// The handler's log lines belong in the Worker's logs, not this report.
+const quiet = { warn: console.warn, log: console.log, error: console.error };
+const isHandlerLog = (args: unknown[]) => String(args[0]).startsWith('enquiry ');
+console.warn = (...args: unknown[]) => void (isHandlerLog(args) || quiet.warn(...args));
+console.error = (...args: unknown[]) => void (isHandlerLog(args) || quiet.error(...args));
+console.log = (...args: unknown[]) => void (isHandlerLog(args) || quiet.log(...args));
 
 const valid = {
   service: 'web',
@@ -220,24 +248,117 @@ await check('rate limiting fails open when KV is not bound', async () => {
   return 'all 7 accepted — a missing binding must not break the form';
 });
 
-await check('a Supabase failure reports an error and never claims success', async () => {
+await check('a Supabase failure buffers the enquiry; the visitor is told it arrived', async () => {
   supabaseStatus = 500;
-  const response = await onRequestPost({ request: post(valid, { json: true }), env: env() });
+  const environment = env();
+  const response = await onRequestPost({ request: post(valid, { json: true }), env: environment });
+  const body = (await response.json()) as { ok: boolean };
+  supabaseStatus = 201;
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  const keys = [...environment.ENQUIRY_BUFFER.store.keys()];
+  assert.equal(keys.length, 1);
+  assert.match(keys[0], /^enquiry:\d{4}-\d\d-\d\dT[\d:.]+Z-[0-9a-f]{8}$/);
+  const entry = JSON.parse(environment.ENQUIRY_BUFFER.store.get(keys[0])!);
+  assert.equal(entry.name, valid.name);
+  assert.ok(entry.id && entry.created_at, 'a buffered entry carries its own id and arrival time');
+  return `200 ok:true, 1 entry in KV — ${keys[0].slice(0, 32)}…`;
+});
+
+await check('missing Supabase config buffers rather than erroring', async () => {
+  const environment = { ...env(), SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' };
+  const response = await onRequestPost({ request: post(valid, { json: true }), env: environment });
+  assert.equal(response.status, 200);
+  assert.equal(environment.ENQUIRY_BUFFER.store.size, 1);
+  return '200, buffered';
+});
+
+await check('if Supabase and the buffer both fail, the visitor is told the truth', async () => {
+  supabaseStatus = 500;
+  const environment = { ...env(), ENQUIRY_BUFFER: undefined };
+  const response = await onRequestPost({ request: post(valid, { json: true }), env: environment });
   const body = (await response.json()) as { ok: boolean };
   supabaseStatus = 201;
   assert.equal(response.status, 502);
   assert.equal(body.ok, false);
-  return '502, ok:false';
+  return '502, ok:false — nothing was kept, so nothing is claimed';
 });
 
-await check('missing Supabase config is caught before the network call', async () => {
-  const response = await onRequestPost({
-    request: post(valid, { json: true }),
-    env: { SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' },
-  });
-  assert.equal(response.status, 500);
-  return '500, no request attempted';
+await check('a rejected payload is never buffered', async () => {
+  supabaseStatus = 500;
+  const environment = env();
+  await onRequestPost({ request: post({ ...valid, budget: 'free-please' }, { json: true }), env: environment });
+  supabaseStatus = 201;
+  assert.equal(environment.ENQUIRY_BUFFER.store.size, 0);
+  return '422, KV empty';
 });
+
+await check('the drain writes buffered enquiries and deletes them', async () => {
+  supabaseStatus = 500;
+  const environment = env();
+  for (const ip of ['198.51.100.21', '198.51.100.22']) {
+    await onRequestPost({ request: post(valid, { json: true, ip }), env: environment });
+  }
+  supabaseStatus = 201;
+  captured = [];
+  preferHeaders = [];
+  const result = await drain(environment);
+  assert.deepEqual(result, { buffered: 2, written: 2, kept: 0 });
+  assert.equal(environment.ENQUIRY_BUFFER.store.size, 0);
+  assert.equal(captured.length, 2);
+  assert.ok(captured.every((row) => row.id && row.created_at), 'drained rows keep their id and arrival time');
+  assert.ok(preferHeaders.every((prefer) => prefer.includes('resolution=ignore-duplicates')));
+  return '2 written with their own id and created_at, KV empty';
+});
+
+await check('the drain keeps what it cannot write, for the next run', async () => {
+  supabaseStatus = 500;
+  const environment = env();
+  await onRequestPost({ request: post(valid, { json: true }), env: environment });
+  const result = await drain(environment);
+  supabaseStatus = 201;
+  assert.deepEqual(result, { buffered: 1, written: 0, kept: 1 });
+  assert.equal(environment.ENQUIRY_BUFFER.store.size, 1);
+  return '0 written, 1 kept';
+});
+
+await check('a live enquiry never uses the drain\'s duplicate-skipping', async () => {
+  preferHeaders = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.30' }), env: env() });
+  assert.deepEqual(preferHeaders, ['return=minimal']);
+  return 'Prefer: return=minimal';
+});
+
+const notifying = () => ({
+  ...env(),
+  TELEGRAM_BOT_TOKEN: 'stub',
+  TELEGRAM_CHAT_ID: '-100',
+  RESEND_API_KEY: 'stub',
+  NOTIFY_EMAIL: 'team@example.com',
+});
+
+await check('every enquiry notifies the team, saying which path it took', async () => {
+  notified = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.40' }), env: notifying() });
+  supabaseStatus = 500;
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.41' }), env: notifying() });
+  supabaseStatus = 201;
+  assert.equal(notified.length, 4, 'two enquiries, two channels each');
+  assert.ok(notified.slice(0, 2).every((n) => n.text.includes('Stored in Supabase.')));
+  assert.ok(notified.slice(2).every((n) => n.text.includes('BUFFERED')));
+  assert.ok(notified.every((n) => n.text.includes(valid.name)));
+  return 'email + telegram; "Stored in Supabase." then "BUFFERED"';
+});
+
+await check('a failed notification never fails the request', async () => {
+  notifyStatus = 500;
+  const response = await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.42' }), env: notifying() });
+  notifyStatus = 200;
+  assert.equal(response.status, 200);
+  return '200 with both channels answering 500';
+});
+
+Object.assign(console, quiet);
 
 // -------------------------------------------------------------------- report
 

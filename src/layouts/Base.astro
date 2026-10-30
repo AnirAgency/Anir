@@ -13,13 +13,16 @@ interface Props {
   description?: string;
   /** The styleguide renders its own chrome-free page. */
   chrome?: boolean;
+  /** A review page, like /v2: kept out of search, and pointing at the home
+   *  page as the real one. */
+  noindex?: boolean;
 }
 
-const { title, description, chrome = true } = Astro.props;
+const { title, description, chrome = true, noindex = false } = Astro.props;
 
 const pageTitle = title ?? site.meta.title;
 const pageDescription = description ?? site.meta.description;
-const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const canonical = new URL(noindex ? '/' : Astro.url.pathname, Astro.site).href;
 const ogImage = site.meta.ogImage ? new URL(site.meta.ogImage, Astro.site).href : null;
 
 /*
@@ -59,6 +62,7 @@ const jsonLd = {
     <title>{pageTitle}</title>
     <meta name="description" content={pageDescription} />
     <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />

@@ -34,6 +34,12 @@ import { placeholderMode } from '../lib/placeholders.mjs';
 
 const PLACEHOLDER_DIR = '/media/placeholder/';
 
+interface Props {
+  /** Dark on the home page; /v2 tries it light. */
+  tone?: 'dark' | 'light';
+}
+
+const { tone = 'dark' } = Astro.props;
 const { label, media, placeholder } = site.showreel;
 
 const tilesOf = (reel: ShowreelMedia) => [...reel.left, reel.above, reel.below, ...reel.right];
@@ -54,7 +60,7 @@ const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placehold
 
 {
   reel && (
-    <Section tone="dark" id="showreel" label={label} layout="bleed">
+    <Section tone={tone} id="showreel" label={label} layout="bleed">
       <div class="track">
         <div class="pin">
           <div class="mosaic-grid">

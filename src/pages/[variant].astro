@@ -1,0 +1,38 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import Marquee from '../components/Marquee.astro';
+import Showreel from '../components/Showreel.astro';
+import Products from '../components/Products.astro';
+import ProductsBeam from '../components/ProductsBeam.astro';
+import Process from '../components/Process.astro';
+import Services from '../components/Services.astro';
+import Contact from '../components/Contact.astro';
+import Footer from '../components/Footer.astro';
+import { placeholderMode } from '../lib/placeholders.mjs';
+
+/*
+  /v2 — the home page with the showreel mosaic and the process on the light
+  ground instead of the dark, to compare against /.
+
+  A review page, so it is built where the placeholder media is — dev and
+  preview builds (src/lib/placeholders.mjs) — and never in production, which
+  stays the one page CLAUDE.md describes. It keeps itself out of search and
+  names / as the real page.
+*/
+export function getStaticPaths() {
+  return placeholderMode({ dev: import.meta.env.DEV }) ? [{ params: { variant: 'v2' } }] : [];
+}
+---
+
+<Base noindex>
+  <Hero />
+  <Marquee />
+  <Showreel tone="light" />
+  <Products />
+  <ProductsBeam />
+  <Process tone="light" />
+  <Services />
+  <Contact />
+  <Footer />
+</Base>

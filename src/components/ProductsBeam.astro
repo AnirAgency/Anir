@@ -9,16 +9,20 @@ import { site } from '../content/site';
   under the reel so the two can be compared.
 
   Anir's own mark is the lamp. It stands in the middle of a dark screen and a
-  beam turns around it as you scroll: left, down, right, resting on each
-  product in turn. Only what the beam falls on can be seen. The beam is
-  orange because it is the live thing on the screen (CLAUDE.md > The orange
-  rule); what it lights is set in --ink, never white.
+  beam of light turns around it as you scroll: left, down, right, resting on
+  each product in turn. Only what the light falls on can be seen. The light
+  is a soft orange haze that fades with distance and feathers at its edges —
+  the live thing on the screen (CLAUDE.md > The orange rule) — and what it
+  shows is not a card but the work itself: the screen in a frame of corner
+  ticks, the same registration marks the sections carry, lit from the lamp's
+  side, with a readout beside it. When the beam comes to rest, an orange
+  line scans down the screen once.
 
-  It is two rotations, both on the compositor: the beam — a fixed wedge cut
-  from a big square that turns about the lamp — and, inside it, the scene
-  holding the three products, turned back by the same angle so it stays
-  where it is while the wedge sweeps across it. One view timeline drives
-  both, so they cannot drift apart.
+  It is two rotations, both on the compositor: the beam — a square three
+  screens across that turns about the lamp, masked to a wedge — and, inside
+  it, the scene holding the products, turned back by the same angle so it
+  stays where it is while the wedge sweeps across it. One view timeline
+  drives both, and the scans, so nothing can drift apart.
 
   The lamp is the hero's own still of the N: the same file, already loaded,
   so it costs nothing.
@@ -29,7 +33,7 @@ import { site } from '../content/site';
   left and right across.
 */
 
-const { intro, items } = site.products;
+const { intro, specLabels, items } = site.products;
 const mark = site.hero.mark ? resolveMark(site.hero.mark.name) : null;
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -47,16 +51,30 @@ const lit = items.slice(0, SIDES.length);
           {
             lit.map((product, i) => (
               <article class={`spot spot--${SIDES[i]}`} aria-labelledby={`beam-${product.id}`}>
-                <div class="spot__shot">
-                  <Plate media={product.shot} ratio="16 / 10" kind="image" />
+                <div class="spot__frame">
+                  <span class="tick tick--tl" aria-hidden="true" />
+                  <span class="tick tick--tr" aria-hidden="true" />
+                  <span class="tick tick--bl" aria-hidden="true" />
+                  <span class="tick tick--br" aria-hidden="true" />
+                  <div class="spot__screen">
+                    <Plate media={product.shot} ratio="16 / 10" kind="image" />
+                    <span class="spot__scan" aria-hidden="true" />
+                  </div>
                 </div>
-                <p class="spot__count t-mono-label">
-                  {pad(i + 1)} / {pad(lit.length)}
-                </p>
-                <h3 id={`beam-${product.id}`} class="spot__name t-display-l">
-                  {product.name}
-                </h3>
-                <p class="spot__tagline t-serif-italic">{product.tagline}</p>
+
+                <div class="spot__read">
+                  <p class="spot__count t-mono-label">
+                    {pad(i + 1)} / {pad(lit.length)} · {product.spec.year}
+                  </p>
+                  <h3 id={`beam-${product.id}`} class="spot__name t-display-l">
+                    {product.name}
+                  </h3>
+                  <p class="spot__tagline t-serif-italic">{product.tagline}</p>
+                  <p class="spot__tech t-mono-label">
+                    <span class="spot__key">{specLabels.tech}</span>
+                    <span>{product.spec.tech}</span>
+                  </p>
+                </div>
               </article>
             ))
           }
@@ -65,15 +83,17 @@ const lit = items.slice(0, SIDES.length);
 
       {
         mark && (
-          <img
-            class="lamp"
-            src={mark.still}
-            width={mark.grid.cell[0]}
-            height={mark.grid.cell[1]}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
+          <div class="lamp">
+            <img
+              class="lamp__mark"
+              src={mark.still}
+              width={mark.grid.cell[0]}
+              height={mark.grid.cell[1]}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
         )
       }
     </div>
@@ -81,7 +101,124 @@ const lit = items.slice(0, SIDES.length);
 </Section>
 
 <style>
-  /* --------------------------------------------------- phones: a list */
+  /* ------------------------------------------------------- the readout */
+
+  .spot {
+    --hud: color-mix(in srgb, var(--paper) 32%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    color: var(--paper);
+  }
+
+  /* The screen, inside four corner ticks set just off its edges. */
+  .spot__frame {
+    position: relative;
+    padding: 7px;
+  }
+
+  .tick {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 0 solid var(--hud);
+  }
+
+  .tick--tl {
+    top: 0;
+    left: 0;
+    border-width: 1px 0 0 1px;
+  }
+
+  .tick--tr {
+    top: 0;
+    right: 0;
+    border-width: 1px 1px 0 0;
+  }
+
+  .tick--bl {
+    bottom: 0;
+    left: 0;
+    border-width: 0 0 1px 1px;
+  }
+
+  .tick--br {
+    bottom: 0;
+    right: 0;
+    border-width: 0 1px 1px 0;
+  }
+
+  .spot__screen {
+    position: relative;
+    overflow: clip;
+    outline: 1px solid var(--hud);
+  }
+
+  /* Lit from the lamp's side: the far side of the screen falls into shadow. */
+  .spot__screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(var(--lit-from, to left), transparent 35%, color-mix(in srgb, var(--ink) 55%, transparent));
+    pointer-events: none;
+  }
+
+  .spot--left {
+    --lit-from: to left;
+  }
+
+  .spot--right {
+    --lit-from: to right;
+  }
+
+  .spot--bottom {
+    --lit-from: to bottom;
+  }
+
+  .spot__scan {
+    display: none;
+  }
+
+  .spot__read {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .spot__count {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  /* The live product's mark: orange as a 2px rule, never as small text. */
+  .spot__count::before {
+    content: '';
+    width: 1.25rem;
+    height: 2px;
+    background: var(--orange);
+  }
+
+  .spot__name,
+  .spot__tagline,
+  .spot__count,
+  .spot__tech {
+    margin: 0;
+  }
+
+  .spot__tech {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.35rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--hud);
+  }
+
+  .spot__key {
+    min-width: 6.5rem;
+  }
+
+  /* -------------------------------------------------- phones: a list */
 
   .pin {
     position: relative;
@@ -95,33 +232,29 @@ const lit = items.slice(0, SIDES.length);
   .scene {
     display: flex;
     flex-direction: column;
-    gap: 3rem;
+    gap: 3.5rem;
     width: 100%;
-  }
-
-  .spot {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .spot__shot {
-    margin-bottom: 0.6rem;
-  }
-
-  .spot__name,
-  .spot__tagline {
-    margin: 0;
-  }
-
-  .spot__count {
-    color: var(--muted);
   }
 
   .lamp {
     order: -1;
+    position: relative;
     width: 7rem;
+  }
+
+  .lamp__mark {
+    position: relative;
+    display: block;
+    width: 100%;
     height: auto;
+  }
+
+  /* A halo: the lamp is lit. */
+  .lamp::before {
+    content: '';
+    position: absolute;
+    inset: -60%;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--orange) 38%, transparent), transparent);
   }
 
   /*
@@ -139,7 +272,7 @@ const lit = items.slice(0, SIDES.length);
       container-type: inline-size;
       --sx: 50cqw;
       --sy: 34svh;
-      --spread: 32deg;
+      --spread: 34deg;
     }
 
     .pin {
@@ -156,7 +289,7 @@ const lit = items.slice(0, SIDES.length);
 
     .spot {
       position: absolute;
-      width: min(24cqw, 22rem);
+      width: min(21cqw, 19rem);
     }
 
     .spot--left {
@@ -171,21 +304,25 @@ const lit = items.slice(0, SIDES.length);
       translate: 0 -50%;
     }
 
-    /* Below the lamp the beam starts narrow and widens, so the words go
-       first and the wider picture under them. */
+    /* Below the lamp the beam starts narrow and widens, so the readout goes
+       first and the screen under it. */
     .spot--bottom {
       left: var(--sx);
-      top: calc(var(--sy) + 22svh);
-      width: min(20cqw, 18rem);
+      top: calc(var(--sy) + 18svh);
+      width: min(18cqw, 17rem);
       translate: -50% 0;
       align-items: center;
       text-align: center;
     }
 
-    .spot--bottom .spot__shot {
+    .spot--bottom .spot__frame {
       order: 1;
       width: 100%;
-      margin: 0.6rem 0 0;
+    }
+
+    .spot--bottom .spot__count,
+    .spot--bottom .spot__tech {
+      justify-content: center;
     }
 
     .lamp {
@@ -203,9 +340,11 @@ const lit = items.slice(0, SIDES.length);
     stops: the beam rests on each product for about a fifth of the way and
     swings between them for the rest.
 
-    The beam is a square three screens across, centred on the lamp, cut to a
-    wedge pointing right (0deg) and turned to aim it. The scene is placed
-    back where the screen is and turned the other way about the same point.
+    The beam is a square three screens across, centred on the lamp, masked to
+    a wedge pointing right — conic 90deg — whose edges feather over 6deg, and
+    turned to aim it. Its haze is brightest at the lamp and gone by the far
+    edge of the screen. The scene is placed back where the screen is and
+    turned the other way about the same point.
   */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
@@ -226,19 +365,19 @@ const lit = items.slice(0, SIDES.length);
         top: calc(var(--sy) - var(--r));
         width: calc(2 * var(--r));
         height: calc(2 * var(--r));
-        clip-path: polygon(
-          50% 50%,
-          100% calc(50% - 50% * tan(var(--spread))),
-          100% calc(50% + 50% * tan(var(--spread)))
+        mask-image: conic-gradient(
+          transparent 0deg calc(90deg - var(--spread) - 3deg),
+          #000 calc(90deg - var(--spread) + 3deg) calc(90deg + var(--spread) - 3deg),
+          transparent calc(90deg + var(--spread) + 3deg)
         );
-        /* Hot near the lamp, orange where it lands. */
         background: radial-gradient(
           circle at 50% 50%,
-          color-mix(in srgb, var(--orange) 55%, var(--paper)) 0,
-          var(--orange) calc(var(--r) * 0.12),
-          var(--orange) 100%
+          color-mix(in srgb, var(--orange) 72%, transparent) 0,
+          color-mix(in srgb, var(--orange) 30%, transparent) calc(var(--r) * 0.06),
+          color-mix(in srgb, var(--orange) 14%, transparent) calc(var(--r) * 0.22),
+          color-mix(in srgb, var(--orange) 5%, transparent) calc(var(--r) * 0.4),
+          transparent calc(var(--r) * 0.55)
         );
-        color: var(--ink);
         animation: sweep both;
         animation-timeline: --beam;
         animation-range: contain 0% contain 100%;
@@ -256,17 +395,32 @@ const lit = items.slice(0, SIDES.length);
         animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
       }
 
-      /* In the light, everything is --ink. */
-      .spot__count {
-        color: var(--ink);
+      /* The scan: an orange line down the screen, with a wash behind it,
+         once while the beam rests on it, then gone. */
+      .spot__scan {
+        display: block;
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          to bottom,
+          transparent calc(100% - 5rem),
+          color-mix(in srgb, var(--orange) 16%, transparent) calc(100% - 2px),
+          var(--orange) calc(100% - 2px)
+        );
+        animation: scan linear both;
+        animation-timeline: --beam;
       }
 
-      .spot :global(.plate) {
-        background: color-mix(in srgb, var(--ink) 12%, var(--orange));
+      .spot--left .spot__scan {
+        animation-range: contain 1% contain 16%;
       }
 
-      .spot :global(.plate__pending) {
-        color: var(--ink);
+      .spot--bottom .spot__scan {
+        animation-range: contain 42% contain 57%;
+      }
+
+      .spot--right .spot__scan {
+        animation-range: contain 83% contain 98%;
       }
     }
 
@@ -297,6 +451,21 @@ const lit = items.slice(0, SIDES.length);
       82%,
       100% {
         rotate: 0deg;
+      }
+    }
+
+    @keyframes scan {
+      0% {
+        translate: 0 -100%;
+        opacity: 1;
+      }
+      85% {
+        translate: 0 0;
+        opacity: 1;
+      }
+      100% {
+        translate: 0 0;
+        opacity: 0;
       }
     }
   }

@@ -10,24 +10,27 @@ import { site } from '../content/site';
 
   Anir's own mark is the lamp. It stands in the middle of a dark screen and a
   beam of light turns around it as you scroll: left, down, right, resting on
-  each product in turn. Only what the light falls on can be seen. The light
-  is a soft orange haze that fades with distance and feathers at its edges —
-  the live thing on the screen (CLAUDE.md > The orange rule) — and what it
-  shows is not a card but the work itself: the screen in a frame of corner
-  ticks, the same registration marks the sections carry, lit from the lamp's
-  side, with a readout beside it. When the beam comes to rest, an orange
-  line scans down the screen once.
+  each product in turn, which comes up out of the dark as the light reaches
+  it and goes back as the light moves on. The light is a soft orange haze,
+  brighter along its core, feathered at its edges and fading with distance —
+  the live thing on the screen (CLAUDE.md > The orange rule). What it shows
+  is not a card but the work itself: the screen in a frame of corner ticks,
+  the same registration marks the sections carry, lit from the lamp's side,
+  with a readout beside it. When the beam comes to rest, an orange line scans
+  down the screen once.
 
-  It is two rotations, both on the compositor: the beam — a square three
-  screens across that turns about the lamp, masked to a wedge — and, inside
-  it, the scene holding the products, turned back by the same angle so it
-  stays where it is while the wedge sweeps across it. One view timeline
-  drives both, and the scans, so nothing can drift apart.
+  Deliberately simple machinery, because the first version was not: a beam
+  masked out of a square three screens across rendered inside-out on some
+  GPUs. Now the beam is an ordinary box the size of its own wedge, shaped by
+  its gradient alone — no mask, no clip — that rotates about the lamp; a
+  still shading layer above it does the falloff; the products are plain
+  elements whose opacity follows the same view timeline. Everything that
+  moves is a rotate, an opacity or a translate.
 
   The lamp is the hero's own still of the N: the same file, already loaded,
   so it costs nothing.
 
-  Without scroll-driven animation or under reduced motion the beam is gone
+  Without scroll-driven animation or under reduced motion there is no beam
   and the three products stand around the lamp in full. Phones get them as a
   list under the lamp: a portrait screen has no room for a beam to sweep
   left and right across.
@@ -46,39 +49,39 @@ const lit = items.slice(0, SIDES.length);
 <Section tone="dark" id="products-beam" label={intro.label} layout="bleed">
   <div class="track">
     <div class="pin">
-      <div class="beam">
-        <div class="scene">
-          {
-            lit.map((product, i) => (
-              <article class={`spot spot--${SIDES[i]}`} aria-labelledby={`beam-${product.id}`}>
-                <div class="spot__frame">
-                  <span class="tick tick--tl" aria-hidden="true" />
-                  <span class="tick tick--tr" aria-hidden="true" />
-                  <span class="tick tick--bl" aria-hidden="true" />
-                  <span class="tick tick--br" aria-hidden="true" />
-                  <div class="spot__screen">
-                    <Plate media={product.shot} ratio="16 / 10" kind="image" />
-                    <span class="spot__scan" aria-hidden="true" />
-                  </div>
+      <div class="beam" aria-hidden="true"></div>
+      <div class="dusk" aria-hidden="true"></div>
+      <div class="scene">
+        {
+          lit.map((product, i) => (
+            <article class={`spot spot--${SIDES[i]}`} aria-labelledby={`beam-${product.id}`}>
+              <div class="spot__frame">
+                <span class="tick tick--tl" aria-hidden="true" />
+                <span class="tick tick--tr" aria-hidden="true" />
+                <span class="tick tick--bl" aria-hidden="true" />
+                <span class="tick tick--br" aria-hidden="true" />
+                <div class="spot__screen">
+                  <Plate media={product.shot} ratio="16 / 10" kind="image" />
+                  <span class="spot__scan" aria-hidden="true" />
                 </div>
+              </div>
 
-                <div class="spot__read">
-                  <p class="spot__count t-mono-label">
-                    {pad(i + 1)} / {pad(lit.length)} · {product.spec.year}
-                  </p>
-                  <h3 id={`beam-${product.id}`} class="spot__name t-display-l">
-                    {product.name}
-                  </h3>
-                  <p class="spot__tagline t-serif-italic">{product.tagline}</p>
-                  <p class="spot__tech t-mono-label">
-                    <span class="spot__key">{specLabels.tech}</span>
-                    <span>{product.spec.tech}</span>
-                  </p>
-                </div>
-              </article>
-            ))
-          }
-        </div>
+              <div class="spot__read">
+                <p class="spot__count t-mono-label">
+                  {pad(i + 1)} / {pad(lit.length)} · {product.spec.year}
+                </p>
+                <h3 id={`beam-${product.id}`} class="spot__name t-display-l">
+                  {product.name}
+                </h3>
+                <p class="spot__tagline t-serif-italic">{product.tagline}</p>
+                <p class="spot__tech t-mono-label">
+                  <span class="spot__key">{specLabels.tech}</span>
+                  <span>{product.spec.tech}</span>
+                </p>
+              </div>
+            </article>
+          ))
+        }
       </div>
 
       {
@@ -218,6 +221,12 @@ const lit = items.slice(0, SIDES.length);
     min-width: 6.5rem;
   }
 
+  /* The beam and its shading only exist where the beam can sweep. */
+  .beam,
+  .dusk {
+    display: none;
+  }
+
   /* -------------------------------------------------- phones: a list */
 
   .pin {
@@ -340,17 +349,22 @@ const lit = items.slice(0, SIDES.length);
     stops: the beam rests on each product for about a fifth of the way and
     swings between them for the rest.
 
-    The beam is a square three screens across, centred on the lamp, masked to
-    a wedge pointing right — conic 90deg — whose edges feather over 6deg, and
-    turned to aim it. Its haze is brightest at the lamp and gone by the far
-    edge of the screen. The scene is placed back where the screen is and
-    turned the other way about the same point.
+    The beam is a box anchored at the lamp by its left middle, as long as the
+    lamp is from the screen's farthest corner and twice that tall, pointing
+    right. Two conic gradients centred on the lamp draw it: a wide wedge with
+    feathered edges, and a narrower, brighter core inside it. It turns about
+    the lamp to aim. The dusk above it is still: clear around the lamp,
+    darkening to the page's own ground by the screen's edges, so the light
+    fades with distance. The products sit above both, so the dusk never dims
+    them.
   */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
       .track {
         height: 400svh;
         view-timeline: --beam block;
+        --reach: 75vmax;
+        --core: 13deg;
       }
 
       .pin {
@@ -359,40 +373,64 @@ const lit = items.slice(0, SIDES.length);
       }
 
       .beam {
-        --r: 150vmax;
+        display: block;
         position: absolute;
-        left: calc(var(--sx) - var(--r));
-        top: calc(var(--sy) - var(--r));
-        width: calc(2 * var(--r));
-        height: calc(2 * var(--r));
-        mask-image: conic-gradient(
-          transparent 0deg calc(90deg - var(--spread) - 3deg),
-          #000 calc(90deg - var(--spread) + 3deg) calc(90deg + var(--spread) - 3deg),
-          transparent calc(90deg + var(--spread) + 3deg)
-        );
-        background: radial-gradient(
-          circle at 50% 50%,
-          color-mix(in srgb, var(--orange) 72%, transparent) 0,
-          color-mix(in srgb, var(--orange) 30%, transparent) calc(var(--r) * 0.06),
-          color-mix(in srgb, var(--orange) 14%, transparent) calc(var(--r) * 0.22),
-          color-mix(in srgb, var(--orange) 5%, transparent) calc(var(--r) * 0.4),
-          transparent calc(var(--r) * 0.55)
-        );
+        left: var(--sx);
+        top: calc(var(--sy) - var(--reach));
+        width: var(--reach);
+        height: calc(2 * var(--reach));
+        transform-origin: 0 50%;
+        background:
+          conic-gradient(
+            at 0 50%,
+            transparent calc(90deg - var(--core) - 4deg),
+            color-mix(in srgb, var(--orange) 16%, transparent) calc(90deg - var(--core) + 4deg)
+              calc(90deg + var(--core) - 4deg),
+            transparent calc(90deg + var(--core) + 4deg)
+          ),
+          conic-gradient(
+            at 0 50%,
+            transparent calc(90deg - var(--spread) - 6deg),
+            color-mix(in srgb, var(--orange) 22%, transparent) calc(90deg - var(--spread) + 6deg)
+              calc(90deg + var(--spread) - 6deg),
+            transparent calc(90deg + var(--spread) + 6deg)
+          );
         animation: sweep both;
         animation-timeline: --beam;
         animation-range: contain 0% contain 100%;
         animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
       }
 
-      .scene {
-        inset: calc(var(--r) - var(--sy)) auto auto calc(var(--r) - var(--sx));
-        width: 100cqw;
-        height: 100svh;
-        transform-origin: var(--sx) var(--sy);
-        animation: unsweep both;
+      .dusk {
+        display: block;
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle farthest-corner at var(--sx) var(--sy),
+          transparent 0,
+          transparent 18%,
+          color-mix(in srgb, var(--ink) 55%, transparent) 55%,
+          var(--ink) 92%
+        );
+      }
+
+      /* Each product comes up as the light reaches it and goes as it leaves. */
+      .spot {
+        animation: both;
         animation-timeline: --beam;
         animation-range: contain 0% contain 100%;
-        animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+      }
+
+      .spot--left {
+        animation-name: lit-left;
+      }
+
+      .spot--bottom {
+        animation-name: lit-bottom;
+      }
+
+      .spot--right {
+        animation-name: lit-right;
       }
 
       /* The scan: an orange line down the screen, with a wash behind it,
@@ -424,6 +462,7 @@ const lit = items.slice(0, SIDES.length);
       }
     }
 
+    /* The beam rests 0–18%, 41–59% and 82–100%, and swings between. */
     @keyframes sweep {
       0%,
       18% {
@@ -439,18 +478,40 @@ const lit = items.slice(0, SIDES.length);
       }
     }
 
-    @keyframes unsweep {
+    @keyframes lit-left {
       0%,
-      18% {
-        rotate: -180deg;
+      19% {
+        opacity: 1;
       }
-      41%,
-      59% {
-        rotate: -90deg;
-      }
-      82%,
+      28%,
       100% {
-        rotate: 0deg;
+        opacity: 0;
+      }
+    }
+
+    @keyframes lit-bottom {
+      0%,
+      31% {
+        opacity: 0;
+      }
+      40%,
+      60% {
+        opacity: 1;
+      }
+      69%,
+      100% {
+        opacity: 0;
+      }
+    }
+
+    @keyframes lit-right {
+      0%,
+      72% {
+        opacity: 0;
+      }
+      81%,
+      100% {
+        opacity: 1;
       }
     }
 

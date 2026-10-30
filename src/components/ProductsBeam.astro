@@ -1,0 +1,303 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import { resolveMark } from '../lib/media';
+import { site } from '../content/site';
+
+/*
+  The products, lit one at a time — a second take on the products section,
+  under the reel so the two can be compared.
+
+  Anir's own mark is the lamp. It stands in the middle of a dark screen and a
+  beam turns around it as you scroll: left, down, right, resting on each
+  product in turn. Only what the beam falls on can be seen. The beam is
+  orange because it is the live thing on the screen (CLAUDE.md > The orange
+  rule); what it lights is set in --ink, never white.
+
+  It is two rotations, both on the compositor: the beam — a fixed wedge cut
+  from a big square that turns about the lamp — and, inside it, the scene
+  holding the three products, turned back by the same angle so it stays
+  where it is while the wedge sweeps across it. One view timeline drives
+  both, so they cannot drift apart.
+
+  The lamp is the hero's own still of the N: the same file, already loaded,
+  so it costs nothing.
+
+  Without scroll-driven animation or under reduced motion the beam is gone
+  and the three products stand around the lamp in full. Phones get them as a
+  list under the lamp: a portrait screen has no room for a beam to sweep
+  left and right across.
+*/
+
+const { intro, items } = site.products;
+const mark = site.hero.mark ? resolveMark(site.hero.mark.name) : null;
+const pad = (n: number) => String(n).padStart(2, '0');
+
+// Where the beam rests, in order. Three products, three stops; a fourth
+// would have to point up, into the nav bar.
+const SIDES = ['left', 'bottom', 'right'] as const;
+const lit = items.slice(0, SIDES.length);
+---
+
+<Section tone="dark" id="products-beam" label={intro.label} layout="bleed">
+  <div class="track">
+    <div class="pin">
+      <div class="beam">
+        <div class="scene">
+          {
+            lit.map((product, i) => (
+              <article class={`spot spot--${SIDES[i]}`} aria-labelledby={`beam-${product.id}`}>
+                <div class="spot__shot">
+                  <Plate media={product.shot} ratio="16 / 10" kind="image" />
+                </div>
+                <p class="spot__count t-mono-label">
+                  {pad(i + 1)} / {pad(lit.length)}
+                </p>
+                <h3 id={`beam-${product.id}`} class="spot__name t-display-l">
+                  {product.name}
+                </h3>
+                <p class="spot__tagline t-serif-italic">{product.tagline}</p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+
+      {
+        mark && (
+          <img
+            class="lamp"
+            src={mark.still}
+            width={mark.grid.cell[0]}
+            height={mark.grid.cell[1]}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        )
+      }
+    </div>
+  </div>
+</Section>
+
+<style>
+  /* --------------------------------------------------- phones: a list */
+
+  .pin {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem;
+    padding: clamp(4rem, 3rem + 4vw, 6rem) var(--inset-mobile);
+  }
+
+  .scene {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    width: 100%;
+  }
+
+  .spot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .spot__shot {
+    margin-bottom: 0.6rem;
+  }
+
+  .spot__name,
+  .spot__tagline {
+    margin: 0;
+  }
+
+  .spot__count {
+    color: var(--muted);
+  }
+
+  .lamp {
+    order: -1;
+    width: 7rem;
+    height: auto;
+  }
+
+  /*
+    Desktop: the lamp a little above the middle of one screen, the products
+    around it — left, below, right — each where the beam is wide enough to
+    hold it. --sx and --sy are the lamp, in the track's cqw and the screen's
+    svh, so every length here is absolute.
+  */
+  @media (min-width: 861px) {
+    :global(#products-beam) {
+      overflow: clip;
+    }
+
+    .track {
+      container-type: inline-size;
+      --sx: 50cqw;
+      --sy: 34svh;
+      --spread: 32deg;
+    }
+
+    .pin {
+      display: block;
+      height: 100svh;
+      padding: 0;
+    }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: block;
+    }
+
+    .spot {
+      position: absolute;
+      width: min(24cqw, 22rem);
+    }
+
+    .spot--left {
+      right: calc(100cqw - var(--sx) + 22cqw);
+      top: var(--sy);
+      translate: 0 -50%;
+    }
+
+    .spot--right {
+      left: calc(var(--sx) + 22cqw);
+      top: var(--sy);
+      translate: 0 -50%;
+    }
+
+    /* Below the lamp the beam starts narrow and widens, so the words go
+       first and the wider picture under them. */
+    .spot--bottom {
+      left: var(--sx);
+      top: calc(var(--sy) + 22svh);
+      width: min(20cqw, 18rem);
+      translate: -50% 0;
+      align-items: center;
+      text-align: center;
+    }
+
+    .spot--bottom .spot__shot {
+      order: 1;
+      width: 100%;
+      margin: 0.6rem 0 0;
+    }
+
+    .lamp {
+      position: absolute;
+      left: var(--sx);
+      top: var(--sy);
+      z-index: 2;
+      width: clamp(5.5rem, 8cqw, 9rem);
+      translate: -50% -50%;
+    }
+  }
+
+  /*
+    The beam, only where it can sweep. 400svh holds the visitor for three
+    stops: the beam rests on each product for about a fifth of the way and
+    swings between them for the rest.
+
+    The beam is a square three screens across, centred on the lamp, cut to a
+    wedge pointing right (0deg) and turned to aim it. The scene is placed
+    back where the screen is and turned the other way about the same point.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
+      .track {
+        height: 400svh;
+        view-timeline: --beam block;
+      }
+
+      .pin {
+        position: sticky;
+        top: 0;
+      }
+
+      .beam {
+        --r: 150vmax;
+        position: absolute;
+        left: calc(var(--sx) - var(--r));
+        top: calc(var(--sy) - var(--r));
+        width: calc(2 * var(--r));
+        height: calc(2 * var(--r));
+        clip-path: polygon(
+          50% 50%,
+          100% calc(50% - 50% * tan(var(--spread))),
+          100% calc(50% + 50% * tan(var(--spread)))
+        );
+        /* Hot near the lamp, orange where it lands. */
+        background: radial-gradient(
+          circle at 50% 50%,
+          color-mix(in srgb, var(--orange) 55%, var(--paper)) 0,
+          var(--orange) calc(var(--r) * 0.12),
+          var(--orange) 100%
+        );
+        color: var(--ink);
+        animation: sweep both;
+        animation-timeline: --beam;
+        animation-range: contain 0% contain 100%;
+        animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+      }
+
+      .scene {
+        inset: calc(var(--r) - var(--sy)) auto auto calc(var(--r) - var(--sx));
+        width: 100cqw;
+        height: 100svh;
+        transform-origin: var(--sx) var(--sy);
+        animation: unsweep both;
+        animation-timeline: --beam;
+        animation-range: contain 0% contain 100%;
+        animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+      }
+
+      /* In the light, everything is --ink. */
+      .spot__count {
+        color: var(--ink);
+      }
+
+      .spot :global(.plate) {
+        background: color-mix(in srgb, var(--ink) 12%, var(--orange));
+      }
+
+      .spot :global(.plate__pending) {
+        color: var(--ink);
+      }
+    }
+
+    @keyframes sweep {
+      0%,
+      18% {
+        rotate: 180deg;
+      }
+      41%,
+      59% {
+        rotate: 90deg;
+      }
+      82%,
+      100% {
+        rotate: 0deg;
+      }
+    }
+
+    @keyframes unsweep {
+      0%,
+      18% {
+        rotate: -180deg;
+      }
+      41%,
+      59% {
+        rotate: -90deg;
+      }
+      82%,
+      100% {
+        rotate: 0deg;
+      }
+    }
+  }
+</style>

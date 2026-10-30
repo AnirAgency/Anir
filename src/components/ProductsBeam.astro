@@ -16,8 +16,8 @@ import { site } from '../content/site';
   the live thing on the screen (CLAUDE.md > The orange rule). What it shows
   is not a card but the work itself: the screen in a frame of corner ticks,
   the same registration marks the sections carry, lit from the lamp's side,
-  with a readout beside it. When the beam comes to rest, an orange line scans
-  down the screen once.
+  with a readout beside it, and an orange line scanning down the screen over
+  and over.
 
   Deliberately simple machinery, because the first version was not: a beam
   masked out of a square three screens across rendered inside-out on some
@@ -433,33 +433,6 @@ const lit = items.slice(0, SIDES.length);
         animation-name: lit-right;
       }
 
-      /* The scan: an orange line down the screen, with a wash behind it,
-         once while the beam rests on it, then gone. */
-      .spot__scan {
-        display: block;
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          to bottom,
-          transparent calc(100% - 5rem),
-          color-mix(in srgb, var(--orange) 16%, transparent) calc(100% - 2px),
-          var(--orange) calc(100% - 2px)
-        );
-        animation: scan linear both;
-        animation-timeline: --beam;
-      }
-
-      .spot--left .spot__scan {
-        animation-range: contain 1% contain 16%;
-      }
-
-      .spot--bottom .spot__scan {
-        animation-range: contain 42% contain 57%;
-      }
-
-      .spot--right .spot__scan {
-        animation-range: contain 83% contain 98%;
-      }
     }
 
     /* The beam rests 0–18%, 41–59% and 82–100%, and swings between. */
@@ -514,20 +487,53 @@ const lit = items.slice(0, SIDES.length);
         opacity: 1;
       }
     }
+  }
 
-    @keyframes scan {
-      0% {
-        translate: 0 -100%;
-        opacity: 1;
-      }
-      85% {
-        translate: 0 0;
-        opacity: 1;
-      }
-      100% {
-        translate: 0 0;
-        opacity: 0;
-      }
+  /*
+    The scan: an orange line down each screen, with a wash behind it, on a
+    loop — always, wherever motion is allowed, beam or no beam. Three short
+    layers moving on the compositor, staggered so they never sweep together.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .spot__scan {
+      display: block;
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        transparent calc(100% - 5rem),
+        color-mix(in srgb, var(--orange) 16%, transparent) calc(100% - 2px),
+        var(--orange) calc(100% - 2px)
+      );
+      animation: scan 3.2s linear infinite;
+    }
+
+    .spot--bottom .spot__scan {
+      animation-delay: -1.1s;
+    }
+
+    .spot--right .spot__scan {
+      animation-delay: -2.2s;
+    }
+  }
+
+  /* Down the screen in the first 70%, fade out, rest, again. */
+  @keyframes scan {
+    0% {
+      translate: 0 -100%;
+      opacity: 0;
+    }
+    6% {
+      opacity: 1;
+    }
+    70% {
+      translate: 0 0;
+      opacity: 1;
+    }
+    80%,
+    100% {
+      translate: 0 0;
+      opacity: 0;
     }
   }
 </style>

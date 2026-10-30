@@ -141,11 +141,12 @@ export interface ShowreelVideo {
 }
 
 /**
- * The desktop mosaic is three columns. The sides are stacks of work, top to
- * bottom, that drift upward as the camera moves in; the centre is one image
- * above the video and one below it, at the video's width, and holds still.
- * Mix portrait and landscape down each side — the stagger reads from the
- * seams between tiles, and the two columns need comparable heights.
+ * The mosaic is three columns. The sides are stacks of work, top to bottom,
+ * shown at their own aspect ratios; as the camera moves in, the left one
+ * drifts up and the right one down. The centre is one image above the video
+ * and one below it, each cropped to the video's cell — a third of the screen
+ * each way. Mix portrait and landscape down each side, so the seams fall in
+ * different places and the columns read as scattered rather than ruled.
  */
 export interface ShowreelMedia {
   left: ShowreelTile[];

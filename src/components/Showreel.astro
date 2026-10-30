@@ -1,25 +1,25 @@
 ---
 import Section from './Section.astro';
-import { site, type ShowreelMedia, type ShowreelTile } from '../content/site';
+import { site, type ShowreelMedia } from '../content/site';
 import { placeholderMode } from '../lib/placeholders.mjs';
 
 /*
-  The showreel mosaic: the work as three columns of tiles, with the video in
-  the middle of the centre one. The section pins as it arrives, and as you
-  keep scrolling the camera moves in: the whole mosaic grows past the screen,
-  the side columns drift upward at different rates, the images above and below
-  the video part, and the video opens out of its cell until it covers the
-  screen; then the pin lets go. Everything hangs off the one view timeline on
-  the track, so it all moves in lockstep by construction. No scroll handler —
-  a tall track with a sticky child — so keyboard, trackpad momentum,
-  find-in-page and screen readers all scroll exactly as they do anywhere else.
+  The showreel mosaic: the work as three columns of tiles scattered a little
+  out of line, with the video in the middle of the centre one. The video's
+  cell is a miniature of the screen — a third of its width and a third of its
+  height — sitting at its centre. The section pins as it arrives, and as you
+  keep scrolling the camera moves in on the video: the whole mosaic grows
+  around it, every tile with it, until the cell fills the screen and the rest
+  has been carried off the edges. The left column drifts up and the right one
+  down as it goes. Then the video holds the screen for a moment and the pin
+  lets go.
 
-  The video is screen-sized from the start and clipped back to its cell, so
-  opening it is just opening the clip. The clip is computed from the same
-  widths as the mosaic, so at rest it lands exactly on the cell's edges at
-  every size. Base style is that rest state: without scroll-driven animation,
-  under reduced motion and with JS off, the mosaic is not pinned, nothing
-  moves, every tile shows whole and the video sits in its cell.
+  It is one transform on the mosaic and one on each side column, all on the
+  one view timeline on the track, so everything moves in lockstep by
+  construction. No scroll handler — a tall track with a sticky child — so
+  keyboard, trackpad momentum, find-in-page and screen readers all scroll
+  exactly as they do anywhere else. Without scroll-driven animation, under
+  reduced motion and with JS off, the mosaic is the same composition, still.
 
   Render-gated on real media. In production, with nothing real in site.ts the
   section is not emitted at all — no markup, no script — so main is
@@ -29,7 +29,7 @@ import { placeholderMode } from '../lib/placeholders.mjs';
 
   The tiles are the portfolio's content, so they are plain lazy <img>s that
   load on every connection, saveData included, with JS on or off. Only the
-  video is gated (the script below); without it, the poster opens instead.
+  video is gated (the script below); without it, the poster stays.
 */
 
 const PLACEHOLDER_DIR = '/media/placeholder/';
@@ -50,81 +50,13 @@ if (leaked.length > 0) {
 }
 
 const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placeholder : null);
-
-/*
-  A side column is its tiles stacked at their own aspect ratios, so its height
-  is the sum of their height-to-width ratios times the column's width, plus a
-  gutter between each. CSS knows the width; the ratios come from here, so the
-  stagger room and the bleed below can be computed exactly.
-*/
-const ratio = (tiles: ShowreelTile[]) => tiles.reduce((sum, tile) => sum + tile.height / tile.width, 0);
-
-/*
-  Phones: two columns. The image above the video, the video and the image
-  below it each take a whole row; the side tiles pair up around them, half
-  the pairs before and the rest after. An odd last tile takes a whole row
-  rather than leaving a hole.
-*/
-const sides = reel ? [...reel.left, ...reel.right] : [];
-const pairs = Math.ceil(sides.length / 2);
-const phone = {
-  rows: pairs + 3,
-  above: Math.floor(pairs / 2) + 1,
-  video: Math.floor(pairs / 2) + 2,
-  below: Math.floor(pairs / 2) + 3,
-};
-const oddLast = sides.length % 2 === 1;
-
-const geometry = reel
-  ? [
-      `--left-ratio: ${ratio(reel.left).toFixed(4)}`,
-      `--left-gaps: ${reel.left.length - 1}`,
-      `--right-ratio: ${ratio(reel.right).toFixed(4)}`,
-      `--right-gaps: ${reel.right.length - 1}`,
-      `--video-w: ${reel.video.width}`,
-      `--video-h: ${reel.video.height}`,
-      `--phone-rows: ${phone.rows}`,
-      `--phone-above: ${phone.above}`,
-      `--phone-r: ${phone.video}`,
-      `--phone-below: ${phone.below}`,
-    ].join('; ')
-  : '';
 ---
 
 {
   reel && (
     <Section tone="dark" id="showreel" label={label} layout="bleed">
-      <div class="track" style={geometry}>
+      <div class="track">
         <div class="pin">
-          {/*
-            First in source order and absolutely placed, so tiles that arrive
-            late in a stalled stream can never move it.
-          */}
-          <div class="showreel">
-            <img
-              class="showreel__poster"
-              src={reel.video.poster}
-              width={reel.video.width}
-              height={reel.video.height}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              data-lane="poster"
-            />
-            <video
-              class="showreel__video"
-              width={reel.video.width}
-              height={reel.video.height}
-              aria-label={reel.video.label}
-              muted
-              playsinline
-              loop
-              preload="none"
-              data-lane="video"
-              data-defer={reel.video.src}
-            />
-          </div>
-
           <div class="mosaic-grid">
             <div class="col col-left">
               {reel.left.map((tile) => (
@@ -152,7 +84,30 @@ const geometry = reel
                 decoding="async"
                 data-lane="tile"
               />
-              <div class="slot" aria-hidden="true" />
+              <div class="slot">
+                <img
+                  class="slot__media"
+                  src={reel.video.poster}
+                  width={reel.video.width}
+                  height={reel.video.height}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="poster"
+                />
+                <video
+                  class="slot__media"
+                  width={reel.video.width}
+                  height={reel.video.height}
+                  aria-label={reel.video.label}
+                  muted
+                  playsinline
+                  loop
+                  preload="none"
+                  data-lane="video"
+                  data-defer={reel.video.src}
+                />
+              </div>
               <img
                 class="tile centre-bottom"
                 src={reel.below.src}
@@ -166,9 +121,9 @@ const geometry = reel
             </div>
 
             <div class="col col-right">
-              {reel.right.map((tile, i) => (
+              {reel.right.map((tile) => (
                 <img
-                  class:list={['tile', { 'tile--fill': oddLast && i === reel.right.length - 1 }]}
+                  class="tile"
                   src={tile.src}
                   width={tile.width}
                   height={tile.height}
@@ -187,7 +142,7 @@ const geometry = reel
         /*
           Attaches the video's src once the section is within one viewport —
           never on saveData, a slow device or reduced motion, where the poster
-          grows instead. The same gates as the hero mark. No scroll handler:
+          stays instead. The same gates as the hero mark. No scroll handler:
           the observer plays it near the viewport and pauses it away from it.
 
           It starts watching only after load. On a desktop the section begins
@@ -225,46 +180,29 @@ const geometry = reel
 
 <style>
   /*
-    The geometry, once, for the mosaic and the clip alike.
+    The geometry. --k is the video's cell as a share of the screen, the same
+    share each way, so the cell has the screen's shape and growing the mosaic
+    by 1 / --k makes it exactly fill the screen. The centre column is the
+    cell's width; the images above and below the video are the cell's size
+    too, so the centre column is the screen's height, cut in three. The sides
+    share what is left.
 
-    Desktop: three columns edge to edge with 1px hairline gutters, below the
-    nav bar. The centre one is --wc wide, the video's width at rest; the sides
-    share what is left. The video sits at the centre of the centre column, and
-    the centre column fills the mosaic's height, so the video's cell is the
-    middle of the screen at every size.
-
-    The track is a size container so that --wc can be a share of its width in
-    cqw: an absolute length, which the clip's top and bottom insets can use as
-    well as its sides. --slot is the video's cell as insets of the
-    screen-sized video layer. --pt and --pb are the space the pin keeps above
-    and below the mosaic.
+    The track is a size container so the cell's width can be a share of it
+    in cqw: an absolute length, like the height's svh.
   */
   .track {
     container-type: inline-size;
-    --g: var(--hairline);
-    --wc: 36cqw;
-    --hv: calc(var(--wc) * var(--video-h) / var(--video-w));
-    --side: calc((100cqw - var(--wc) - 2 * var(--g)) / 2);
-    --left-h: calc(var(--left-ratio) * var(--side) + var(--left-gaps) * var(--g));
-    --right-h: calc(var(--right-ratio) * var(--side) + var(--right-gaps) * var(--g));
-    /* At rest the columns stand 4% of their height off level (below), so the
-       pin keeps exactly that much room above and below them. */
-    --pt: calc(var(--header-h) + 0.04 * var(--left-h));
-    --pb: calc(0.04 * var(--right-h));
-    --slot: inset(
-      calc(var(--pt) + (100% - var(--pt) - var(--pb) - var(--hv)) / 2)
-        calc((100% - var(--wc)) / 2)
-        calc(var(--pb) + (100% - var(--pt) - var(--pb) - var(--hv)) / 2)
-        calc((100% - var(--wc)) / 2)
-    );
+    --k: calc(1 / 3);
+    --g: 8px;
+    --cw: calc(var(--k) * 100cqw);
+    --ch: calc(var(--k) * 100svh);
   }
 
   /*
-    The columns overflow the pin while it moves, so the section clips them —
-    with clip, not hidden, which would make it a scroll container and freeze
-    the timeline. The pin itself does not clip: a tile hidden by an ancestor's
-    overflow never starts its lazy load, and would arrive only as its column
-    carried it into view.
+    The tiles run past the screen, and the zoom carries them further, so the
+    section clips them — with clip, not hidden, which would make it a scroll
+    container and freeze the timeline. The pin itself does not clip: a tile
+    hidden by an ancestor's overflow never starts its lazy load.
   */
   :global(#showreel) {
     overflow: clip;
@@ -272,51 +210,46 @@ const geometry = reel
 
   .pin {
     position: relative;
-    padding-top: var(--pt);
-    padding-bottom: var(--pb);
+    height: 100svh;
     background: var(--bg);
   }
 
   /*
-    The ground is --bg, so any edge a column leaves is page, never a grey
-    block. Hairlines come from the side columns, which move: their own
-    backgrounds between their tiles, and a 1px border on the edge they share
-    with the centre — the gutter, carried with them.
+    The tiles sit apart on the page's own ground rather than on hairlines — a
+    contact sheet scattered on a table (CLAUDE.md > Layout records the
+    exception). The grid fills the screen, so its centre is the screen's
+    centre: the zoom's origin, and the video's.
   */
   .mosaic-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--wc) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) var(--cw) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
-    background: var(--bg);
+    column-gap: var(--g);
+    height: 100%;
   }
 
+  /*
+    The sides: tiles at their own aspect ratios, so the seams fall in
+    different places down each column, and the columns start at different
+    heights above the screen — out of line on purpose. Each is at least 1.3
+    screens tall, so it covers top to bottom however it drifts; tiles shorter
+    than that grow, and cover crops them rather than distorting.
+  */
   .col-left,
   .col-right {
     display: flex;
     flex-direction: column;
     gap: var(--g);
     align-self: start;
-    background: var(--line);
+    min-height: calc(1.3 * 100svh);
   }
 
-  /*
-    The stagger at rest — most of what makes the grid look composed rather
-    than tiled. The animation's first keyframe carries the same values, so
-    nothing snaps when scrolling starts.
-  */
   .col-left {
-    translate: 0 -4%;
-    border-right: var(--g) solid var(--line);
+    margin-top: calc(-0.14 * 100svh);
   }
 
   .col-right {
-    translate: 0 4%;
-    border-left: var(--g) solid var(--line);
-  }
-
-  .col-centre {
-    position: relative;
-    background: var(--bg);
+    margin-top: calc(-0.04 * 100svh);
   }
 
   .tile {
@@ -327,56 +260,46 @@ const geometry = reel
     background: var(--plate);
   }
 
-  /* A side tile grows only when its column has to stretch past its tiles'
-     own height (the min-height below); cover crops it rather than distorting. */
   .col-left .tile,
   .col-right .tile {
     flex: 1 0 auto;
     min-height: 0;
   }
 
-  /* The centre column hangs off the video's cell at its middle, so the video
-     is centred whatever the heights of the images above and below it. */
+  /*
+    The centre hangs off the video's cell at the screen's middle: the image
+    above, the cell, the image below, each the cell's size.
+  */
+  .col-centre {
+    position: relative;
+  }
+
   .slot,
   .centre-top,
   .centre-bottom {
     position: absolute;
     left: 0;
     width: 100%;
+    height: var(--ch);
   }
 
-  /* Holds the video's cell open; the video draws over it. The outline is the
-     hairline between it and the images above and below. */
   .slot {
-    top: calc(50% - var(--hv) / 2);
-    height: var(--hv);
+    top: calc(50% - var(--ch) / 2);
+    overflow: clip;
     background: var(--plate);
-    outline: var(--g) solid var(--line);
   }
 
   .centre-top {
-    bottom: calc(50% + var(--hv) / 2 + var(--g));
+    bottom: calc(50% + var(--ch) / 2 + var(--g));
   }
 
   .centre-bottom {
-    top: calc(50% + var(--hv) / 2 + var(--g));
+    top: calc(50% + var(--ch) / 2 + var(--g));
   }
 
-  /*
-    Screen-sized, clipped to its cell. cover, never contain, on both the
-    video and the poster: the media fills the clip at every size and can never
-    letterbox.
-  */
-  .showreel {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    background: var(--plate);
-    clip-path: var(--slot);
-  }
-
-  .showreel__poster,
-  .showreel__video {
+  /* cover, never contain: the poster and the video fill the cell at every
+     size, all the way to the full screen, and never letterbox. */
+  .slot__media {
     position: absolute;
     inset: 0;
     display: block;
@@ -385,78 +308,26 @@ const geometry = reel
     object-fit: cover;
   }
 
-  /*
-    Phones: two columns in one screen, as in Phase 17. Three columns would
-    leave the sides a hundred pixels wide, and no column that narrow can be
-    tall enough to keep covering the screen while it rises. The column
-    wrappers step aside (display: contents) and every tile becomes a cell.
-  */
   @media (max-width: 860px) {
     .track {
-      --pt: var(--header-h);
-      --pb: 0px;
-      --rows: var(--phone-rows);
-      --row-step: calc((100% - var(--pt) - (var(--rows) - 1) * var(--g)) / var(--rows) + var(--g));
-      --slot: inset(
-        calc(var(--pt) + (var(--phone-r) - 1) * var(--row-step)) 0
-          calc((var(--rows) - var(--phone-r)) * var(--row-step)) 0
-      );
-    }
-
-    .pin {
-      height: 100svh;
-    }
-
-    .mosaic-grid {
-      height: 100%;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
-      grid-auto-flow: row dense;
-      gap: var(--g);
-      background: var(--line);
-    }
-
-    .col {
-      display: contents;
-    }
-
-    .tile,
-    .slot {
-      position: static;
-      height: 100%;
-      min-height: 0;
-    }
-
-    .slot {
-      grid-column: 1 / -1;
-      grid-row: var(--phone-r);
-      outline: none;
-    }
-
-    .centre-top {
-      grid-column: 1 / -1;
-      grid-row: var(--phone-above);
-    }
-
-    .centre-bottom {
-      grid-column: 1 / -1;
-      grid-row: var(--phone-below);
-    }
-
-    .tile--fill {
-      grid-column: 1 / -1;
+      --g: 4px;
     }
   }
 
   /*
-    The pin and the dolly, only where both work. 340svh is the one knob for
-    how long the visitor is held: everything runs across the 240svh during
-    which the track covers the screen (contain 0% to 100%).
+    The pin and the zoom, only where both work. 340svh is the one knob for
+    how long the visitor is held: the camera moves in across the first 85% of
+    the 240svh during which the track covers the screen, and the video holds
+    the screen for the rest.
 
-    The nav yields while the video holds the screen: it fades out as the clip
-    passes three quarters open, stays out while the video covers everything,
-    and comes back as the pin lets go — so footage never runs under a bar,
-    and the bar is there again for the rest of the page.
+    The zoom runs in equal ratios — each quarter of the way multiplies the
+    size by the same amount — so the camera moves at an even pace instead of
+    lunging at the start.
+
+    The nav yields while the video holds the screen: it fades out as the
+    video comes to fill it, stays out while it does, and comes back as the pin
+    lets go — so footage never runs under a bar, and the bar is there again
+    for the rest of the page.
   */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
@@ -465,8 +336,6 @@ const geometry = reel
       }
 
       .track {
-        --pt: var(--header-h);
-        --pb: 0px;
         height: 340svh;
         view-timeline: --sr block;
       }
@@ -474,28 +343,26 @@ const geometry = reel
       .pin {
         position: sticky;
         top: 0;
-        height: 100svh;
       }
 
-      .mosaic-grid {
-        height: 100%;
-      }
-
-      .showreel,
-      .mosaic-grid {
+      .mosaic-grid,
+      .col-left,
+      .col-right {
         animation: linear both;
         animation-timeline: --sr;
-        animation-range: contain 0% contain 100%;
+        animation-range: contain 0% contain 85%;
       }
 
-      .showreel {
-        animation-name: showreel-open;
-      }
-
-      /* The camera moves in: everything grows past the screen around the
-         video, which is the transform's origin. */
       .mosaic-grid {
-        animation-name: dolly;
+        animation-name: zoom;
+      }
+
+      .col-left {
+        animation-name: drift-up;
+      }
+
+      .col-right {
+        animation-name: drift-down;
       }
 
       :global(.header) {
@@ -505,128 +372,44 @@ const geometry = reel
       }
     }
 
-    /*
-      Desktop. The sides rise at different rates — equal movement reads as the
-      page scrolling, unequal reads as depth — while the centre column, the
-      thing the camera moves toward, holds still.
-
-      A side column has to cover the screen top to bottom all the way through:
-      the left one ends 38% up, the right one starts 4% down. So each is at
-      least 1.6 screens tall, and both start above the top of the mosaic by
-      the right column's 4% plus a little. If its tiles are shorter than that,
-      they grow and crop rather than leave a gap.
-    */
-    @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
-      .col-left,
-      .col-right {
-        --cover: calc(1.6 * (100svh - var(--pt)));
-        min-height: var(--cover);
-        margin-top: calc(-0.045 * max(var(--right-h), var(--cover)));
-        animation: linear both;
-        animation-timeline: --sr;
-        animation-range: contain 0% contain 100%;
-      }
-
-      .col-left {
-        animation-name: rise-a;
-      }
-
-      .col-right {
-        animation-name: rise-b;
-      }
-
-      /*
-        Pinned, the centre column is the screen's height. On a squarish or
-        narrow screen the images above and below the video are shorter than
-        the space they have, so they grow to the screen's edges and crop.
-
-        The video's clip opens straight over them, so they part and are gone
-        by 55% — before it fills the screen.
-      */
-      .centre-top,
-      .centre-bottom {
-        min-height: calc((100% - var(--hv)) / 2 - var(--g));
-        animation: linear both;
-        animation-timeline: --sr;
-        animation-range: contain 0% contain 55%;
-      }
-
-      .centre-top {
-        animation-name: part-up;
-      }
-
-      .centre-bottom {
-        animation-name: part-down;
-      }
-    }
-
-    /* Phones: the dolly alone, centred on the video's row. */
-    @media (prefers-reduced-motion: no-preference) and (max-width: 860px) {
-      .mosaic-grid {
-        transform-origin: 50% calc((var(--phone-r) - 0.5) / var(--rows) * 100%);
-      }
-    }
-
-    @keyframes showreel-open {
-      from {
-        clip-path: var(--slot);
-      }
-      to {
-        clip-path: inset(0 0 0 0);
-      }
-    }
-
-    @keyframes dolly {
-      from {
+    @keyframes zoom {
+      0% {
         scale: 1;
       }
-      to {
-        scale: 1.35;
+      25% {
+        scale: pow(calc(1 / var(--k)), 0.25);
+      }
+      50% {
+        scale: pow(calc(1 / var(--k)), 0.5);
+      }
+      75% {
+        scale: pow(calc(1 / var(--k)), 0.75);
+      }
+      100% {
+        scale: calc(1 / var(--k));
       }
     }
 
-    @keyframes rise-a {
-      from {
-        translate: 0 -4%;
-      }
-      to {
-        translate: 0 -38%;
-      }
-    }
-
-    @keyframes rise-b {
-      from {
-        translate: 0 4%;
-      }
-      to {
-        translate: 0 -22%;
-      }
-    }
-
-    @keyframes part-up {
+    @keyframes drift-up {
       from {
         translate: 0 0;
-        opacity: 1;
       }
       to {
-        translate: 0 -60%;
-        opacity: 0;
+        translate: 0 -20svh;
       }
     }
 
-    @keyframes part-down {
+    @keyframes drift-down {
       from {
         translate: 0 0;
-        opacity: 1;
       }
       to {
-        translate: 0 60%;
-        opacity: 0;
+        translate: 0 20svh;
       }
     }
 
-    /* contain 55% to exit 30%: 26% is the clip three quarters open, 78% is
-       contain 100% — the video covering the screen as the pin lets go. */
+    /* contain 55% to exit 30%: 26% is the video three quarters of the way
+       to the screen, 78% is contain 100% — the pin letting go. */
     @keyframes nav-yield {
       0% {
         opacity: 1;

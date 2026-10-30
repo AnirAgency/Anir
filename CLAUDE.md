@@ -242,7 +242,10 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   fitting below 1280px — measured by overlapping label boxes, not computed.
 - Structure is drawn with **1px hairlines**, not shadows or rounded cards.
   Grids are built as a 1px-gap flex/grid whose container background is the
-  hairline colour. Corner ticks on section boundaries.
+  hairline colour. Corner ticks on section boundaries. **One exception, by the
+  owner's direction:** the showreel mosaic's tiles sit apart on 8px of the
+  page's own ground, slightly out of line, like prints scattered on a table —
+  it is the work on display, not structure.
 - No `border-radius` on UI surfaces: buttons, inputs, cards, media frames,
   the enquiry form. Geometric marks that are circular by nature are not UI
   surfaces. The eyebrow pills (100px) are the one rounded UI element.

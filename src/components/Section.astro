@@ -102,12 +102,15 @@ const ticks = layout !== 'strip' && layout !== 'bleed';
     scroll-margin-top: var(--header-h);
   }
 
+  /* color-scheme so native parts — a textarea's grip and scrollbar,
+     autofill — follow the ground too. */
   .section--dark {
     --bg: var(--ink);
     --fg: var(--paper);
     --muted: var(--dim);
     --line: var(--line-dark);
     --plate: var(--ink-2);
+    color-scheme: dark;
   }
 
   .section--light {
@@ -116,6 +119,7 @@ const ticks = layout !== 'strip' && layout !== 'bleed';
     --muted: var(--dim-2);
     --line: var(--line-light);
     --plate: var(--paper-2);
+    color-scheme: light;
   }
 
   /*

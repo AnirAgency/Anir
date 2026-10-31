@@ -179,9 +179,9 @@ Three rules follow:
    `--dim-2` on light.
 2. On light sections, orange fails the 4.5:1 small-text bar (3.06:1 with the
    grain) but passes the 3:1 large-text bar. It may be used as text only at >=24px
-   regular or >=18.66px bold — the enquiry email at Display/M (26–34px)
-   qualifies. Below that it is a mark, not a text colour: use --muted and
-   return the orange as a 2px rule or dot.
+   regular or >=18.66px bold — Display/M (26–34px) qualifies. Below that it
+   is a mark, not a text colour: use --muted and return the orange as a 2px
+   rule or dot.
 3. **Text on an orange fill is `--ink`, never white.** White on orange fails.
 
 The Figma `Anir / Colour` collection must carry the same split, or the design
@@ -242,7 +242,9 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   one is full and the other sparse, so density separates them where tone
   cannot: the edge-to-edge showreel mosaic after the hero (a glowing video
   needs dark ground), and the ruled services list after the sparse process
-  (low-alpha orange needs dark ground).
+  (low-alpha orange needs dark ground). **By the owner's direction, the
+  enquiry form is dark too**: it follows the ruled services list, and the
+  section's hairline and corner ticks mark the boundary.
 - **A fluid layout that mixes scaled graphics with fixed-minimum text has a
   breakpoint, and it has to be found by measurement, not derived.** The
   process spine is the case that taught it: its circles scale with the

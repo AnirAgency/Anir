@@ -1,0 +1,88 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import { site, type Product } from '../content/site';
+
+/*
+  A product's screens, in three runs, each under its own heading: two wide
+  screens side by side, the phone screens in a row, and more of it in a grid
+  of two. Each run is a 1px-gap grid on the hairline colour, so the rules
+  between screens are the grid's own (CLAUDE.md > Layout).
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { pages } = site.products;
+const { screens, mobile, more } = product.gallery;
+
+const runs = [
+  { title: pages.screens, kind: 'pair', items: screens },
+  { title: pages.mobile, kind: 'phones', items: mobile },
+  { title: pages.more, kind: 'grid', items: more },
+] as const;
+---
+
+<Section tone="light" id="screens" label={pages.screens} heading={false}>
+  {
+    runs.map((run, i) => (
+      <div class="run">
+        <h2 class="run__title t-display-m" data-reveal>
+          <span class="run__index t-mono-label">{String(i + 1).padStart(2, '0')}</span>
+          {run.title}
+        </h2>
+        <div class={`run__grid run__grid--${run.kind}`} data-reveal>
+          {run.items.map((media) => (
+            <Plate media={media} ratio={`${media.width} / ${media.height}`} kind="image" />
+          ))}
+        </div>
+      </div>
+    ))
+  }
+</Section>
+
+<style>
+  .run + .run {
+    margin-top: clamp(3.5rem, 2rem + 5vw, 7rem);
+  }
+
+  .run__title {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: clamp(1.25rem, 1rem + 1vw, 2rem);
+  }
+
+  .run__index {
+    color: var(--muted);
+  }
+
+  .run__grid {
+    display: grid;
+    gap: var(--hairline);
+    background: var(--line);
+    border: var(--hairline) solid var(--line);
+  }
+
+  .run__grid--pair,
+  .run__grid--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .run__grid--phones {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 860px) {
+    .run__grid--pair,
+    .run__grid--grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .run__grid--phones {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

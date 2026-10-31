@@ -16,9 +16,12 @@ interface Props {
   /** A review page, like /v2: kept out of search, and pointing at the home
    *  page as the real one. */
   noindex?: boolean;
+  /** False on the products pages, which do not hold the home page's
+   *  sections: the nav's anchors lead back to it. */
+  home?: boolean;
 }
 
-const { title, description, chrome = true, noindex = false } = Astro.props;
+const { title, description, chrome = true, noindex = false, home = true } = Astro.props;
 
 const pageTitle = title ?? site.meta.title;
 const pageDescription = description ?? site.meta.description;
@@ -130,7 +133,7 @@ const jsonLd = {
   <body id="top">
     <a class="skip-link t-mono-label" href="#main">{site.chrome.skipToContent}</a>
 
-    {chrome && <Header />}
+    {chrome && <Header home={home} />}
     {chrome && <Rail />}
 
     <main id="main">

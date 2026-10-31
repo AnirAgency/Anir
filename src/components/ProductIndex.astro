@@ -1,0 +1,124 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The products page's list: one large card per product, its screen and its
+  readout side by side, alternating sides down the page, ruled apart. The
+  whole card is the link to the product's own page.
+
+  Hover turns the name orange — large type, which clears 3:1 on --paper —
+  and draws an orange rule under the way in: the small label stays --ink,
+  because orange as small text on light fails (CLAUDE.md > Contrast).
+*/
+
+const { pages, items } = site.products;
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<Section tone="light" id="products-list" label={pages.title} heading={false}>
+  <ol class="cards">
+    {
+      items.map((product, i) => (
+        <li class="card" data-reveal>
+          <a class="card__link" href={`/products/${product.id}/`}>
+            <div class="card__shot">
+              <Plate media={product.shot} ratio="16 / 10" kind="image" />
+            </div>
+            <div class="card__text">
+              <p class="card__index t-mono-label">
+                {pad(i + 1)} / {pad(items.length)} · {product.spec.year}
+              </p>
+              <h2 class="card__name t-display-l">{product.name}</h2>
+              <p class="card__tagline t-serif-italic">{product.tagline}</p>
+              <p class="card__desc t-mono-body">{product.description}</p>
+              <span class="card__open t-mono-label">{pages.open}</span>
+            </div>
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+</Section>
+
+<style>
+  .cards {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .card {
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .card__link {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+    gap: clamp(1.75rem, 0.5rem + 3.5vw, 4.5rem);
+    align-items: center;
+    padding-block: clamp(2rem, 1rem + 3vw, 4rem);
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  /* Every other product swaps sides. */
+  .card:nth-child(even) .card__shot {
+    order: 1;
+  }
+
+  .card__text {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 0.9rem;
+  }
+
+  .card__index,
+  .card__desc {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .card__name,
+  .card__tagline {
+    margin: 0;
+  }
+
+  .card__name {
+    transition: color 0.3s ease;
+  }
+
+  .card__desc {
+    max-width: 40ch;
+  }
+
+  .card__open {
+    margin-top: 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.3s ease;
+  }
+
+  .card__link:hover .card__name,
+  .card__link:focus-visible .card__name {
+    color: var(--orange);
+  }
+
+  .card__link:hover .card__open,
+  .card__link:focus-visible .card__open {
+    border-color: var(--orange);
+  }
+
+  @media (max-width: 860px) {
+    .card__link {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .card:nth-child(even) .card__shot {
+      order: 0;
+    }
+  }
+</style>

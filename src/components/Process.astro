@@ -16,12 +16,6 @@ import { site, type ProcessStep } from '../content/site';
   motion and with JS off the chain sits at full size.
 */
 
-interface Props {
-  /** Dark on the home page; /v2 tries it light. */
-  tone?: 'dark' | 'light';
-}
-
-const { tone = 'dark' } = Astro.props;
 const { intro, sides, events } = site.process;
 
 /*
@@ -83,7 +77,7 @@ const rows = events.map((event, i) => {
 const both = `${sides.client} · ${sides.studio}`;
 ---
 
-<Section tone={tone} id="process" label={intro.label} heading={false}>
+<Section tone="dark" id="process" label={intro.label} heading={false}>
   <SectionHead intro={intro} id="process-title" />
 
   <div class="process" style={`--h: ${height}; --r-first: ${EVENT_D[0] / 2}; --r-max: ${Math.max(...EVENT_D, ...FILLER_D) / 2};`}>

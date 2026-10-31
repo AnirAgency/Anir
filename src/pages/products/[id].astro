@@ -1,0 +1,32 @@
+---
+import Base from '../../layouts/Base.astro';
+import ProductHero from '../../components/ProductHero.astro';
+import ProductGallery from '../../components/ProductGallery.astro';
+import ProductNext from '../../components/ProductNext.astro';
+import ContactCta from '../../components/ContactCta.astro';
+import Footer from '../../components/Footer.astro';
+import { site } from '../../content/site';
+
+/*
+  /products/<id>/ — one product's own page: what it is and Anir's part in it,
+  its screens, then the next product and the way to the enquiry form. One
+  page per product in site.ts, built from its data alone.
+*/
+
+export function getStaticPaths() {
+  return site.products.items.map((product, index) => ({ params: { id: product.id }, props: { index } }));
+}
+
+const { items } = site.products;
+const { index } = Astro.props;
+const product = items[index];
+const next = items[(index + 1) % items.length];
+---
+
+<Base title={`${product.name} — Anir`} description={product.description} home={false}>
+  <ProductHero product={product} index={index} count={items.length} />
+  <ProductGallery product={product} />
+  <ProductNext product={next} />
+  <ContactCta tone="light" />
+  <Footer />
+</Base>

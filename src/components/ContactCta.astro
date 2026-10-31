@@ -1,0 +1,72 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The way to the enquiry form from a page that does not hold it — the
+  products pages. The contact section's own eyebrow and heading, and the
+  nav's call to action, pointing at the form on the home page.
+*/
+
+interface Props {
+  tone?: 'dark' | 'light';
+}
+
+const { tone = 'dark' } = Astro.props;
+const { intro } = site.contact;
+const cta = site.nav.links.find((link) => link.accent);
+---
+
+<Section tone={tone} id="contact-cta" label={intro.label} heading={false}>
+  <div class="cta">
+    <p class="cta__eyebrow t-mono-label" data-reveal>{intro.eyebrow}</p>
+    <h2 class="cta__title t-display-xl" data-reveal>{intro.title}</h2>
+    {
+      cta && (
+        <a class="cta__link t-mono-label" href={`/${cta.href}`} data-reveal>
+          {cta.label}
+        </a>
+      )
+    }
+  </div>
+</Section>
+
+<style>
+  .cta {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.5rem;
+  }
+
+  .cta__eyebrow {
+    margin: 0;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  .cta__title {
+    max-width: 18ch;
+    text-wrap: balance;
+  }
+
+  /* Clickable, so orange; text on orange is --ink. */
+  .cta__link {
+    margin-top: 0.5rem;
+    padding: 1rem 1.6rem;
+    background: var(--orange);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      background 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .cta__link:hover,
+  .cta__link:focus-visible {
+    background: var(--fg);
+    color: var(--bg);
+  }
+</style>

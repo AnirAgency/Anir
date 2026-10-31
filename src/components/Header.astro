@@ -15,20 +15,31 @@ import { site } from '../content/site';
   width-holding ghost and the tone-tracking script are all gone.
 */
 
+interface Props {
+  /** False on a page that does not hold the home page's sections — the
+   *  products pages — where its anchors lead back to the home page. */
+  home?: boolean;
+}
+
+const { home = true } = Astro.props;
 const { navLabel } = site.chrome;
 const links = site.nav.links.filter((link) => !link.accent);
 const cta = site.nav.links.find((link) => link.accent);
+
+const to = (href: string) => (!home && href.startsWith('#') ? `/${href}` : href);
+// A link to a page is current on that page and everything under it.
+const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.startsWith(href) ? 'page' : undefined);
 ---
 
 <header class="header">
-  <a class="header__mark t-display-s" href="#top">{site.nav.wordmark}</a>
+  <a class="header__mark t-display-s" href={home ? '#top' : '/'}>{site.nav.wordmark}</a>
 
   <nav class="header__nav" aria-label={navLabel}>
     <ul class="header__list">
       {
         links.map((link) => (
           <li>
-            <a class="header__link t-mono-label" href={link.href}>
+            <a class="header__link t-mono-label" href={to(link.href)} aria-current={current(link.href)}>
               {link.label}
             </a>
           </li>
@@ -37,7 +48,7 @@ const cta = site.nav.links.find((link) => link.accent);
     </ul>
     {
       cta && (
-        <a class="header__cta t-mono-label" href={cta.href}>
+        <a class="header__cta t-mono-label" href={to(cta.href)}>
           {cta.label}
         </a>
       )
@@ -93,6 +104,11 @@ const cta = site.nav.links.find((link) => link.accent);
     min-height: 44px;
     min-width: 44px;
     transition: color 0.3s ease;
+  }
+
+  /* The page you are on is the live link. */
+  .header__link[aria-current='page'] {
+    color: var(--orange);
   }
 
   .header__link:hover {

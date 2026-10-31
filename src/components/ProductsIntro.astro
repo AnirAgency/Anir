@@ -1,0 +1,192 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The home page's word on the products: one statement, set large and
+  centred, that lights up word by word as it passes through the screen, and
+  the way to the products page. Under it a soft orange wave drifts slowly
+  across the light ground.
+
+  The words are read from a view timeline on the statement: each one comes
+  up over its own short stretch of the scroll, in order, so the sentence
+  fills in as you read it. Opacity only. The statement is one string in
+  site.ts, split into words here — presentation, not copy.
+
+  Without scroll-driven animation, under reduced motion and with JS off, the
+  statement is simply there in full, and the wave holds still.
+*/
+
+const { intro, statement } = site.products;
+const words = statement.text.split(' ');
+---
+
+<Section tone="light" id="products" label={intro.label} heading={false}>
+  <div class="glow" aria-hidden="true">
+    <span class="glow__wave glow__wave--a"></span>
+    <span class="glow__wave glow__wave--b"></span>
+  </div>
+
+  <div class="say">
+    <p class="say__eyebrow t-mono-label">{statement.eyebrow}</p>
+    <h2 class="say__text t-serif-display" style={`--n: ${words.length}`}>
+      {
+        words.map((word, i) => (
+          <span class="word" style={`--i: ${i}`}>
+            {word}{' '}
+          </span>
+        ))
+      }
+    </h2>
+    <a class="say__cta t-mono-label" href="/products/">
+      {statement.cta}
+    </a>
+  </div>
+</Section>
+
+<style>
+  /* The wave: two broad, soft swells of orange low across the section, out
+     to its edges past the content's inset. */
+  .glow {
+    position: absolute;
+    inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-right)) calc(-1 * var(--section-pad-y))
+      calc(-1 * var(--inset));
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  @media (max-width: 860px) {
+    .glow {
+      inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-mobile));
+    }
+  }
+
+  .glow__wave {
+    position: absolute;
+    left: -25%;
+    width: 150%;
+    height: 70%;
+    background: radial-gradient(
+      ellipse closest-side,
+      color-mix(in srgb, var(--orange) 34%, transparent),
+      color-mix(in srgb, var(--orange) 12%, transparent) 55%,
+      transparent
+    );
+  }
+
+  .glow__wave--a {
+    bottom: -22%;
+    rotate: -6deg;
+  }
+
+  .glow__wave--b {
+    bottom: -38%;
+    left: 5%;
+    width: 120%;
+    rotate: 8deg;
+    opacity: 0.7;
+  }
+
+  .say {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+    max-width: 58rem;
+    margin-inline: auto;
+    padding-block: clamp(4rem, 2rem + 8vw, 10rem);
+    text-align: center;
+  }
+
+  .say__eyebrow {
+    margin: 0;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+  }
+
+  .say__text {
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  /* Clickable, so orange; text on orange is --ink. */
+  .say__cta {
+    display: inline-block;
+    padding: 1rem 1.6rem;
+    background: var(--orange);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      background 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .say__cta:hover,
+  .say__cta:focus-visible {
+    background: var(--ink);
+    color: var(--orange);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .glow__wave--a {
+      animation: swell-a 22s ease-in-out infinite alternate;
+    }
+
+    .glow__wave--b {
+      animation: swell-b 28s ease-in-out infinite alternate;
+    }
+  }
+
+  @keyframes swell-a {
+    from {
+      translate: -4% 0;
+      rotate: -6deg;
+    }
+    to {
+      translate: 6% -6%;
+      rotate: 2deg;
+    }
+  }
+
+  @keyframes swell-b {
+    from {
+      translate: 5% 0;
+      rotate: 8deg;
+    }
+    to {
+      translate: -6% -4%;
+      rotate: -3deg;
+    }
+  }
+
+  /*
+    The words: each comes up over its own stretch while the statement moves
+    from the lower part of the screen to the upper — together they take 40%
+    of its passage, starting a fifth of the way in.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .say__text {
+        view-timeline: --say block;
+        --step: calc(40% / var(--n));
+      }
+
+      .word {
+        animation: word-in linear both;
+        animation-timeline: --say;
+        animation-range: cover calc(20% + var(--i) * var(--step)) cover calc(26% + var(--i) * var(--step));
+      }
+    }
+
+    @keyframes word-in {
+      from {
+        opacity: 0.16;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+  }
+</style>

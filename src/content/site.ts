@@ -188,6 +188,16 @@ export interface Product {
   href?: string;
   /** A screen of the product. A labelled plate until it is shot. */
   shot: Media;
+  /** The screens on its own page, by kind, in the order they are shown.
+   *  Labelled plates until they are shot. */
+  gallery: {
+    /** Two wide screens, side by side. */
+    screens: [Media, Media];
+    /** Phone screens, in a row. */
+    mobile: Media[];
+    /** More of the product, in a grid of two. */
+    more: Media[];
+  };
 }
 
 export interface Products {
@@ -203,6 +213,29 @@ export interface Products {
     slide: string;
     pause: string;
     play: string;
+  };
+  /** The home page's word on the products: one statement and the way in. */
+  statement: {
+    eyebrow: string;
+    text: string;
+    cta: string;
+  };
+  /** The products page, and what every product's own page shares. */
+  pages: {
+    title: string;
+    headline: string;
+    intro: string;
+    /** On each card of the products page. */
+    open: string;
+    /** Back from a product to all of them. */
+    back: string;
+    /** On a product that has a public site. */
+    visit: string;
+    /** The headings over a product's screens. */
+    screens: string;
+    mobile: string;
+    more: string;
+    next: string;
   };
   items: Product[];
 }
@@ -389,6 +422,20 @@ export interface Site {
   contact: Contact;
 }
 
+/**
+ * A screen on a product's own page, not shot yet: a labelled plate in
+ * production, the named placeholder on dev and preview builds.
+ */
+const screen = (product: string, n: number, kind: 'wide' | 'phone' | 'grid', placeholder: string): Media => ({
+  name: null,
+  alt: `${product} — ${kind === 'phone' ? 'утасны дэлгэц' : 'дэлгэц'} ${n}`,
+  width: kind === 'wide' ? 1600 : kind === 'phone' ? 900 : 1200,
+  height: kind === 'wide' ? 1000 : kind === 'phone' ? 1200 : 900,
+  label: `${kind === 'phone' ? 'Утас' : 'Дэлгэц'} ${String(n).padStart(2, '0')}`,
+  format: kind === 'wide' ? 'Дэлгэцийн зураг · 16:10' : kind === 'phone' ? 'Утасны дэлгэц · 3:4' : 'Дэлгэцийн зураг · 4:3',
+  placeholder: `/media/placeholder/${placeholder}.avif`,
+});
+
 export const site: Site = {
   meta: {
     title: 'Anir — Улаанбаатарын бүтээлч студи',
@@ -411,6 +458,7 @@ export const site: Site = {
   nav: {
     wordmark: 'ANIR',
     links: [
+      { label: 'Бүтээгдэхүүн', href: '/products/' },
       { label: 'Үйлчилгээ', href: '#services' },
       { label: 'Холбоо +', href: '#contact', accent: true },
     ],
@@ -433,28 +481,28 @@ export const site: Site = {
       width: 1280,
       height: 720,
     },
-    // Each card opens its product's slide in the products reel.
+    // Each card opens its product's own page.
     products: [
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ezmath',
         tagline: 'Математикаа бэлд',
         cta: 'Үзэх +',
-        href: '#product-ezmath',
+        href: '/products/ezmath/',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Ethos',
         tagline: 'Зөв хандив',
         cta: 'Үзэх +',
-        href: '#product-ethos',
+        href: '/products/ethos/',
       },
       {
         eyebrow: 'Бүтээгдэхүүн',
         name: 'Olymo',
         tagline: 'Боловсролын мэдээлэл',
         cta: 'Үзэх +',
-        href: '#product-olymo',
+        href: '/products/olymo/',
       },
     ],
   },
@@ -517,6 +565,26 @@ export const site: Site = {
       pause: 'Түр зогсоох',
       play: 'Үргэлжлүүлэх',
     },
+    // New, for the products page and each product's own page. Bat-Enkh to
+    // proofread. The statement is true to the old disciplines copy: Anir
+    // built its three products and runs them.
+    statement: {
+      eyebrow: 'Бүтээгдэхүүн',
+      text: 'Бид санааг бодит бүтээгдэхүүн болгодог. Ezmath, Ethos, Olymo — гурвууланг нь өөрсдөө зохиож, бүтээж, өдөр бүр ажиллуулдаг.',
+      cta: 'Бүтээгдэхүүн үзэх',
+    },
+    pages: {
+      title: 'Бүтээгдэхүүн',
+      headline: 'Бүтээгдэхүүн бүр өөрийн түүхтэй',
+      intro: 'Бидний бүтээж, өдөр бүр ажиллуулдаг гурван бүтээгдэхүүн.',
+      open: 'Үзэх +',
+      back: 'Бүх бүтээгдэхүүн',
+      visit: 'Сайтыг үзэх +',
+      screens: 'Дэлгэцүүд',
+      mobile: 'Гар утсанд',
+      more: 'Ерөнхий сэтгэгдэл',
+      next: 'Дараагийн бүтээгдэхүүн',
+    },
     items: [
       {
         id: 'ezmath',
@@ -536,6 +604,23 @@ export const site: Site = {
           label: 'Ezmath',
           format: 'Дэлгэцийн зураг · 16:10',
           placeholder: '/media/placeholder/tile-07.avif',
+        },
+        gallery: {
+          screens: [
+          screen('Ezmath', 1, 'wide', 'tile-07'),
+          screen('Ezmath', 2, 'wide', 'tile-05'),
+          ],
+          mobile: [
+          screen('Ezmath', 1, 'phone', 'tile-01'),
+          screen('Ezmath', 2, 'phone', 'tile-02'),
+          screen('Ezmath', 3, 'phone', 'tile-03'),
+          ],
+          more: [
+          screen('Ezmath', 3, 'grid', 'tile-04'),
+          screen('Ezmath', 4, 'grid', 'tile-06'),
+          screen('Ezmath', 5, 'grid', 'tile-08'),
+          screen('Ezmath', 6, 'grid', 'tile-05'),
+          ],
         },
       },
       {
@@ -557,6 +642,23 @@ export const site: Site = {
           format: 'Дэлгэцийн зураг · 16:10',
           placeholder: '/media/placeholder/tile-04.avif',
         },
+        gallery: {
+          screens: [
+          screen('Ethos', 1, 'wide', 'tile-04'),
+          screen('Ethos', 2, 'wide', 'tile-08'),
+          ],
+          mobile: [
+          screen('Ethos', 1, 'phone', 'tile-02'),
+          screen('Ethos', 2, 'phone', 'tile-03'),
+          screen('Ethos', 3, 'phone', 'tile-01'),
+          ],
+          more: [
+          screen('Ethos', 3, 'grid', 'tile-06'),
+          screen('Ethos', 4, 'grid', 'tile-07'),
+          screen('Ethos', 5, 'grid', 'tile-05'),
+          screen('Ethos', 6, 'grid', 'tile-04'),
+          ],
+        },
       },
       {
         id: 'olymo',
@@ -576,6 +678,23 @@ export const site: Site = {
           label: 'Olymo',
           format: 'Дэлгэцийн зураг · 16:10',
           placeholder: '/media/placeholder/tile-08.avif',
+        },
+        gallery: {
+          screens: [
+          screen('Olymo', 1, 'wide', 'tile-08'),
+          screen('Olymo', 2, 'wide', 'tile-06'),
+          ],
+          mobile: [
+          screen('Olymo', 1, 'phone', 'tile-03'),
+          screen('Olymo', 2, 'phone', 'tile-01'),
+          screen('Olymo', 3, 'phone', 'tile-02'),
+          ],
+          more: [
+          screen('Olymo', 3, 'grid', 'tile-05'),
+          screen('Olymo', 4, 'grid', 'tile-04'),
+          screen('Olymo', 5, 'grid', 'tile-07'),
+          screen('Olymo', 6, 'grid', 'tile-08'),
+          ],
         },
       },
     ],

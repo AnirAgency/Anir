@@ -13,7 +13,9 @@
  * Budgets are decimal bytes, because the constraint they encode is bandwidth
  * (17 Mbps mobile) and link speed is measured decimally.
  *
- * Usage: npm run budget
+ * Usage: npm run budget — the home page here, every other page through
+ * scripts/budget-pages.mjs. `node scripts/budget.mjs products/index.html`
+ * measures one page.
  */
 import { brotliCompressSync, constants } from 'node:zlib';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -24,7 +26,7 @@ import { placeholderMode, placeholderReason } from '../src/lib/placeholders.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
-const entry = join(dist, 'index.html');
+const entry = join(dist, process.argv[2] ?? 'index.html');
 
 const TOTAL_MAX = 1_000_000; // 1 MB first load
 const JS_MAX = 200_000; //     200 kB JS

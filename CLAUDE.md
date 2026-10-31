@@ -84,7 +84,9 @@ set. A local `npm run build` builds what production ships;
 place, `src/lib/placeholders.mjs`.
 
 `scripts/budget.mjs` checks the three budgets separately and must stay blocking.
-Do not make it advisory.
+Do not make it advisory. The ceilings are per page — a visitor pays for one
+page at a time — and `npm run budget` holds every built page to them: the home
+page in full, the rest through `scripts/budget-pages.mjs`.
 
 ---
 
@@ -120,6 +122,11 @@ and it is what lets orange circles and a neutral heading live under one rule:
 headings, column heads and labels stay neutral; the chain is the brand's
 mark, drawn in its colour. The Services marquee bands are the same kind of
 surface: an orange ground, with the service's name on it in `--ink`.
+
+**One exception, by the owner's direction:** the soft orange wave under the
+home page's products statement is decoration, and is allowed as such. It
+stays a low haze behind the words — never a fill under text, never on a
+heading.
 
 ### Contrast — measured, not assumed
 
@@ -270,7 +277,8 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   Ethos and Ezmath, so this is not a new dependency.
 
 No React. No Tailwind. No UI library. Plain `.astro` components and CSS custom
-properties — the site is one static page, a framework earns nothing here.
+properties — the site is a handful of static pages, a framework earns nothing
+here.
 
 ---
 
@@ -278,6 +286,11 @@ properties — the site is one static page, a framework earns nothing here.
 
 - Components in `src/components/`, one per section, named in English
   (`Pricing.astro`), with Mongolian content inside.
+- Pages in `src/pages/`: the home page; `/products/`, Anir's own products;
+  and `/products/<id>/`, one page per product, built from `site.products`
+  alone — add a product there and its page exists. Their nav anchors lead
+  back to the home page. `/v2` is a review page, built on dev and preview
+  builds only, never in production.
 - **All copy lives in `src/content/site.ts`** as a typed object. Never hardcode
   Mongolian strings in a component — the team needs one file to proofread.
 - Prices are data, not markup. They change; they live in `site.ts`.
@@ -303,7 +316,7 @@ properties — the site is one static page, a framework earns nothing here.
 A phase is not finished until:
 
 1. `npm run build` succeeds with no warnings.
-2. The built page is under the weight budget (`npm run budget`).
+2. Every built page is under the weight budget (`npm run budget`).
 3. It renders correctly with JS disabled — content is static HTML; motion is enhancement.
 4. `prefers-reduced-motion: reduce` kills all animation.
 5. Ө and Ү render in every font on the page.

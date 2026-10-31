@@ -1,0 +1,82 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import { site, type Product } from '../content/site';
+
+/*
+  The end of a product's page: the next product, large, as one link — its
+  name, its line and its screen — so the three read as a loop.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { pages } = site.products;
+---
+
+<Section tone="dark" id="next" label={pages.next} heading={false}>
+  <a class="next" href={`/products/${product.id}/`}>
+    <div class="next__text">
+      <p class="next__label t-mono-label">{pages.next}</p>
+      <h2 class="next__name t-display-xl">{product.name}</h2>
+      <p class="next__tagline t-serif-italic">{product.tagline}</p>
+      <span class="next__open t-mono-label">{pages.open}</span>
+    </div>
+    <div class="next__shot">
+      <Plate media={product.shot} ratio="16 / 10" kind="image" />
+    </div>
+  </a>
+</Section>
+
+<style>
+  .next {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(2rem, 1rem + 4vw, 6rem);
+    align-items: center;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .next__text {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .next__label {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .next__name,
+  .next__tagline {
+    margin: 0;
+  }
+
+  .next__name,
+  .next__open {
+    transition: color 0.3s ease;
+  }
+
+  .next__open {
+    margin-top: 0.75rem;
+  }
+
+  /* Clickable: on --ink the orange clears AA even as small text. */
+  .next:hover .next__name,
+  .next:hover .next__open,
+  .next:focus-visible .next__name,
+  .next:focus-visible .next__open {
+    color: var(--orange);
+  }
+
+  @media (max-width: 860px) {
+    .next {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

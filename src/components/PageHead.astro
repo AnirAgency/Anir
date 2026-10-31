@@ -1,0 +1,48 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The head of the products page: what the page is, one large line, and why
+  these three. The page's only h1.
+*/
+
+const { pages } = site.products;
+---
+
+<Section tone="dark" id="products-head" label={pages.title} heading={false}>
+  <header class="head">
+    <p class="head__eyebrow t-mono-label" data-reveal>{pages.title}</p>
+    <h1 class="head__title t-display-xl" data-reveal>{pages.headline}</h1>
+    <p class="head__intro t-serif-italic" data-reveal>{pages.intro}</p>
+  </header>
+</Section>
+
+<style>
+  /* The first thing on the page clears the fixed nav bar. */
+  .head {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.5rem;
+    padding-top: var(--header-h);
+  }
+
+  .head__eyebrow {
+    margin: 0;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  .head__title {
+    max-width: 16ch;
+    text-wrap: balance;
+  }
+
+  .head__intro {
+    margin: 0;
+    max-width: 34ch;
+  }
+</style>

@@ -10,7 +10,7 @@
     "dev": "astro dev",
     "build": "astro build && node scripts/headers.mjs",
     "preview": "astro preview",
-    "budget": "npm run build && node scripts/budget.mjs && node scripts/contrast.mjs",
+    "budget": "npm run build && node scripts/budget.mjs && node scripts/budget-pages.mjs && node scripts/contrast.mjs",
     "fonts": "node scripts/fonts.mjs",
     "shot": "node scripts/shot.mjs",
     "test:enquiry": "node scripts/test-enquiry.ts",

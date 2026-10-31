@@ -5,8 +5,9 @@ import { site } from '../content/site';
 /*
   The home page's word on the products: one statement, set large and
   centred, that lights up word by word as it passes through the screen, and
-  the way to the products page. Under it a soft orange wave drifts slowly
-  across the light ground.
+  the way to the products page. Behind it, orange silk flows through the
+  dark — a still, generated for Anir, drifting very slowly — with a soft
+  shade behind the words so they stay readable wherever the silk runs.
 
   The words are read from a view timeline on the statement: each one comes
   up over its own short stretch of the scroll, in order, so the sentence
@@ -14,17 +15,25 @@ import { site } from '../content/site';
   site.ts, split into words here — presentation, not copy.
 
   Without scroll-driven animation, under reduced motion and with JS off, the
-  statement is simply there in full, and the wave holds still.
+  statement is simply there in full, and the silk holds still.
 */
 
 const { intro, statement } = site.products;
+const { backdrop } = statement;
 const words = statement.text.split(' ');
 ---
 
-<Section tone="light" id="products" label={intro.label} heading={false}>
-  <div class="glow" aria-hidden="true">
-    <span class="glow__wave glow__wave--a"></span>
-    <span class="glow__wave glow__wave--b"></span>
+<Section tone="dark" id="products" label={intro.label} heading={false}>
+  <div class="backdrop" aria-hidden="true">
+    <img
+      class="backdrop__image"
+      src={backdrop.src}
+      width={backdrop.width}
+      height={backdrop.height}
+      alt=""
+      loading="lazy"
+      decoding="async"
+    />
   </div>
 
   <div class="say">
@@ -45,9 +54,8 @@ const words = statement.text.split(' ');
 </Section>
 
 <style>
-  /* The wave: two broad, soft swells of orange low across the section, out
-     to its edges past the content's inset. */
-  .glow {
+  /* Out to the section's edges, past the content's inset. */
+  .backdrop {
     position: absolute;
     inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-right)) calc(-1 * var(--section-pad-y))
       calc(-1 * var(--inset));
@@ -55,36 +63,26 @@ const words = statement.text.split(' ');
     pointer-events: none;
   }
 
-  @media (max-width: 860px) {
-    .glow {
-      inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-mobile));
-    }
+  .backdrop__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 60% 50%;
   }
 
-  .glow__wave {
+  /* The shade behind the words: the silk can run anywhere, the text cannot
+     sit on bright orange. */
+  .backdrop::after {
+    content: '';
     position: absolute;
-    left: -25%;
-    width: 150%;
-    height: 70%;
+    inset: 0;
     background: radial-gradient(
-      ellipse closest-side,
-      color-mix(in srgb, var(--orange) 34%, transparent),
-      color-mix(in srgb, var(--orange) 12%, transparent) 55%,
+      ellipse 52% 42% at 50% 46%,
+      color-mix(in srgb, var(--ink) 72%, transparent),
+      color-mix(in srgb, var(--ink) 30%, transparent) 60%,
       transparent
     );
-  }
-
-  .glow__wave--a {
-    bottom: -22%;
-    rotate: -6deg;
-  }
-
-  .glow__wave--b {
-    bottom: -38%;
-    left: 5%;
-    width: 120%;
-    rotate: 8deg;
-    opacity: 0.7;
   }
 
   .say {
@@ -95,7 +93,7 @@ const words = statement.text.split(' ');
     gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
     max-width: 58rem;
     margin-inline: auto;
-    padding-block: clamp(4rem, 2rem + 8vw, 10rem);
+    padding-block: clamp(5rem, 2rem + 9vw, 11rem);
     text-align: center;
   }
 
@@ -104,6 +102,7 @@ const words = statement.text.split(' ');
     padding: 0.4rem 0.75rem;
     border: var(--hairline) solid var(--line);
     border-radius: 100px;
+    color: var(--muted);
   }
 
   .say__text {
@@ -111,12 +110,13 @@ const words = statement.text.split(' ');
     text-wrap: balance;
   }
 
-  /* Clickable, so orange; text on orange is --ink. */
+  /* Clickable, so orange — as the label on a dark plate, the way the
+     reference has it; reversed on hover. */
   .say__cta {
     display: inline-block;
     padding: 1rem 1.6rem;
-    background: var(--orange);
-    color: var(--ink);
+    background: var(--ink);
+    color: var(--orange);
     text-decoration: none;
     transition:
       background 0.3s ease,
@@ -125,39 +125,45 @@ const words = statement.text.split(' ');
 
   .say__cta:hover,
   .say__cta:focus-visible {
-    background: var(--ink);
-    color: var(--orange);
+    background: var(--orange);
+    color: var(--ink);
   }
 
+  @media (max-width: 860px) {
+    .backdrop {
+      inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-mobile));
+    }
+
+    /* A tall screen shows a slice of the image: the one with the curl. */
+    .backdrop__image {
+      object-position: 72% 50%;
+    }
+
+    .backdrop::after {
+      background: radial-gradient(
+        ellipse 80% 40% at 50% 46%,
+        color-mix(in srgb, var(--ink) 78%, transparent),
+        color-mix(in srgb, var(--ink) 35%, transparent) 65%,
+        transparent
+      );
+    }
+  }
+
+  /* The silk breathes: a slow drift and swell, on the compositor. */
   @media (prefers-reduced-motion: no-preference) {
-    .glow__wave--a {
-      animation: swell-a 22s ease-in-out infinite alternate;
-    }
-
-    .glow__wave--b {
-      animation: swell-b 28s ease-in-out infinite alternate;
+    .backdrop__image {
+      animation: drift 26s ease-in-out infinite alternate;
     }
   }
 
-  @keyframes swell-a {
+  @keyframes drift {
     from {
-      translate: -4% 0;
-      rotate: -6deg;
+      scale: 1;
+      translate: 0 0;
     }
     to {
-      translate: 6% -6%;
-      rotate: 2deg;
-    }
-  }
-
-  @keyframes swell-b {
-    from {
-      translate: 5% 0;
-      rotate: 8deg;
-    }
-    to {
-      translate: -6% -4%;
-      rotate: -3deg;
+      scale: 1.07;
+      translate: -2% -2%;
     }
   }
 

@@ -219,6 +219,12 @@ export interface Products {
     eyebrow: string;
     text: string;
     cta: string;
+    /** The flowing orange behind it: a still, decorative, cover-fitted. */
+    backdrop: {
+      src: string;
+      width: number;
+      height: number;
+    };
   };
   /** The products page, and what every product's own page shares. */
   pages: {
@@ -572,6 +578,9 @@ export const site: Site = {
       eyebrow: 'Бүтээгдэхүүн',
       text: 'Бид санааг бодит бүтээгдэхүүн болгодог. Ezmath, Ethos, Olymo — гурвууланг нь өөрсдөө зохиож, бүтээж, өдөр бүр ажиллуулдаг.',
       cta: 'Бүтээгдэхүүн үзэх',
+      // Generated with Gemini for Anir, its mock-up text removed; the source
+      // and the cleaned PNG are in raw-media/ (not committed).
+      backdrop: { src: '/media/statement-backdrop.avif', width: 1400, height: 752 },
     },
     pages: {
       title: 'Бүтээгдэхүүн',

@@ -123,10 +123,10 @@ headings, column heads and labels stay neutral; the chain is the brand's
 mark, drawn in its colour. The Services marquee bands are the same kind of
 surface: an orange ground, with the service's name on it in `--ink`.
 
-**One exception, by the owner's direction:** the soft orange wave under the
-home page's products statement is decoration, and is allowed as such. It
-stays a low haze behind the words — never a fill under text, never on a
-heading.
+**One exception, by the owner's direction:** the orange silk behind the home
+page's products statement — a still generated for Anir — is decoration, and
+is allowed as such. A dark shade sits between it and the words, so text is
+never set on bright orange; it never appears behind a heading anywhere else.
 
 ### Contrast — measured, not assumed
 

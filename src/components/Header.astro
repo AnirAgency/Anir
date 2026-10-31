@@ -2,17 +2,21 @@
 import { site } from '../content/site';
 
 /*
-  Fixed top bar on a solid --ink ground, at every scroll position.
+  Fixed top bar: the words alone, no ground, by the owner's direction. It
+  gets out of the way — scrolling down slides it up out of sight, scrolling
+  up brings it back — and is always there at the top of the page and
+  whenever something in it has keyboard focus.
 
-  Solid rather than see-through: content scrolling under a transparent bar
-  collides with the nav labels, and a backdrop blur would re-blur the strip on
-  every frame of scrolling — on a budget Android already running Lenis and the
-  scroll-driven animations — for a blur that is barely visible over a dark
-  page anyway. A flat fill costs nothing.
+  With no ground of its own it takes the tone of the section under it: --paper
+  words over a dark section, --ink over a light one. On light, the orange
+  links become --ink with a 2px orange rule under them, because orange as
+  small text on --paper fails (CLAUDE.md > Contrast). The script below
+  tracks the section; without JS the bar keeps a solid --ink ground and
+  needs no tracking, as it always did.
 
-  On --ink the CTA's --orange is 5.43:1 wherever the page is scrolled, so it no
-  longer needs to know what is underneath it: the old blended layer, the
-  width-holding ghost and the tone-tracking script are all gone.
+  Over photographs and the silk the words can land on busy ground; that is
+  the cost of having no bar. No backdrop blur: it would re-blur the strip on
+  every frame of scrolling.
 */
 
 interface Props {
@@ -70,6 +74,22 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
     padding-right: var(--inset-right);
     background: var(--ink);
     color: var(--paper);
+    transition:
+      translate 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
+      color 0.3s ease;
+  }
+
+  /* With JS: no ground, and out of the way while reading down the page. */
+  :global(html.js) .header {
+    background: transparent;
+  }
+
+  .header.is-hidden {
+    translate: 0 -100%;
+  }
+
+  .header:focus-within {
+    translate: none;
   }
 
   .header__mark {
@@ -123,6 +143,26 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
     color: var(--paper);
   }
 
+  /* Over a light section. */
+  .header[data-tone='light'] {
+    color: var(--ink);
+  }
+
+  .header[data-tone='light'] .header__link:hover {
+    color: var(--dim-2);
+  }
+
+  .header[data-tone='light'] .header__link[aria-current='page'],
+  .header[data-tone='light'] .header__cta {
+    color: var(--ink);
+    text-decoration: underline 2px var(--orange);
+    text-underline-offset: 0.55em;
+  }
+
+  .header[data-tone='light'] .header__cta:hover {
+    color: var(--dim-2);
+  }
+
   @media (max-width: 860px) {
     .header {
       padding-left: var(--inset-mobile);
@@ -153,3 +193,39 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
     }
   }
 </style>
+
+<script>
+  /*
+    The tone: whichever section crosses a band along the top of the screen —
+    where the bar sits — sets it. The footer counts as dark.
+
+    Hiding: down past the bar's own height hides it, any scroll up brings it
+    back. A few pixels of slack, so a trackpad's jitter cannot flicker it.
+  */
+  const header = document.querySelector<HTMLElement>('.header');
+  if (header) {
+    const tone = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            header.dataset.tone = entry.target.classList.contains('section--light') ? 'light' : 'dark';
+          }
+        }
+      },
+      { rootMargin: '0px 0px -95% 0px' }
+    );
+    document.querySelectorAll('[data-section], .footer').forEach((el) => tone.observe(el));
+
+    let last = scrollY;
+    addEventListener(
+      'scroll',
+      () => {
+        const y = scrollY;
+        if (Math.abs(y - last) < 8) return;
+        header.classList.toggle('is-hidden', y > last && y > header.offsetHeight);
+        last = y;
+      },
+      { passive: true }
+    );
+  }
+</script>

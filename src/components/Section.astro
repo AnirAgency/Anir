@@ -98,7 +98,7 @@ const ticks = layout !== 'strip' && layout !== 'bleed';
     padding-block: var(--section-pad-y);
     padding-left: var(--inset);
     padding-right: var(--inset-right);
-    /* Anchor jumps — Lenis honours this too — land below the solid nav bar. */
+    /* Anchor jumps — Lenis honours this too — land below the nav bar. */
     scroll-margin-top: var(--header-h);
   }
 
@@ -132,7 +132,7 @@ const ticks = layout !== 'strip' && layout !== 'bleed';
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    /* The first thing on the page must clear the solid nav bar. */
+    /* The first thing on the page must clear the nav bar. */
     padding-top: max(var(--section-pad-y), calc(var(--header-h) + 1.5rem));
   }
 

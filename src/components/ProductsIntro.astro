@@ -31,7 +31,14 @@ const backdrop = light ? statement.backdropLight : statement.backdrop;
 const words = statement.text.split(' ');
 ---
 
-<Section tone={light ? 'light' : 'dark'} id="products" label={intro.label} heading={false}>
+{/* Busy on dark: the nav's orange would sink into the silk (Header.astro). */}
+<Section
+  tone={light ? 'light' : 'dark'}
+  id="products"
+  label={intro.label}
+  heading={false}
+  class={light ? undefined : 'section--busy'}
+>
   <div class="backdrop" aria-hidden="true">
     <img
       class="backdrop__image"

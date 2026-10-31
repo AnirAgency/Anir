@@ -12,9 +12,19 @@
   margin: 0;
 }
 
+/*
+  No scrollbar, by the owner's direction: the rail's progress line already
+  says where you are. Only the bar goes — wheel, trackpad, touch, keyboard
+  and find-in-page all scroll as before.
+*/
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 body {

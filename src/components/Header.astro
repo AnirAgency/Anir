@@ -14,9 +14,13 @@ import { site } from '../content/site';
   tracks the section; without JS the bar keeps a solid --ink ground and
   needs no tracking, as it always did.
 
-  Over photographs and the silk the words can land on busy ground; that is
-  the cost of having no bar. No backdrop blur: it would re-blur the strip on
-  every frame of scrolling.
+  So the words never sit straight on a heading or the silk, a soft shade of
+  the section's own ground lies behind them, fading to nothing just below
+  the bar — a fade, not a bar. Two layers, dark and light, cross-fade when the
+  tone changes. A section can also call itself busy (.section--busy): over
+  the orange silk the orange call to action would vanish, so there it turns
+  --paper with the orange as a rule under it. No backdrop blur: it would
+  re-blur the strip on every frame of scrolling.
 */
 
 interface Props {
@@ -82,6 +86,46 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
   /* With JS: no ground, and out of the way while reading down the page. */
   :global(html.js) .header {
     background: transparent;
+  }
+
+  /* The fade: the section's ground behind the words, gone a little below
+     the bar. Dark in ::before, light in ::after; the tone picks one. */
+  :global(html.js) .header::before,
+  :global(html.js) .header::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: -1;
+    height: 170%;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+
+  :global(html.js) .header::before {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ink) 82%, transparent),
+      color-mix(in srgb, var(--ink) 45%, transparent) 55%,
+      transparent
+    );
+  }
+
+  :global(html.js) .header::after {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--paper) 86%, transparent),
+      color-mix(in srgb, var(--paper) 48%, transparent) 55%,
+      transparent
+    );
+    opacity: 0;
+  }
+
+  :global(html.js) .header[data-tone='light']::before {
+    opacity: 0;
+  }
+
+  :global(html.js) .header[data-tone='light']::after {
+    opacity: 1;
   }
 
   .header.is-hidden {
@@ -163,6 +207,14 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
     color: var(--dim-2);
   }
 
+  /* Over busy dark ground — the silk — the orange call to action would sink
+     into the orange: --paper words, the orange kept as the rule under them. */
+  .header[data-busy]:not([data-tone='light']) .header__cta {
+    color: var(--paper);
+    text-decoration: underline 2px var(--orange);
+    text-underline-offset: 0.55em;
+  }
+
   @media (max-width: 860px) {
     .header {
       padding-left: var(--inset-mobile);
@@ -209,6 +261,7 @@ const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.st
         for (const entry of entries) {
           if (entry.isIntersecting) {
             header.dataset.tone = entry.target.classList.contains('section--light') ? 'light' : 'dark';
+            header.toggleAttribute('data-busy', entry.target.classList.contains('section--busy'));
           }
         }
       },

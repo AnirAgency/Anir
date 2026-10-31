@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import Hero from '../components/Hero.astro';
 import Marquee from '../components/Marquee.astro';
 import Showreel from '../components/Showreel.astro';
-import Products from '../components/Products.astro';
+import ProductsIntro from '../components/ProductsIntro.astro';
 import ProductsBeam from '../components/ProductsBeam.astro';
 import Process from '../components/Process.astro';
 import Services from '../components/Services.astro';
@@ -12,9 +12,9 @@ import Footer from '../components/Footer.astro';
 import { placeholderMode } from '../lib/placeholders.mjs';
 
 /*
-  /v2 — the home page as it stood before the products moved to pages of
-  their own: the products reel in place of the statement that replaced it,
-  everything else the same. Kept to compare against /.
+  /v2 — the home page with the products statement on the light ground: the
+  same silk on --paper instead of the dark. Everything else as on /, to
+  compare the two.
 
   A review page, so it is built where the placeholder media is — dev and
   preview builds (src/lib/placeholders.mjs) — and never in production. It
@@ -29,7 +29,7 @@ export function getStaticPaths() {
   <Hero />
   <Marquee />
   <Showreel />
-  <Products />
+  <ProductsIntro light />
   <ProductsBeam />
   <Process />
   <Services />

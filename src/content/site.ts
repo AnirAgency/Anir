@@ -225,6 +225,12 @@ export interface Products {
       width: number;
       height: number;
     };
+    /** The same silk on the light ground, for the light version (/v2). */
+    backdropLight: {
+      src: string;
+      width: number;
+      height: number;
+    };
   };
   /** The products page, and what every product's own page shares. */
   pages: {
@@ -581,6 +587,8 @@ export const site: Site = {
       // Generated with Gemini for Anir, its mock-up text removed; the source
       // and the cleaned PNG are in raw-media/ (not committed).
       backdrop: { src: '/media/statement-backdrop.avif', width: 1400, height: 752 },
+      // Its white tinted to --paper, so the ground is the token exactly.
+      backdropLight: { src: '/media/statement-backdrop-light.avif', width: 1400, height: 752 },
     },
     pages: {
       title: 'Бүтээгдэхүүн',

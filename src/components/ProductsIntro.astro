@@ -16,14 +16,22 @@ import { site } from '../content/site';
 
   Without scroll-driven animation, under reduced motion and with JS off, the
   statement is simply there in full, and the silk holds still.
+
+  `light` sets it on the light ground instead — the same silk on --paper,
+  shaded with --paper behind the words — which /v2 tries against the dark.
 */
 
+interface Props {
+  light?: boolean;
+}
+
+const { light = false } = Astro.props;
 const { intro, statement } = site.products;
-const { backdrop } = statement;
+const backdrop = light ? statement.backdropLight : statement.backdrop;
 const words = statement.text.split(' ');
 ---
 
-<Section tone="dark" id="products" label={intro.label} heading={false}>
+<Section tone={light ? 'light' : 'dark'} id="products" label={intro.label} heading={false}>
   <div class="backdrop" aria-hidden="true">
     <img
       class="backdrop__image"
@@ -71,16 +79,16 @@ const words = statement.text.split(' ');
     object-position: 60% 50%;
   }
 
-  /* The shade behind the words: the silk can run anywhere, the text cannot
-     sit on bright orange. */
+  /* The shade behind the words, in the section's own ground: the silk can
+     run anywhere, the text cannot sit on bright orange. */
   .backdrop::after {
     content: '';
     position: absolute;
     inset: 0;
     background: radial-gradient(
       ellipse 52% 42% at 50% 46%,
-      color-mix(in srgb, var(--ink) 72%, transparent),
-      color-mix(in srgb, var(--ink) 30%, transparent) 60%,
+      color-mix(in srgb, var(--bg) 72%, transparent),
+      color-mix(in srgb, var(--bg) 30%, transparent) 60%,
       transparent
     );
   }
@@ -142,8 +150,8 @@ const words = statement.text.split(' ');
     .backdrop::after {
       background: radial-gradient(
         ellipse 80% 40% at 50% 46%,
-        color-mix(in srgb, var(--ink) 78%, transparent),
-        color-mix(in srgb, var(--ink) 35%, transparent) 65%,
+        color-mix(in srgb, var(--bg) 78%, transparent),
+        color-mix(in srgb, var(--bg) 35%, transparent) 65%,
         transparent
       );
     }

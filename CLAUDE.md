@@ -124,9 +124,10 @@ mark, drawn in its colour. The Services marquee bands are the same kind of
 surface: an orange ground, with the service's name on it in `--ink`.
 
 **One exception, by the owner's direction:** the orange silk behind the home
-page's products statement — a still generated for Anir — is decoration, and
-is allowed as such. A dark shade sits between it and the words, so text is
-never set on bright orange; it never appears behind a heading anywhere else.
+page's products statement — a still generated for Anir, on dark or, on /v2,
+on --paper — is decoration, and is allowed as such. A shade of the
+section's own ground sits between it and the words, so text is never set on
+bright orange; it never appears behind a heading anywhere else.
 
 ### Contrast — measured, not assumed
 

@@ -15,9 +15,10 @@ import { site, type Product } from '../content/site';
   off it goes. For a product built from nothing there is no old site, so the
   new front page alone, under its own heading.
 
-  The line and its square handle are the control, so they are orange
-  (CLAUDE.md > The orange rule), and the handle is square, as every control
-  here is. The old site lies in a clipping box over the new one; the box
+  The line and its round handle are the control, so they are orange
+  (CLAUDE.md > The orange rule); the handle is round by the owner's
+  direction (CLAUDE.md > Layout). The old site lies in a clipping box over
+  the new one; the box
   slides left while the picture inside slides back by as much, so only the
   box's edge moves — translate, on the compositor. On a touchscreen only a
   sideways drag moves the line; an upward one scrolls the page. The labels
@@ -152,14 +153,24 @@ const ratio = `${after.media.width} / ${after.media.height}`;
   .sides {
     display: flex;
     justify-content: space-between;
-    margin: clamp(2rem, 1rem + 3vw, 4rem) 0 0.9rem;
+    width: 90%;
+    margin: clamp(2rem, 1rem + 3vw, 4rem) auto 0.9rem;
     color: var(--muted);
   }
 
-  /* The frame at the content's full width, in the new site's shape. */
+  /* The frame at 90% of the content's width, centred, in the new site's
+     shape; the full width on a phone. */
   .view {
     position: relative;
-    margin-top: clamp(2rem, 1rem + 3vw, 4rem);
+    width: 90%;
+    margin: clamp(2rem, 1rem + 3vw, 4rem) auto 0;
+  }
+
+  @media (max-width: 860px) {
+    .sides,
+    .view {
+      width: 100%;
+    }
   }
 
   .sides + .view {
@@ -231,6 +242,7 @@ const ratio = `${after.media.width} / ${after.media.height}`;
     width: 2.75rem;
     height: 2.75rem;
     border: 2px solid var(--orange);
+    border-radius: 50%;
     background: var(--ink);
     translate: -50% -50%;
     cursor: ew-resize;

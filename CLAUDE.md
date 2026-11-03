@@ -262,7 +262,9 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   the same kind of surface.
 - No `border-radius` on UI surfaces: buttons, inputs, cards, media frames,
   the enquiry form. Geometric marks that are circular by nature are not UI
-  surfaces. The eyebrow pills (100px) are the one rounded UI element.
+  surfaces. The eyebrow pills (100px) are the one rounded UI element — and,
+  by the owner's direction, the round handle on a product page's old-and-new
+  comparison line.
 
 ---
 

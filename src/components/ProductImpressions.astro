@@ -5,19 +5,21 @@ import { placeholderMode } from '../lib/placeholders.mjs';
 import { site, type Product } from '../content/site';
 
 /*
-  A product's impressions, composed to one screen: a label in the margin, a
+  A product's impressions, composed to the screen: a label in the margin, a
   paragraph on what the product is for set large at the top left, and two
   pictures set against it — a wide one at the right, running out to the
-  screen's edge, which the paragraph runs onto, and a tall one laid over the
-  wide one's lower-left corner. The section is exactly the screen's height,
-  so when it lies on the screen the whole composition is in view. As it
-  passes, the tall picture rises a little slower than the rest, so the two
-  part like prints at different heights. Translate only, on one view
-  timeline; still without it.
+  screen's edge, as large as fits on the screen with the paragraph running
+  onto it, and a tall one laid over the wide one's lower-left corner and
+  hanging below the screen. With the section's top at the screen's, the
+  paragraph and the wide picture are in view whole. As it passes, the tall
+  picture rises a little slower than the rest, so the two part like prints
+  at different heights. Translate only, on one view timeline; still without
+  it.
 
   Where the paragraph lies on the wide picture, a shade of the ground sits
-  between them, so the words keep their contrast whatever the screenshot
-  is — the rule the silk follows (CLAUDE.md > The orange rule).
+  between them, and a halo of it round the letters, so the words keep their
+  contrast whatever the screenshot is — the rule the silk follows
+  (CLAUDE.md > The orange rule).
 
   Each picture is shown only where there is something to show — the real
   encode, or its stand-in on dev and preview builds — so in production,
@@ -40,59 +42,69 @@ const pics = [
 ---
 
 <Section tone="dark" id="impressions" label={pages.impressions} heading={false}>
-  <div class:list={['stage', { 'stage--text': pics.length === 0 }]}>
-    <h2 class="label t-mono-label" data-reveal>{pages.impressions}</h2>
-    <p class="text t-serif-display" data-reveal>{product.impressions.text}</p>
+  <div class="box">
+    <div class:list={['stage', { 'stage--text': pics.length === 0 }]}>
+      <h2 class="label t-mono-label" data-reveal>{pages.impressions}</h2>
+      <p class="text t-serif-display" data-reveal>{product.impressions.text}</p>
 
-    {
-      pics.map(({ media, pic, kind }) => (
-        <div class={`pic pic--${kind}`}>
-          <picture>
-            {pic!.sources.map((s) => (
-              <source srcset={s.src} type={s.type} />
-            ))}
-            <img
-              src={pic!.src}
-              width={media.width}
-              height={media.height}
-              alt={media.alt}
-              loading="lazy"
-              decoding="async"
-              data-lane="tile"
-            />
-          </picture>
-        </div>
-      ))
-    }
+      {
+        pics.map(({ media, pic, kind }) => (
+          <div class={`pic pic--${kind}`}>
+            <picture>
+              {pic!.sources.map((s) => (
+                <source srcset={s.src} type={s.type} />
+              ))}
+              <img
+                src={pic!.src}
+                width={media.width}
+                height={media.height}
+                alt={media.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+            </picture>
+          </div>
+        ))
+      }
+    </div>
   </div>
 </Section>
 
 <style>
-  /* Less padding than a section usually takes, so that the section and the
-     screen are the same height. */
+  /* Less padding than a section usually takes, so that the composition and
+     the screen are the same height. */
   :global(#impressions) {
     --section-pad-y: 3rem;
   }
 
   /*
-    The stage is the screen less that padding, and out past the content's
-    right inset to the screen's edge. Everything in it is placed in shares of
-    its width and height, so the composition holds at every screen size.
+    --stage-h is the screen less that padding: the room the paragraph and the
+    wide picture share. The stage runs out past the content's right inset to
+    the screen's edge, and everything in it is placed in shares of its width
+    and of --stage-h, so the composition holds at every screen size.
 
-    --wide-w is the wide picture's width: 64% of the stage, but never so wide
-    that, at 16:10 from 26% down, it and the tall one hanging off it would
-    run past the stage's foot — 0.95 of the stage's height is that limit. In
-    cqw, not %: it is also used in `top`, where a percentage would be of the
-    height.
+    --wide-w is the wide picture's width: 72% of the stage, but never so wide
+    that, at 16:10 from 16% down, it would run past the screen's foot — 1.344
+    of --stage-h is that limit. In cqw, not %: it is also used for heights.
+    The box around the stage is the container, the stage's own width, so the
+    stage's height and its pictures measure against the same thing.
+
+    The tall picture hangs below; the stage is as tall as it needs to be to
+    hold it, so it never lies over the section after.
   */
+  .box {
+    container-type: inline-size;
+    margin-right: calc(-1 * var(--inset-right));
+  }
+
   .stage {
     --stage-h: calc(100svh - 2 * var(--section-pad-y));
-    --wide-w: min(64cqw, calc(var(--stage-h) * 0.95));
+    --wide-w: min(72cqw, calc(var(--stage-h) * 1.344));
+    --wide-top: calc(var(--stage-h) * 0.16);
 
-    container-type: inline-size;
     position: relative;
-    height: var(--stage-h);
-    margin-right: calc(-1 * var(--inset-right));
+    height: max(var(--stage-h), calc(var(--wide-top) + var(--wide-w) * 0.824));
   }
 
   /* With no pictures to show, the paragraph alone takes only its own room. */
@@ -113,12 +125,16 @@ const pics = [
     margin-bottom: 1.5rem;
   }
 
-  /* Over the pictures: it may run onto the wide one. */
+  /* Over the pictures: it may run onto the wide one, a halo of the ground
+     round each letter. */
   .text {
     position: relative;
     z-index: 2;
     width: min(34rem, 46%);
     margin: 0 0 0 15%;
+    text-shadow:
+      0 0 0.4em color-mix(in srgb, var(--bg) 70%, transparent),
+      0 0 1.2em color-mix(in srgb, var(--bg) 55%, transparent);
   }
 
   .stage--text .text {
@@ -144,7 +160,7 @@ const pics = [
   }
 
   .pic--wide {
-    top: 26%;
+    top: var(--wide-top);
     right: 0;
     width: var(--wide-w);
     aspect-ratio: 16 / 10;
@@ -157,19 +173,19 @@ const pics = [
     inset: 0;
     background: linear-gradient(
       155deg,
-      color-mix(in srgb, var(--bg) 78%, transparent) 0%,
-      color-mix(in srgb, var(--bg) 40%, transparent) 26%,
-      transparent 48%
+      color-mix(in srgb, var(--bg) 80%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 55%, transparent) 30%,
+      transparent 56%
     );
   }
 
-  /* A third of the wide one's width at 3:4, over its lower-left corner,
-     its top 60% of the way down the wide one. */
+  /* 36% of the wide one's width at 3:4, over its lower-left corner, its top
+     55% of the way down the wide one, its foot well below it. */
   .pic--tall {
     z-index: 1;
-    top: calc(26% + var(--wide-w) * 0.375);
-    left: calc(100% - var(--wide-w) * 1.12);
-    width: calc(var(--wide-w) * 0.3);
+    top: calc(var(--wide-top) + var(--wide-w) * 0.344);
+    left: calc(100% - var(--wide-w) * 1.14);
+    width: calc(var(--wide-w) * 0.36);
     aspect-ratio: 3 / 4;
   }
 
@@ -179,10 +195,13 @@ const pics = [
     Stacked, it still comes to about a screen.
   */
   @media (max-width: 860px) {
+    .box {
+      margin-right: calc(-1 * var(--inset-mobile));
+    }
+
     .stage {
       display: grid;
       height: auto;
-      margin-right: calc(-1 * var(--inset-mobile));
     }
 
     .label {
@@ -206,13 +225,13 @@ const pics = [
     }
 
     .pic--wide {
-      width: 90%;
+      width: 96%;
       margin: -2rem 0 0 auto;
     }
 
     .pic--tall {
-      width: 40%;
-      margin: -24% 0 0 4%;
+      width: 50%;
+      margin: -26% 0 0 0;
     }
   }
 

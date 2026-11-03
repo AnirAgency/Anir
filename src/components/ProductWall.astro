@@ -8,10 +8,11 @@ import type { Media, Product } from '../content/site';
   The top of a product's own page: a wall of its screens, five columns of
   them scattered a little out of line, with the product's own shot in the
   middle of the centre column. The page opens close in on that shot — it
-  fills the screen, edge to edge — and the section pins. As you scroll the camera pulls back: the wall shrinks
-  around the shot until all of it is on the screen, while the columns drift
-  into line, the outer ones from furthest. Then it holds a moment and the pin
-  lets go.
+  fills the screen, edge to edge — and the section pins. As you scroll the
+  camera pulls back: the wall shrinks around the shot until all of it is on
+  the screen, while the columns drift into line, the outer ones from
+  furthest. Then it holds a moment and the pin lets go. On a phone, the shot
+  alone, filling the screen, still.
 
   The same construction as the home page's mosaic (Showreel.astro): a tall
   track with a sticky child, one transform on the wall and one on each side
@@ -232,23 +233,43 @@ const right = [deal(5), deal(5)];
     top: calc(50% + 1.5 * var(--ch) + 2 * var(--g));
   }
 
-  /* A phone shows the centre column and the halves of its neighbours. */
+  /*
+    A phone, by the owner's direction: the shot alone, filling the screen,
+    still — no wall, no pin, no pull-back. The rest of the wall is not
+    displayed, so its lazy images are never fetched.
+  */
   @media (max-width: 860px) {
-    .track {
-      --k: 0.44;
-      --g: 4px;
+    .col--side,
+    .cell--above-1,
+    .cell--above-2,
+    .cell--below-1,
+    .cell--below-2 {
+      display: none;
+    }
+
+    .wall {
+      display: block;
+    }
+
+    .col--centre,
+    .cell--focus {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
     }
   }
 
   /*
-    The pin and the pull-back, only where both work. 300svh is how long the
-    visitor is held: of the 200svh during which the track covers the screen,
-    the shot holds alone for the first 8%, the camera pulls back until 85%,
-    and the whole wall holds for the rest. In equal ratios, as in the
-    mosaic, so the pace is even. Without it, the wall is simply there.
+    The pin and the pull-back, only where all of it works, and not on a
+    phone. 300svh is how long the visitor is held: of the 200svh during
+    which the track covers the screen, the shot holds alone for the first
+    8%, the camera pulls back until 85%, and the whole wall holds for the
+    rest. In equal ratios, as in the mosaic, so the pace is even. Without it,
+    the wall is simply there.
   */
   @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
+    @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
       .track {
         height: 300svh;
         view-timeline: --wall block;

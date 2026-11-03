@@ -7,11 +7,12 @@ import type { Media, Product } from '../content/site';
 /*
   The top of a product's own page: a wall of its screens, five columns of
   them scattered a little out of line, with the product's own shot in the
-  middle of the centre column. The section pins as the page opens, and as you
-  scroll the camera moves in on that shot: the wall grows around it until the
-  shot spans most of the screen with its neighbours just showing at the
-  edges, while the columns drift apart, the outer ones furthest. Then it holds
-  a moment and the pin lets go.
+  middle of the centre column. The page opens close in on that shot — it
+  spans most of the screen, its neighbours just showing at the edges — and
+  the section pins. As you scroll the camera pulls back: the wall shrinks
+  around the shot until all of it is on the screen, while the columns drift
+  into line, the outer ones from furthest. Then it holds a moment and the pin
+  lets go.
 
   The same construction as the home page's mosaic (Showreel.astro): a tall
   track with a sticky child, one transform on the wall and one on each side
@@ -24,8 +25,10 @@ import type { Media, Product } from '../content/site';
   below, so alt="". The wall is built only from the screens it can show — the real encode,
   or its stand-in on dev and preview builds. The page renders it only when
   the shot itself can be shown (products/[id].astro); before the shoot, in
-  production, the page opens on the product's name instead. Plain lazy
-  <img>s in the tile lane, as in the mosaic (CLAUDE.md > Budget).
+  production, the page opens on the product's name instead. The rest are
+  plain lazy <img>s in the tile lane, as in the mosaic (CLAUDE.md > Budget).
+  The shot is the first screen, so it is first-load media: eager, at high
+  priority, and encoded for its opening size, close to the screen's width.
 */
 
 interface Props {
@@ -80,7 +83,7 @@ const right = [deal(5), deal(5)];
           }
           <picture>
             {focus.pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
-            <img class="tile cell cell--focus" src={focus.pic.src} width={focus.media.width} height={focus.media.height} alt={focus.media.alt} loading="lazy" decoding="async" data-lane="tile" />
+            <img class="tile cell cell--focus" src={focus.pic.src} width={focus.media.width} height={focus.media.height} alt={focus.media.alt} decoding="async" fetchpriority="high" />
           </picture>
           {
             below.map(({ media, pic }, i) => (
@@ -113,8 +116,8 @@ const right = [deal(5), deal(5)];
   /*
     The geometry. --k is a column's width as a share of the screen: five of
     them overrun it, so the outer two are cut by its edges. The shot's cell
-    is a column wide and the shot's own shape tall. Growing the wall by --z
-    takes the cell to --end of the screen's width.
+    is a column wide and the shot's own shape tall. The wall opens grown by
+    --z, which takes the cell to --end of the screen's width.
 
     The track is a size container so a column's width can be a share of it in
     cqw: an absolute length, like the height's svh.
@@ -122,7 +125,7 @@ const right = [deal(5), deal(5)];
   .track {
     container-type: inline-size;
     --k: 0.22;
-    --end: 0.76;
+    --end: 0.88;
     --g: 8px;
     --cw: calc(var(--k) * 100cqw);
     --ch: calc(var(--cw) * var(--ratio));
@@ -236,10 +239,11 @@ const right = [deal(5), deal(5)];
   }
 
   /*
-    The pin and the zoom, only where both work. 300svh is how long the
-    visitor is held: the camera moves in across the first 80% of the 200svh
-    during which the track covers the screen, and the shot holds for the
-    rest. In equal ratios, as in the mosaic, so the pace is even.
+    The pin and the pull-back, only where both work. 300svh is how long the
+    visitor is held: of the 200svh during which the track covers the screen,
+    the shot holds alone for the first 8%, the camera pulls back until 85%,
+    and the whole wall holds for the rest. In equal ratios, as in the
+    mosaic, so the pace is even. Without it, the wall is simply there.
   */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
@@ -257,15 +261,15 @@ const right = [deal(5), deal(5)];
       .col--side {
         animation: linear both;
         animation-timeline: --wall;
-        animation-range: contain 0% contain 80%;
+        animation-range: contain 8% contain 85%;
       }
 
       .wall {
-        animation-name: zoom;
+        animation-name: pull-back;
       }
 
       .col--side {
-        animation-name: drift;
+        animation-name: gather;
       }
 
       .col--outer-left {
@@ -285,30 +289,30 @@ const right = [deal(5), deal(5)];
       }
     }
 
-    @keyframes zoom {
+    @keyframes pull-back {
       0% {
-        scale: 1;
+        scale: var(--z);
       }
       25% {
-        scale: pow(var(--z), 0.25);
+        scale: pow(var(--z), 0.75);
       }
       50% {
         scale: pow(var(--z), 0.5);
       }
       75% {
-        scale: pow(var(--z), 0.75);
+        scale: pow(var(--z), 0.25);
       }
       100% {
-        scale: var(--z);
+        scale: 1;
       }
     }
 
-    @keyframes drift {
+    @keyframes gather {
       from {
-        translate: 0 0;
+        translate: 0 var(--drift);
       }
       to {
-        translate: 0 var(--drift);
+        translate: 0 0;
       }
     }
   }

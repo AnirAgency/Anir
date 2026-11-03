@@ -7,6 +7,7 @@ import ProductImpressions from '../../components/ProductImpressions.astro';
 import ProductFront from '../../components/ProductFront.astro';
 import ProductResponsive from '../../components/ProductResponsive.astro';
 import ProductOverview from '../../components/ProductOverview.astro';
+import ProductTestimonial from '../../components/ProductTestimonial.astro';
 import ProductNext from '../../components/ProductNext.astro';
 import ContactCta from '../../components/ContactCta.astro';
 import Footer from '../../components/Footer.astro';
@@ -18,8 +19,8 @@ import { placeholderMode } from '../../lib/placeholders.mjs';
   /products/<id>/ — one product's own page: the wall of its screens, what it
   is and Anir's part in it, one big picture, its impressions, its front page
   — old and new for a redesign, the new one alone for a product built from
-  nothing — its pages on a phone, its general impressions, then the next
-  product and the way to the enquiry form. One page per product in site.ts, built from its data alone; each
+  nothing — its pages on a phone, its general impressions, what someone who
+  uses it said, then the next product and the way to the enquiry form. One page per product in site.ts, built from its data alone; each
   section with pictures shows only those there are to show.
 
   The wall needs the shot to land on. Until there is one to show — before
@@ -46,6 +47,7 @@ const wall = pictureOf(product.shot, placeholderMode({ dev: import.meta.env.DEV 
   <ProductFront product={product} />
   <ProductResponsive product={product} />
   <ProductOverview product={product} />
+  <ProductTestimonial product={product} />
   <ProductNext product={next} />
   <ContactCta tone="light" />
   <Footer />

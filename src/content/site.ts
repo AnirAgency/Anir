@@ -172,6 +172,16 @@ export interface Showreel {
 
 /* ---------------------------------------------------------------- products */
 
+/** Someone's word on a product, with their portrait. */
+export interface Testimonial {
+  name: string;
+  /** Their position, and where. */
+  role: string;
+  /** The quote in two parts; the second is set apart, further right. */
+  quote: [string, string];
+  portrait: Media;
+}
+
 /** One of Anir's own products: a slide in the products reel. */
 export interface Product {
   /** ASCII. The slide's anchor is #product-<id>; the hero cards link to it. */
@@ -217,6 +227,12 @@ export interface Product {
   };
   /** Five of its pages on a phone, whole: tall screenshots, left to right. */
   responsive: Media[];
+  /**
+   * What someone who uses it said — real words, given with their permission,
+   * never written for them. Without one, production shows no testimonial;
+   * dev and preview builds show `pages.testimonial.stand` in its place.
+   */
+  testimonial?: Testimonial;
 }
 
 export interface Products {
@@ -263,8 +279,16 @@ export interface Products {
     /** On a product that has a public site. */
     visit: string;
     next: string;
+    /** On the round button to the next product. */
+    about: string;
     /** Over a product's general impressions, in its three lines. */
     overview: [string, string, string];
+    /** A product's testimonial: its label, and the stand-in that shows on
+     *  dev and preview builds while the product has no real one. */
+    testimonial: {
+      label: string;
+      stand: Testimonial;
+    };
     /** The label over a product's impressions. */
     impressions: string;
     /** Over the old and new front pages of a redesign. */
@@ -659,7 +683,30 @@ export const site: Site = {
       visit: 'Сайтыг үзэх +',
       next: 'Дараагийн бүтээгдэхүүн',
       // New. Bat-Enkh to proofread.
+      about: 'Дэлгэрэнгүй',
       overview: ['Энэ бүтээгдэхүүний', 'ерөнхий', 'сэтгэгдэл'],
+      // The stand-in says what belongs there, so a preview can never be
+      // mistaken for a real testimonial. It never ships: production shows a
+      // product's testimonial only when the product has a real one.
+      testimonial: {
+        label: 'Хэрэглэгчийн сэтгэгдэл',
+        stand: {
+          name: 'Нэр Овог',
+          role: 'Албан тушаал, байгууллага',
+          quote: [
+            '«Энд бүтээгдэхүүнийг ашигласан хүн эсвэл захиалагчийн бодит сэтгэгдэл орно. Бид өөрсдөө бичихгүй — хүлээн авсан үгийг нь зөвшөөрлийг нь авч байж нийтэлнэ.',
+            'Ишлэлийн сүүлийн хэсэг энд, баруун тийш шилжиж төгсөнө.»',
+          ],
+          portrait: {
+            name: null,
+            alt: 'Хөрөг',
+            width: 600,
+            height: 600,
+            label: 'Хөрөг',
+            format: '1:1',
+          },
+        },
+      },
       // New, with the impressions and the front pages. Bat-Enkh to proofread.
       impressions: 'Сэтгэгдэл',
       compare: {

@@ -9,7 +9,16 @@
  *
  * Copy is stored in sentence case and uppercased by CSS where the type scale
  * calls for it, so this file stays readable prose for proofreading.
+ *
+ * Since the admin (/admin/), this file is the types and the seed: what the
+ * site says while the database holds nothing for a section. What the team
+ * saves in the admin is laid over it at build time (./live.ts), so `site`
+ * below is the seed with their edits — and `seed` is this file as written,
+ * which the admin uses for its forms' shapes and templates.
  */
+
+import liveJson from './live.json' with { type: 'json' };
+import { applyLive, type Live } from './live.ts';
 
 /* ------------------------------------------------------------------ shared */
 
@@ -532,7 +541,7 @@ const phonePages = (product: string, placeholders: string[]): Media[] =>
     return still(`${product} — гар утсан дээрх хуудас ${n}`, 780, 1688, `Утас ${n}`, 'Утасны бүтэн хуудас · 9:19.5', placeholder);
   });
 
-export const site: Site = {
+export const seed: Site = {
   meta: {
     title: 'Anir — Улаанбаатарын бүтээлч студи',
     description:
@@ -1274,5 +1283,12 @@ export const site: Site = {
     },
   },
 };
+
+/**
+ * The site as the build renders it: the seed with the admin's content laid
+ * over it. live.json is written by scripts/content-pull.mjs before every
+ * build and dev server — `{}` when there is nothing to pull.
+ */
+export const site: Site = applyLive(seed, liveJson as Live);
 
 export default site;

@@ -20,6 +20,10 @@ It is **not** a blog, not a CMS-driven marketing site, and not a place to
 demonstrate technical tricks. Every effect either serves the two jobs above or
 comes out.
 
+The team edits its words and images in an admin, by the owner's direction
+(see **The admin** below) — but a visitor never meets a CMS: every publish is
+a static build, held to every rule in this file like any other.
+
 ---
 
 ## Hard constraints
@@ -31,7 +35,7 @@ These are not preferences. Breaking one is a bug.
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
-| Output | **Static.** No SSR, no server runtime except the one contact-form function. |
+| Output | **Static.** No SSR, no server runtime except two Worker routes: the contact form and the admin's publish button. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
 | Node | **Pin to 22** via `.nvmrc`. Workers Builds is set to Node 22 (`NODE_VERSION`); building locally on a different major than CI is a needless risk on a static site. |
@@ -86,7 +90,9 @@ place, `src/lib/placeholders.mjs`.
 `scripts/budget.mjs` checks the three budgets separately and must stay blocking.
 Do not make it advisory. The ceilings are per page — a visitor pays for one
 page at a time — and `npm run budget` holds every built page to them: the home
-page in full, the rest through `scripts/budget-pages.mjs`.
+page in full, the rest through `scripts/budget-pages.mjs`. A `<picture>` counts
+as the one file a browser fetches from it, its first source (AVIF); the WebP
+and JPEG beside it are never fetched by a browser this site supports.
 
 ---
 
@@ -280,11 +286,13 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   scrubbing, pinning, sequenced timelines — and none of those is on this site.
 - **Lenis** — smooth scroll. Must no-op under reduced-motion.
 - **Cloudflare Workers** — hosting. Static Assets serves `dist/`; the Worker
-  (`worker/index.ts`) answers the one contact endpoint. `_headers` is not applied
+  (`worker/index.ts`) answers the contact endpoint and the admin's publish
+  endpoint. `_headers` is not applied
   to Worker responses, so the Worker attaches the same security headers itself,
   from the list `scripts/headers.mjs` generates — `npm run test:headers` checks it.
-- **Supabase** — stores contact submissions. Anir already runs Supabase for
-  Ethos and Ezmath, so this is not a new dependency.
+- **Supabase** — stores contact submissions, and the content the team edits in
+  the admin. Anir already runs Supabase for Ethos and Ezmath, so this is not a
+  new dependency.
 
 No React. No Tailwind. No UI library. Plain `.astro` components and CSS custom
 properties — the site is a handful of static pages, a framework earns nothing
@@ -301,14 +309,47 @@ here.
   alone — add a product there and its page exists. Their nav anchors lead
   back to the home page. `/v2` is a review page, built on dev and preview
   builds only, never in production.
-- **All copy lives in `src/content/site.ts`** as a typed object. Never hardcode
-  Mongolian strings in a component — the team needs one file to proofread.
-- Prices are data, not markup. They change; they live in `site.ts`.
+- **All copy lives in `src/content/site.ts`** as a typed object — its types
+  and its seed — and what the team saves in the admin is laid over it at
+  build time. Components read `site` and nothing else. Never hardcode
+  Mongolian strings in a component — the team needs one place to proofread:
+  `site.ts` and the admin for the site, `src/content/admin.ts` for the admin's
+  own words.
+- Prices are data, not markup. They change; they live in `site.ts` and the
+  admin.
 - Every image ships with explicit `width`/`height` to prevent layout shift.
 - Every video: `muted`, `playsinline`, `loop`, `preload="none"`, a `poster`
   frame, and `loading="lazy"` on anything below the fold. Below the fold the
   poster is a lazy `<img>` under the video, not the `poster` attribute —
   browsers fetch that eagerly, whatever `preload` says.
+
+---
+
+## The admin
+
+`/admin/` is where the team edits every word and image and adds, removes and
+orders products. By the owner's direction it stores content in Supabase; the
+site stays static.
+
+- **Save** writes to Supabase (`supabase/migrations/0002_content.sql`):
+  `site_content`, one row per section of `site.ts`; `products`, one row per
+  product; uploads in the `media` bucket. Anyone may read; only a user listed
+  in `editors` may write, enforced by row level security — never by the
+  admin's own code.
+- **Publish** (`worker/publish.ts`) checks the caller is an editor and starts a
+  production build through the Workers Builds deploy hook, a Worker secret.
+- **The build** pulls the content first (`scripts/content-pull.mjs`): every
+  upload is cut to its slot's `width` × `height` and encoded AVIF, WebP and
+  JPEG into `public/media/live/`, so the site serves it itself. The content is
+  laid over `site.ts` (`src/content/live.ts`); a type that disagrees stops the
+  build. So a bad save, a page over budget or a broken image fails the build
+  and the site stays as it was — nothing reaches a visitor unchecked.
+- The forms are built from `site.ts`'s shape. A value that is code, not copy
+  — a form field's name, an option's value the enquiries table checks — is
+  hidden in the admin (`RULES` in `src/scripts/admin.ts`). Add a field to
+  `site.ts` and the admin shows it; hide it there if it is not copy.
+- Video is not uploaded through the admin: it needs the media pipeline
+  (`npm run media`).
 
 ---
 

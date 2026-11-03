@@ -1,23 +1,25 @@
 /**
- * The Worker: one route of code in front of a static site.
+ * The Worker: two routes of code in front of a static site.
  *
- * POST /api/enquiry runs the contact handler (./enquiry.ts). Everything else
+ * POST /api/enquiry runs the contact handler (./enquiry.ts); POST
+ * /api/publish, the admin's publish button (./publish.ts). Everything else
  * goes to the static assets in dist/; requests that match a file are served by
  * Workers Static Assets before this code ever runs.
  *
- * Other methods on /api/enquiry fall through to the assets too, which answer
+ * Other methods on either route fall through to the assets too, which answer
  * 404 — the same thing a Pages Function exporting only onRequestPost did.
  *
  * On a schedule (wrangler.jsonc > triggers) it drains enquiries that were
  * buffered in KV while Supabase would not take them.
  */
 import { drain, onRequestPost, type Env as EnquiryEnv } from './enquiry.ts';
+import { onPublish, type Env as PublishEnv } from './publish.ts';
 
 // Written by scripts/headers.mjs on every build, from the same list that
 // becomes dist/_headers. Missing means `npm run build` has not run.
 import security from './security-headers.generated.json';
 
-interface Env extends EnquiryEnv {
+interface Env extends EnquiryEnv, PublishEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
 }
 
@@ -42,6 +44,9 @@ export default {
     if (pathname === '/api/enquiry' && request.method === 'POST') {
       const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
       return withSecurityHeaders(await onRequestPost({ request, env, waitUntil }));
+    }
+    if (pathname === '/api/publish' && request.method === 'POST') {
+      return withSecurityHeaders(await onPublish(request, env));
     }
     return env.ASSETS.fetch(request);
   },

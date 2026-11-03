@@ -108,6 +108,24 @@ function isDeferred(name, attrs) {
 /** First URL of each srcset candidate. */
 const fromSrcset = (value) => value.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean);
 
+/*
+  A <picture> is one image, not three. A browser takes the first <source> it
+  understands and fetches that alone — every browser this site supports
+  understands AVIF, which Plate and the admin's uploads put first — so each
+  picture is read as its <img> showing its first source. Counting the WebP
+  and the JPEG beside it would charge a visitor for files they never fetch.
+*/
+function asFetched(html) {
+  return html.replace(/<picture\b[^>]*>([\s\S]*?)<\/picture>/gi, (whole, inner) => {
+    const img = /<img\b([^>]*)>/i.exec(inner);
+    const first = /<source\b[^>]*\bsrcset\s*=\s*("[^"]*"|'[^']*')/i.exec(inner);
+    if (!img || !first) return whole;
+    const src = fromSrcset(first[1].slice(1, -1))[0];
+    const attrs = img[1].replace(/\s(src|srcset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    return `<img src="${src}"${attrs}>`;
+  });
+}
+
 function refsInHtml(html) {
   const found = [];
   for (const tag of html.matchAll(/<(\w+)\b([^>]*)>/g)) {
@@ -171,7 +189,8 @@ while (queue.length) {
   const type = typeOf(file);
   if (type !== 'html' && type !== 'css') continue;
 
-  const source = readFileSync(file, 'utf8');
+  const raw = readFileSync(file, 'utf8');
+  const source = type === 'html' ? asFetched(raw) : raw;
   // For HTML, refsInCss also sweeps inline <style> blocks and style="" attributes.
   const refs = type === 'html' ? [...refsInHtml(source), ...refsInCss(source)] : refsInCss(source);
 
@@ -195,7 +214,7 @@ const inline = inlineBytes(readFileSync(entry, 'utf8'));
   though nothing declared it, so no asset can slip past both budgets.
 */
 const LAZY_EXT = /\.(avif|webp|png|jpe?g|gif|svg|webm|mp4|json)$/i;
-const pageHtml = readFileSync(entry, 'utf8');
+const pageHtml = asFetched(readFileSync(entry, 'utf8'));
 
 const declaredLazy = [...pageHtml.matchAll(/\bdata-lazy\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)].map((m) => clean(m[1]));
 

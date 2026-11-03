@@ -63,14 +63,24 @@ for (const page of pages(dist)) {
   hashes and same-origin, and this site renders no user input into its HTML, so
   there is no injection vector to exploit the style relaxation.
 */
+/*
+  The admin (/admin/) is the one page that talks to anything but this site:
+  it signs in to, reads from and uploads to Supabase, and shows the uploaded
+  images, and a picked file before it is sent (blob:). One policy covers every
+  page — _headers joins a second CSP rule to the first, and two policies only
+  ever narrow — so the project's origin is allowed everywhere; no other page
+  has a script that connects anywhere, and scripts stay locked to hashes.
+*/
+const supabase = new URL(JSON.parse(readFileSync(join(root, 'src', 'lib', 'supabase.json'), 'utf8')).url).origin;
+
 const csp = [
   `default-src 'self'`,
   `script-src 'self' ${[...scriptHashes].join(' ')}`,
   `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data:`,
+  `img-src 'self' data: blob: ${supabase}`,
   `font-src 'self'`,
   `media-src 'self'`,
-  `connect-src 'self'`,
+  `connect-src 'self' ${supabase}`,
   `form-action 'self'`,
   `frame-ancestors 'none'`,
   `base-uri 'none'`,

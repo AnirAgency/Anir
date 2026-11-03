@@ -19,12 +19,13 @@ npm run dev          # http://localhost:4321
 | Script | What it does |
 |---|---|
 | `npm run dev` | Dev server with HMR |
-| `npm run build` | Static build into `dist/` |
+| `npm run build` | Pulls the admin's content from Supabase, then a static build into `dist/` |
 | `npm run preview` | Serves the built `dist/` locally |
 | `npm run budget` | Builds, then enforces the weight budget and the contrast table. **Exits non-zero if the page is over or a pair fails.** |
 | `npm run contrast` | Measures the CLAUDE.md contrast table under the film grain, from `tokens.css` and the shipped tile |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
+| `npm run test:publish` | Exercises the admin's publish endpoint against stubs — see [The admin](#the-admin) |
 
 ## The styleguide
 
@@ -490,7 +491,63 @@ studio's own address and is not filed as spam.
 ## Content
 
 Every Mongolian string and every price lives in [`src/content/site.ts`](src/content/site.ts),
-typed. Nothing Mongolian is hardcoded in a component: the team proofreads one file,
-and a non-technical person can change a price without opening markup.
+typed, as its seed — and the team edits it in [the admin](#the-admin), which is laid
+over the seed at build time. Nothing Mongolian is hardcoded in a component.
 
-As of Phase 01 that file is shape-only — the types are final-ish, the values are empty.
+## The admin
+
+`https://aniragency.mn/admin/` — sign in, edit any section or product, **Хадгалах**
+(save), then **Нийтлэх** (publish). The site rebuilds in two to three minutes. Saving
+alone changes nothing on the site; publishing is what ships it.
+
+How it fits together (CLAUDE.md > The admin has the rules):
+
+| Piece | What it does |
+|---|---|
+| [`src/scripts/admin.ts`](src/scripts/admin.ts) | The admin app. Talks to Supabase directly with the publishable key and the editor's session. |
+| [`supabase/migrations/0002_content.sql`](supabase/migrations/0002_content.sql) | `site_content`, `products`, `editors`, the `media` bucket, and the policies that let only editors write. |
+| [`worker/publish.ts`](worker/publish.ts) | `POST /api/publish`: checks the caller is an editor, then posts to the deploy hook. |
+| [`scripts/content-pull.mjs`](scripts/content-pull.mjs) | First step of every build: content into `src/content/live.json`, uploads encoded into `public/media/live/`. |
+| [`src/content/live.ts`](src/content/live.ts) | Lays the content over `site.ts`; a value of the wrong kind stops the build. |
+| [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
+
+### Setting it up (once)
+
+1. **The tables.** Paste [`supabase/migrations/0002_content.sql`](supabase/migrations/0002_content.sql)
+   into the project's SQL editor and run it (or `supabase db push`). Until then the
+   build says *the admin tables are not set up yet* and the site is `site.ts` as written.
+2. **No sign-ups.** Authentication → Sign In / Providers → turn **Allow new users to sign
+   up** off. Accounts are made by the owner, not by visitors.
+3. **The team's accounts.** Authentication → Users → **Add user** → *Create new user*, with
+   each person's email and a password, *Auto Confirm User* on. Then, in the SQL editor:
+
+   ```sql
+   insert into public.editors (user_id, email)
+   select id, email from auth.users where email in ('one@example.com', 'two@example.com');
+   ```
+
+   Someone signed in but not in `editors` can read and do nothing else. To take access
+   away: `delete from public.editors where email = '…';`
+4. **The publish button.** Workers & Pages → anir → Settings → Builds → **Deploy Hooks** →
+   create one for `main`. Copy its URL — it is a credential: whoever has it can start
+   builds — and set it as a Worker secret, never in a file:
+
+   ```
+   npx wrangler secret put DEPLOY_HOOK_URL
+   ```
+
+   Without it **Нийтлэх** answers that publishing is not set up. If the URL ever leaks,
+   delete the hook and make a new one.
+
+### When a publish does not show up
+
+The admin says *Нийтэллээ* when the build has **started**. If the site has not changed
+after a few minutes, the build failed and the site stayed as it was: Workers & Pages →
+anir → Deployments → the newest build's log names the reason — a page over the weight
+budget, or `content: … is number in the database, string in site.ts` for a value of the
+wrong kind.
+
+### Testing it
+
+`npm run test:publish` exercises the publish endpoint: an editor publishes; no token, a
+dead token and a non-editor are refused; a failing Supabase or hook is reported.

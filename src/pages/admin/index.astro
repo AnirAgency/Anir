@@ -1,0 +1,487 @@
+---
+import '../../styles/fonts.css';
+import '../../styles/tokens.css';
+import '../../styles/base.css';
+import { seed } from '../../content/site';
+import { admin } from '../../content/admin';
+import { placeholderMode } from '../../lib/placeholders.mjs';
+
+/*
+  /admin/ — where the team edits the site (src/scripts/admin.ts). Not linked
+  from anywhere and kept out of search; signing in is what guards it, and
+  the database decides what a signed-in user may do.
+
+  The page is a shell: the app draws everything into #admin. site.ts as
+  written rides along as data, not code — the forms' shapes and templates,
+  and the content while the database holds nothing. `<` is escaped so no
+  string in it can close the script element.
+
+  A production build leaves the placeholder paths out of it, as it leaves
+  them out of every page (CLAUDE.md > Budget); the build lays the seed's back
+  over whatever is saved, so preview builds still show them.
+*/
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const data = JSON.stringify({ seed }, (_key, value) =>
+  !placeholders && typeof value === 'string' && value.startsWith('/media/placeholder/') ? undefined : value
+).replace(/</g, '\\u003c');
+---
+
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{admin.title}</title>
+  </head>
+  <body>
+    <div class="admin" id="admin" data-state="loading">
+      <p class="admin__message">{admin.loading}</p>
+      <noscript><p class="admin__message">{admin.noscript}</p></noscript>
+    </div>
+    <script type="application/json" id="admin-data" set:html={data} />
+    <script>
+      import '../../scripts/admin.ts';
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  /*
+    The admin's own look, in the site's tokens: dark ground, hairlines, no
+    radii, mono for the working text. It is a tool, so it is plain — the
+    orange marks what can be pressed and what is current, as on the site.
+  */
+  .admin {
+    --bg: var(--ink);
+    --fg: var(--paper);
+    --muted: var(--dim);
+    --line: var(--line-dark);
+    --plate: var(--ink-2);
+
+    min-height: 100svh;
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+
+  .admin button,
+  .admin input,
+  .admin textarea {
+    font: inherit;
+  }
+
+  .admin__message {
+    padding: 4rem 2rem;
+    color: var(--muted);
+  }
+
+  .admin__message--bad {
+    color: var(--fg);
+  }
+
+  /* -------------------------------------------------------------- bar */
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 70;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--ink);
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .bar__brand {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .bar__status {
+    flex: 1;
+    min-width: 12rem;
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .bar__status[data-tone='ok'] {
+    color: var(--fg);
+  }
+
+  .bar__status[data-tone='bad'] {
+    color: var(--orange);
+  }
+
+  .bar__who {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  /* ------------------------------------------------------------- body */
+
+  .body {
+    display: grid;
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+    min-height: calc(100svh - 3.5rem);
+  }
+
+  .nav {
+    position: sticky;
+    top: 3.5rem;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: calc(100svh - 3.5rem);
+    padding: 1.25rem;
+    overflow-y: auto;
+    border-right: var(--hairline) solid var(--line);
+  }
+
+  .nav__title {
+    margin: 1rem 0 0.25rem;
+    color: var(--muted);
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .nav__title:first-child {
+    margin-top: 0;
+  }
+
+  .nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .nav__product {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .nav__item {
+    flex: 1;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    color: var(--fg);
+    background: none;
+    border: 0;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+  }
+
+  .nav__item:hover {
+    background: var(--ink-2);
+  }
+
+  .nav__item[aria-current='true'] {
+    border-left-color: var(--orange);
+    background: var(--ink-2);
+  }
+
+  .main {
+    padding: 1.5rem clamp(1.25rem, 1rem + 2vw, 3rem) 6rem;
+    max-width: 60rem;
+  }
+
+  .main__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .main__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--size-display-m);
+    font-weight: 600;
+    line-height: 1.02;
+    text-transform: uppercase;
+  }
+
+  .main__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--muted);
+  }
+
+  .main__meta p {
+    margin: 0;
+  }
+
+  /* ----------------------------------------------------------- fields */
+
+  .group__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .group {
+    border: var(--hairline) solid var(--line);
+  }
+
+  .group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0.9rem;
+    cursor: pointer;
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .group[open] > summary {
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .group > .group__body,
+  .group > .list {
+    padding: 1rem 0.9rem;
+  }
+
+  .group--item > summary {
+    text-transform: none;
+    letter-spacing: 0.04em;
+    color: var(--fg);
+  }
+
+  .group--image {
+    padding: 0.9rem;
+  }
+
+  .group__title {
+    margin: 0 0 0.75rem;
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .f {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .f--check {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .f__label {
+    color: var(--muted);
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .f input[type='text'],
+  .f input[type='email'],
+  .f input[type='password'],
+  .f input[type='number'],
+  .f textarea {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.75rem;
+    color: var(--fg);
+    background: transparent;
+    border: var(--hairline) solid var(--muted);
+    resize: vertical;
+  }
+
+  .f input:focus,
+  .f textarea:focus {
+    border-color: var(--fg);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .list__row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+
+  .list__row > :first-child {
+    flex: 1;
+  }
+
+  .list__controls {
+    display: inline-flex;
+    gap: 0.25rem;
+  }
+
+  /* ----------------------------------------------------------- images */
+
+  .img {
+    display: grid;
+    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .img__preview {
+    aspect-ratio: 4 / 3;
+    background: var(--ink-2);
+    overflow: hidden;
+  }
+
+  .img__preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .img__side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .img__note,
+  .img__size {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .img__note {
+    color: var(--fg);
+  }
+
+  .img__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .img__error {
+    margin: 0;
+    min-height: 0;
+    color: var(--orange);
+  }
+
+  .img__error:empty {
+    display: none;
+  }
+
+  /* ---------------------------------------------------------- buttons */
+
+  .btn {
+    min-height: 2.5rem;
+    padding: 0 1rem;
+    color: var(--fg);
+    background: transparent;
+    border: var(--hairline) solid var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: var(--size-mono-label);
+  }
+
+  .btn:hover {
+    border-color: var(--fg);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* What publishes or saves: orange, with --ink on it. */
+  .btn--primary {
+    color: var(--ink);
+    background: var(--orange);
+    border-color: var(--orange);
+  }
+
+  .btn--primary:hover {
+    color: var(--fg);
+    background: transparent;
+  }
+
+  .btn--ghost {
+    border-color: var(--line);
+    align-self: start;
+  }
+
+  .btn--small {
+    min-height: 2rem;
+    margin: 0.75rem 0.9rem;
+  }
+
+  .btn--icon {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0;
+    border-color: var(--line);
+  }
+
+  .btn--danger:hover {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  /* --------------------------------------------------- sign in, new */
+
+  .sign,
+  .new {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: min(26rem, 100% - 2rem);
+    margin: 0 auto;
+    padding: 12svh 0 4rem;
+  }
+
+  .sign .btn--primary,
+  .new .btn--primary {
+    align-self: start;
+  }
+
+  .new {
+    margin: 0;
+    padding-top: 0;
+  }
+
+  @media (max-width: 860px) {
+    .body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nav {
+      position: static;
+      max-height: none;
+      border-right: 0;
+      border-bottom: var(--hairline) solid var(--line);
+    }
+
+    .img {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

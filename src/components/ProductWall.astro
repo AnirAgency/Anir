@@ -8,8 +8,7 @@ import type { Media, Product } from '../content/site';
   The top of a product's own page: a wall of its screens, five columns of
   them scattered a little out of line, with the product's own shot in the
   middle of the centre column. The page opens close in on that shot — it
-  spans most of the screen, its neighbours just showing at the edges — and
-  the section pins. As you scroll the camera pulls back: the wall shrinks
+  fills the screen, edge to edge — and the section pins. As you scroll the camera pulls back: the wall shrinks
   around the shot until all of it is on the screen, while the columns drift
   into line, the outer ones from furthest. Then it holds a moment and the pin
   lets go.
@@ -28,7 +27,7 @@ import type { Media, Product } from '../content/site';
   production, the page opens on the product's name instead. The rest are
   plain lazy <img>s in the tile lane, as in the mosaic (CLAUDE.md > Budget).
   The shot is the first screen, so it is first-load media: eager, at high
-  priority, and encoded for its opening size, close to the screen's width.
+  priority, and encoded for its opening size, the screen's full width.
 */
 
 interface Props {
@@ -116,8 +115,13 @@ const right = [deal(5), deal(5)];
   /*
     The geometry. --k is a column's width as a share of the screen: five of
     them overrun it, so the outer two are cut by its edges. The shot's cell
-    is a column wide and the shot's own shape tall. The wall opens grown by
-    --z, which takes the cell to --end of the screen's width.
+    is a column wide, and tall enough for both: the shot's own shape, or the
+    screen's share --k of the height, whichever is taller. The wall opens
+    grown by 1 / --k, which takes the cell to the screen's full width — and,
+    with that floor on its height, to at least the screen's full height, so
+    it covers the screen of any shape. On a screen wider than the shot, the
+    shot's shape wins and it overruns top and bottom a little; on a taller
+    one, a phone, the floor wins and cover crops the shot's sides.
 
     The track is a size container so a column's width can be a share of it in
     cqw: an absolute length, like the height's svh.
@@ -125,11 +129,10 @@ const right = [deal(5), deal(5)];
   .track {
     container-type: inline-size;
     --k: 0.22;
-    --end: 0.88;
     --g: 8px;
     --cw: calc(var(--k) * 100cqw);
-    --ch: calc(var(--cw) * var(--ratio));
-    --z: calc(var(--end) / var(--k));
+    --ch: max(calc(var(--cw) * var(--ratio)), calc(var(--k) * 100svh));
+    --z: calc(1 / var(--k));
   }
 
   :global(#wall) {
@@ -233,7 +236,6 @@ const right = [deal(5), deal(5)];
   @media (max-width: 860px) {
     .track {
       --k: 0.44;
-      --end: 0.9;
       --g: 4px;
     }
   }

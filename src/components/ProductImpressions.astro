@@ -96,7 +96,8 @@ const pics = [
     stage's height and its pictures measure against the same thing.
 
     The tall picture hangs below; the stage is as tall as it needs to be to
-    hold it, so it never lies over the section after.
+    hold it — its height, 0.48 of --wide-w, plus the 12% of that it travels
+    down as the section passes — so it never crosses the section's foot.
   */
   .box {
     container-type: inline-size;
@@ -110,7 +111,7 @@ const pics = [
     --wide-top: calc(var(--stage-h) - var(--wide-w) * 0.625);
 
     position: relative;
-    height: calc(var(--wide-top) + var(--wide-w) * 0.824);
+    height: calc(var(--wide-top) + var(--wide-w) * 0.882);
   }
 
   /* With no pictures to show, the paragraph alone takes only its own room. */
@@ -205,9 +206,11 @@ const pics = [
       margin-right: calc(-1 * var(--inset-mobile));
     }
 
+    /* Room under the tall picture for the 12% of its height it travels. */
     .stage {
       display: grid;
       height: auto;
+      padding-bottom: 8%;
     }
 
     .label {

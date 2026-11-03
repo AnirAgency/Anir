@@ -1,0 +1,202 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product on a phone: a label in the margin, a two-line heading, and five
+  of its pages, whole, as tall phone screenshots in a row across the
+  screen's full width — a staircase rising to the right, the outer two cut
+  by the screen's edges. The highest stands beside the heading; the heading
+  sits where the stair has not yet climbed. As the section passes, each
+  phone lifts a little more than the one to its left, so the stair steepens.
+  Translate only, on one view timeline; still without it.
+
+  Each page is shown only where there is something to show — the real
+  encode, or its stand-in on dev and preview builds — and with none, before
+  the shoot in production, the section is not emitted: the heading means
+  nothing without the phones. Plain lazy <img>s in the tile lane.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { responsive } = site.products.pages;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const phones = product.responsive
+  .map((media, i) => ({ media, i, pic: pictureOf(media, placeholders) }))
+  .filter((phone) => phone.pic);
+---
+
+{
+  phones.length > 0 && (
+    <Section tone="dark" id="responsive" label={responsive.label} heading={false}>
+      <div class="show">
+        <div class="head">
+          <p class="head__label t-mono-label" data-reveal>{responsive.label}</p>
+          <h2 class="head__title t-display-l" data-reveal>
+            {responsive.title.map((line) => (
+              <span class="head__line">{line}</span>
+            ))}
+          </h2>
+        </div>
+
+        <div class="row">
+          {phones.map(({ media, i, pic }) => (
+            <div class="phone" style={`--i: ${i}; --drop: ${i === 0 ? 4.5 : 4 - i};`}>
+              <picture>
+                {pic!.sources.map((s) => (
+                  <source srcset={s.src} type={s.type} />
+                ))}
+                <img
+                  src={pic!.src}
+                  width={media.width}
+                  height={media.height}
+                  alt={media.alt}
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="tile"
+                />
+              </picture>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+<style>
+  /*
+    Out to both edges of the screen, past the content's inset, clipping
+    sideways only: the stair overruns the screen at both ends, and the lift
+    carries the phones upward, which must not be cut.
+  */
+  .show {
+    position: relative;
+    margin-left: calc(-1 * var(--inset));
+    margin-right: calc(-1 * var(--inset-right));
+    overflow-x: clip;
+  }
+
+  /*
+    The label at the content's edge, the heading in the column the
+    impressions' paragraph keeps (15% of the way into the content), both over
+    the stair's low end, where no phone has climbed to yet.
+  */
+  .head {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 1;
+  }
+
+  .head__label {
+    position: absolute;
+    top: 0.9rem;
+    left: var(--inset);
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .head__title {
+    position: absolute;
+    top: 0;
+    left: calc(var(--inset) + (100% - var(--inset)) * 0.15);
+    margin: 0;
+  }
+
+  .head__line {
+    display: block;
+  }
+
+  /*
+    The stair. Five phones 22.9% of the screen wide, 1.5% apart, centred, so
+    the row overruns both edges equally; each one a step of 10% of the
+    screen's width higher than the one to its left, the first a step and a
+    half lower again. The third stands two steps down, clear of the heading
+    above it at every width.
+  */
+  .row {
+    --w: 22.9vw;
+    --step: 10vw;
+
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1.5vw;
+  }
+
+  .phone {
+    flex: 0 0 var(--w);
+    aspect-ratio: 780 / 1688;
+    margin-top: calc(var(--drop) * var(--step));
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .phone :global(picture) {
+    display: contents;
+  }
+
+  .phone img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* A phone: the heading above the stair, two and a bit phones on screen. */
+  @media (max-width: 860px) {
+    .show {
+      margin-left: calc(-1 * var(--inset-mobile));
+      margin-right: calc(-1 * var(--inset-mobile));
+    }
+
+    .head,
+    .head__label,
+    .head__title {
+      position: static;
+    }
+
+    .head {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding-inline: var(--inset-mobile);
+      margin-bottom: 2rem;
+    }
+
+    .row {
+      --w: 44vw;
+      --step: 12vw;
+      gap: 3vw;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .row {
+        view-timeline: --stair block;
+      }
+
+      .phone {
+        animation: lift linear both;
+        animation-timeline: --stair;
+        animation-range: cover 0% cover 100%;
+      }
+    }
+
+    /* Each phone lifts 2.5svh more than the one to its left. */
+    @keyframes lift {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 calc(var(--i) * -2.5svh);
+      }
+    }
+  }
+</style>

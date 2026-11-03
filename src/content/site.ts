@@ -215,6 +215,8 @@ export interface Product {
     before?: Media;
     after: Media;
   };
+  /** Five of its pages on a phone, whole: tall screenshots, left to right. */
+  responsive: Media[];
 }
 
 export interface Products {
@@ -280,6 +282,11 @@ export interface Products {
     fresh: {
       title: string;
       note: string;
+    };
+    /** Over a product's pages on a phone. The title in its two lines. */
+    responsive: {
+      label: string;
+      title: [string, string];
     };
   };
   items: Product[];
@@ -496,6 +503,13 @@ const still = (alt: string, width: number, height: number, label: string, format
   placeholder: `/media/placeholder/${placeholder}.avif`,
 });
 
+/** A product's pages on a phone, whole — tall screenshots, one per placeholder. */
+const phonePages = (product: string, placeholders: string[]): Media[] =>
+  placeholders.map((placeholder, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return still(`${product} — гар утсан дээрх хуудас ${n}`, 780, 1688, `Утас ${n}`, 'Утасны бүтэн хуудас · 9:19.5', placeholder);
+  });
+
 export const site: Site = {
   meta: {
     title: 'Anir — Улаанбаатарын бүтээлч студи',
@@ -662,6 +676,10 @@ export const site: Site = {
         title: 'Эхнээс нь шинээр',
         note: 'Хуучин хувилбар гэж байгаагүй — бид анхны мөрөөс нь зохиож бүтээсэн.',
       },
+      responsive: {
+        label: 'Дасан зохицох',
+        title: ['Ямар ч дэлгэцэнд', 'төгс харагдана'],
+      },
     },
     items: [
       {
@@ -716,6 +734,7 @@ export const site: Site = {
           before: still('Ezmath — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-06'),
           after: still('Ezmath — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-07'),
         },
+        responsive: phonePages('Ezmath', ['tile-01', 'tile-02', 'tile-03', 'tile-02', 'tile-01']),
       },
       {
         id: 'ethos',
@@ -766,6 +785,7 @@ export const site: Site = {
         front: {
           after: still('Ethos — нүүр хуудас', 1600, 1000, 'Нүүр хуудас', 'Нүүр хуудас · 16:10', 'tile-04'),
         },
+        responsive: phonePages('Ethos', ['tile-02', 'tile-03', 'tile-01', 'tile-03', 'tile-02']),
       },
       {
         id: 'olymo',
@@ -819,6 +839,7 @@ export const site: Site = {
           before: still('Olymo — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-08'),
           after: still('Olymo — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-06'),
         },
+        responsive: phonePages('Olymo', ['tile-03', 'tile-01', 'tile-02', 'tile-01', 'tile-03']),
       },
     ],
   },

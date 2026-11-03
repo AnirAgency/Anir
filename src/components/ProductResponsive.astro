@@ -13,13 +13,13 @@ import { site, type Product } from '../content/site';
   phone lifts a little more than the one to its left, so the stair steepens.
   Translate only, on one view timeline; still without it.
 
-  Behind the stair, fine arcs ring the section's bottom-left corner, like
-  ripples spreading out under the phones — seen in the gaps between them
-  and in the room under the stair's high end. They spread out from the
-  corner as they come into view, and a slow pulse of light keeps running
-  outward through them. Each arc is its own quarter-circle box moved by
-  scale and opacity only, so the compositor does it all; a decorative mark,
-  so a hairline grey, not orange. Still under reduced motion.
+  In the room under the stair's high end, fine arcs ring the section's
+  bottom-right corner, standing still. On each, a short brighter stretch of
+  the line runs along it toward its left end as you scroll down, each a
+  little behind the one inside it. The glint is a piece of the same circle
+  in its own box, turned about the corner — rotate only, on the compositor,
+  and nothing clipped or masked. A decorative mark, so a hairline grey, not
+  orange. Under reduced motion the glints hold where they start.
 
   Each page is shown only where there is something to show — the real
   encode, or its stand-in on dev and preview builds — and with none, before
@@ -37,15 +37,30 @@ const placeholders = placeholderMode({ dev: import.meta.env.DEV });
 const phones = product.responsive
   .map((media, i) => ({ media, i, pic: pictureOf(media, placeholders) }))
   .filter((phone) => phone.pic);
+
+// The arcs' radii, in % of the screen's width, inside out. Presentation.
+const radii = [9, 19, 29, 39, 49];
+const outer = radii[radii.length - 1];
 ---
 
 {
   phones.length > 0 && (
     <Section tone="dark" id="responsive" label={responsive.label} heading={false}>
       <div class="show">
-        <div class="rings" aria-hidden="true">
-          {[0, 1, 2, 3, 4, 5].map((k) => (
-            <span class="ring" style={`--k: ${k};`} />
+        <div class="rings" aria-hidden="true" style={`--r: ${outer};`}>
+          {/* The arcs, still: quarter circles about the box's bottom-right corner. */}
+          <svg class="arcs" viewBox={`0 0 ${outer} ${outer}`}>
+            {radii.map((r) => (
+              <path d={`M ${outer} ${outer - r} A ${r} ${r} 0 0 0 ${outer - r} ${outer}`} />
+            ))}
+          </svg>
+
+          {/* The glints: 14 degrees of each circle, from its top end, in a box
+              of that circle's size, turned about the same corner. */}
+          {radii.map((r, k) => (
+            <svg class="glint" viewBox="0 0 100 100" style={`--r: ${r}; --k: ${k};`}>
+              <path d="M 100 0 A 100 100 0 0 0 75.81 2.97" />
+            </svg>
           ))}
         </div>
 
@@ -165,39 +180,49 @@ const phones = product.responsive
   }
 
   /*
-    The arcs: six quarter-circles centred on the section's bottom-left
-    corner, 10% of the screen's width out and 12% apart. A square box with
-    its top and right edges drawn and the top-right corner fully rounded is
-    exactly that quarter. The grey is the ground's own text colour mixed
-    into the ground, as the hairlines are — derived, not a new colour.
+    The arcs: quarter circles about the section's bottom-right corner, 9% of
+    the screen's width out and 10% apart. Strokes are a pixel at any size
+    (non-scaling-stroke), so the glints lie exactly on their lines. The grey
+    is the ground's own text colour mixed into the ground, as the hairlines
+    are, and the glint the same, brighter — derived, not new colours.
   */
   .rings {
     position: absolute;
-    left: 0;
+    right: 0;
     bottom: 0;
-    width: 70vw;
+    width: calc(var(--r) * 1vw);
     aspect-ratio: 1;
     pointer-events: none;
   }
 
-  .ring {
+  .arcs,
+  .glint {
     position: absolute;
-    left: 0;
+    right: 0;
     bottom: 0;
-    width: calc((10 + var(--k) * 12) * 1vw);
-    aspect-ratio: 1;
-    border-top: var(--hairline) solid color-mix(in srgb, var(--fg) 30%, var(--bg));
-    border-right: var(--hairline) solid color-mix(in srgb, var(--fg) 30%, var(--bg));
-    border-top-right-radius: 100%;
-    opacity: 0.6;
-    transform-origin: 0 100%;
+    overflow: visible;
+    fill: none;
   }
 
-  /* Where there is no scroll timeline, the pulse alone (below). */
-  @media (prefers-reduced-motion: no-preference) {
-    .ring {
-      animation: pulse 5s ease-in-out calc(var(--k) * 0.4s) infinite;
-    }
+  .arcs {
+    width: 100%;
+    height: 100%;
+    stroke: color-mix(in srgb, var(--fg) 20%, var(--bg));
+  }
+
+  .glint {
+    width: calc(var(--r) * 1vw);
+    height: calc(var(--r) * 1vw);
+    stroke: color-mix(in srgb, var(--fg) 70%, var(--bg));
+    stroke-linecap: round;
+    transform-origin: 100% 100%;
+    rotate: calc(var(--k) * -4deg);
+  }
+
+  .arcs path,
+  .glint path {
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
   }
 
   /* A phone: the heading above the stair, two and a bit phones on screen. */
@@ -251,44 +276,31 @@ const phones = product.responsive
       }
     }
 
-    /* The arcs spread out from the corner as they come into view, the inner
-       ones first. */
+    /*
+      The glints run toward the arcs' left ends as you scroll down, across
+      the arcs' whole passage through the screen: each turns 60 degrees from
+      a start 4 degrees behind the one inside it, so the outermost, 14
+      degrees long, ends just at its line's end and none runs past it.
+    */
     @media (prefers-reduced-motion: no-preference) {
       .rings {
         view-timeline: --rings block;
       }
 
-      .ring {
-        animation:
-          spread linear both,
-          pulse 5s ease-in-out calc(var(--k) * 0.4s) infinite;
-        animation-timeline: --rings, auto;
-        animation-range:
-          entry calc(var(--k) * 8%) cover calc(35% + var(--k) * 8%),
-          normal;
+      .glint {
+        animation: glide linear both;
+        animation-timeline: --rings;
+        animation-range: cover 0% cover 100%;
       }
     }
 
-    @keyframes spread {
+    @keyframes glide {
       from {
-        scale: 0.45;
+        rotate: calc(var(--k) * -4deg);
       }
       to {
-        scale: 1;
+        rotate: calc(var(--k) * -4deg - 60deg);
       }
-    }
-  }
-
-  /* The pulse: a swell of light running outward through the arcs, one
-     after another, every five seconds. Time-based, so it needs no scroll. */
-  @keyframes pulse {
-    0%,
-    45%,
-    100% {
-      opacity: 0.6;
-    }
-    18% {
-      opacity: 1;
     }
   }
 </style>

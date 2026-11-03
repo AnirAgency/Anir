@@ -1017,11 +1017,13 @@ function renderNewProduct() {
         if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) return void (error.textContent = t.newProduct.idInvalid);
         if (products.some((p) => p.id === slug)) return void (error.textContent = t.newProduct.idTaken);
         // The first product's shape, every word and upload emptied: a new
-        // product is built new, so no old version, no link, no testimonial.
+        // product is built new, so no old version, no link, no testimonial —
+        // null, not left out, or the build would fill them from the first
+        // product (src/content/live.ts).
         const data = blank(clone(seedItems[0]), true) as Obj;
-        delete data.href;
-        delete data.testimonial;
-        delete (data.front as Obj).before;
+        data.href = null;
+        data.testimonial = null;
+        (data.front as Obj).before = null;
         data.name = name.value.trim();
         data.id = slug;
         products.push({ id: slug, data });

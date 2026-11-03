@@ -42,7 +42,27 @@ export function overlay(seed: unknown, live: unknown, path: string): unknown {
   }
 
   if (Array.isArray(seed)) {
-    return (live as unknown[]).map((item, i) => overlay(seed[i] ?? seed[0], item, `${path}[${i}]`));
+    /*
+      A list's items can differ in shape — a process step shared by both
+      columns has `both`, one on a single side `client` and `studio` — and the
+      saved list may be longer or in another order than the seed's. So an
+      item is filled in only with the keys every seed item has; a key only
+      some have is each item's own, never borrowed from its neighbour.
+    */
+    const objects = seed.length > 0 && seed.every((item) => kind(item) === 'object');
+    const common = objects
+      ? Object.keys(seed[0] as object).filter((key) => seed.every((item) => key in (item as object)))
+      : null;
+    return (live as unknown[]).map((item, i) => {
+      let template = seed[i] ?? seed[0];
+      if (common && kind(item) === 'object') {
+        const own = item as Record<string, unknown>;
+        template = Object.fromEntries(
+          Object.entries(template as Record<string, unknown>).filter(([key]) => common.includes(key) || key in own)
+        );
+      }
+      return overlay(template, item, `${path}[${i}]`);
+    });
   }
 
   if (kind(seed) === 'object') {

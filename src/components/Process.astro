@@ -19,24 +19,25 @@ import { site, type ProcessStep } from '../content/site';
 const { intro, sides, events } = site.process;
 
 /*
-  The chain's geometry. Presentation, not copy, so it lives here; but it is
-  matched to the events one for one. Fillers sit between consecutive events
-  and are load-bearing: the label spacing comes from the diameters, and
-  without them neighbouring labels nearly collide.
+  The chain's geometry. Presentation, not copy, so it lives here. A circle
+  per event and a filler between consecutive events; the fillers are
+  load-bearing: the label spacing comes from the diameters, and without them
+  neighbouring labels nearly collide.
+
+  The diameters are a rhythm set by hand for the fourteen steps the process
+  was designed with. The team can add and remove steps in the admin, so each
+  event takes the rhythm's next diameter, and more steps than the rhythm
+  repeat it from the start; fewer take its beginning.
 
   Every diameter is a fraction of the section's width, --spine-w, and so is
   every centre and offset derived from them: the chain scales as one piece
   on every screen.
 */
-const EVENT_D = [0.0776, 0.0408, 0.0987, 0.0579, 0.1289, 0.0487, 0.0842, 0.1474, 0.0605, 0.1092, 0.0382, 0.0921, 0.0526, 0.0711];
-const FILLER_D = [0.0303, 0.0579, 0.0263, 0.0632, 0.0237, 0.0684, 0.0289, 0.0605, 0.025, 0.0658, 0.0276, 0.0566, 0.0329];
+const EVENT_RHYTHM = [0.0776, 0.0408, 0.0987, 0.0579, 0.1289, 0.0487, 0.0842, 0.1474, 0.0605, 0.1092, 0.0382, 0.0921, 0.0526, 0.0711];
+const FILLER_RHYTHM = [0.0303, 0.0579, 0.0263, 0.0632, 0.0237, 0.0684, 0.0289, 0.0605, 0.025, 0.0658, 0.0276, 0.0566, 0.0329];
 
-if (EVENT_D.length !== events.length || FILLER_D.length !== events.length - 1) {
-  throw new Error(
-    `site.process has ${events.length} events but Process.astro has ${EVENT_D.length} event and ` +
-      `${FILLER_D.length} filler diameters. Add or remove a diameter for each event (and the filler after it).`
-  );
-}
+const EVENT_D = events.map((_, i) => EVENT_RHYTHM[i % EVENT_RHYTHM.length]);
+const FILLER_D = events.slice(1).map((_, i) => FILLER_RHYTHM[i % FILLER_RHYTHM.length]);
 
 /*
   Consecutive centres sit 0.58 of their radii apart, so neighbours overlap by

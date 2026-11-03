@@ -235,8 +235,9 @@ const right = [deal(5), deal(5)];
 
   /*
     A phone, by the owner's direction: the shot alone, the screen's full
-    width at its own shape, still — no wall, no pin, no pull-back. The rest
-    of the wall is not displayed, so its lazy images are never fetched.
+    width at its own shape, below the nav bar, still — no wall, no pin, no
+    pull-back. The rest of the wall is not displayed, so its lazy images are
+    never fetched.
   */
   @media (max-width: 860px) {
     .col--side,
@@ -249,6 +250,7 @@ const right = [deal(5), deal(5)];
 
     .pin {
       height: auto;
+      padding-top: var(--header-h);
     }
 
     .wall {

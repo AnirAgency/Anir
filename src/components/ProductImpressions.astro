@@ -73,9 +73,12 @@ const pics = [
 
 <style>
   /* Less padding than a section usually takes, so that the composition and
-     the screen are the same height. */
+     the screen are the same height, with --lead (30px, by the owner's
+     direction) more above it. */
   :global(#impressions) {
     --section-pad-y: 3rem;
+    --lead: 1.875rem;
+    padding-top: calc(var(--section-pad-y) + var(--lead));
   }
 
   /*
@@ -84,9 +87,10 @@ const pics = [
     the screen's edge, and everything in it is placed in shares of its width
     and of --stage-h, so the composition holds at every screen size.
 
-    --wide-w is the wide picture's width: 72% of the stage, but never so wide
-    that, at 16:10 from 16% down, it would run past the screen's foot — 1.344
-    of --stage-h is that limit. In cqw, not %: it is also used for heights.
+    The pictures start 16% of the way down, and 40px lower again, by the
+    owner's direction. --wide-w is the wide picture's width: 72% of the
+    stage, but never so wide that, at 16:10, it would run past the screen's
+    foot. In cqw, not %: it is also used for heights.
     The box around the stage is the container, the stage's own width, so the
     stage's height and its pictures measure against the same thing.
 
@@ -99,9 +103,9 @@ const pics = [
   }
 
   .stage {
-    --stage-h: calc(100svh - 2 * var(--section-pad-y));
-    --wide-w: min(72cqw, calc(var(--stage-h) * 1.344));
-    --wide-top: calc(var(--stage-h) * 0.16);
+    --stage-h: calc(100svh - 2 * var(--section-pad-y) - var(--lead));
+    --wide-top: calc(var(--stage-h) * 0.16 + 2.5rem);
+    --wide-w: min(72cqw, calc((var(--stage-h) - var(--wide-top)) * 1.6));
 
     position: relative;
     height: max(var(--stage-h), calc(var(--wide-top) + var(--wide-w) * 0.824));
@@ -226,7 +230,7 @@ const pics = [
 
     .pic--wide {
       width: 96%;
-      margin: -2rem 0 0 auto;
+      margin: 0.5rem 0 0 auto;
     }
 
     .pic--tall {

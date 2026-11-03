@@ -15,8 +15,8 @@ import { site, type Product } from '../content/site';
 
   In the room under the stair's high end, fine arcs ring the section's
   bottom-right corner, standing still. On each, a short brighter stretch of
-  the line runs along it toward its left end as you scroll down, each a
-  little behind the one inside it. The glint is a piece of the same circle
+  the line runs along it toward its left end as you scroll down, each from
+  its own place on its line, scattered. The glint is a piece of the same circle
   in its own box, turned about the corner — rotate only, on the compositor,
   and nothing clipped or masked. A decorative mark, so a hairline grey, not
   orange. Under reduced motion the glints hold where they start.
@@ -38,8 +38,12 @@ const phones = product.responsive
   .map((media, i) => ({ media, i, pic: pictureOf(media, placeholders) }))
   .filter((phone) => phone.pic);
 
-// The arcs' radii, in % of the screen's width, inside out. Presentation.
+// The arcs' radii, in % of the screen's width, inside out, and where each
+// glint starts on its arc, in degrees turned from the top end — scattered,
+// and no more than 32 so that, turning 44 more, none runs past its line's
+// end at 90 (it is 14 long). Presentation.
 const radii = [9, 19, 29, 39, 49];
+const starts = [20, 4, 32, 12, 28];
 const outer = radii[radii.length - 1];
 ---
 
@@ -58,7 +62,7 @@ const outer = radii[radii.length - 1];
           {/* The glints: 14 degrees of each circle, from its top end, in a box
               of that circle's size, turned about the same corner. */}
           {radii.map((r, k) => (
-            <svg class="glint" viewBox="0 0 100 100" style={`--r: ${r}; --k: ${k};`}>
+            <svg class="glint" viewBox="0 0 100 100" style={`--r: ${r}; --from: ${-starts[k]}deg;`}>
               <path d="M 100 0 A 100 100 0 0 0 75.81 2.97" />
             </svg>
           ))}
@@ -216,7 +220,7 @@ const outer = radii[radii.length - 1];
     stroke: color-mix(in srgb, var(--fg) 70%, var(--bg));
     stroke-linecap: round;
     transform-origin: 100% 100%;
-    rotate: calc(var(--k) * -4deg);
+    rotate: var(--from);
   }
 
   .arcs path,
@@ -278,9 +282,9 @@ const outer = radii[radii.length - 1];
 
     /*
       The glints run toward the arcs' left ends as you scroll down, across
-      the arcs' whole passage through the screen: each turns 60 degrees from
-      a start 4 degrees behind the one inside it, so the outermost, 14
-      degrees long, ends just at its line's end and none runs past it.
+      the arcs' whole passage through the screen: each turns 44 degrees from
+      its own start (`starts`, above), so the furthest ends just at its
+      line's end and none runs past it.
     */
     @media (prefers-reduced-motion: no-preference) {
       .rings {
@@ -296,10 +300,10 @@ const outer = radii[radii.length - 1];
 
     @keyframes glide {
       from {
-        rotate: calc(var(--k) * -4deg);
+        rotate: var(--from);
       }
       to {
-        rotate: calc(var(--k) * -4deg - 60deg);
+        rotate: calc(var(--from) - 44deg);
       }
     }
   }

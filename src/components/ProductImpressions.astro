@@ -1,0 +1,183 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product's impressions: a label in the margin, a paragraph on what the
+  product is for, set large, and under it two pictures set against each
+  other — a wide one running out to the screen's right edge, and a tall one
+  laid over its lower-left corner and hanging below it. As the section
+  passes, the tall one rises a little slower than the wide one, so the two
+  part like prints at different heights. Translate only, on one view
+  timeline; still without it.
+
+  The pictures are the section's only media; each is shown only where there
+  is something to show — the real encode, or its stand-in on dev and
+  preview builds — so in production, before the shoot, the impressions are
+  the paragraph alone. Plain lazy <img>s in the tile lane.
+
+  The paragraph never runs onto the pictures: text on a screenshot cannot
+  promise its contrast.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { pages } = site.products;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const [wide, tall] = product.impressions.images.map((media) => ({ media, pic: pictureOf(media, placeholders) }));
+---
+
+<Section tone="dark" id="impressions" label={pages.impressions} heading={false}>
+  <div class="impressions">
+    <h2 class="impressions__label t-mono-label" data-reveal>{pages.impressions}</h2>
+    <p class="impressions__text t-serif-display" data-reveal>{product.impressions.text}</p>
+  </div>
+
+  {
+    (wide.pic || tall.pic) && (
+      <div class="pics">
+        {[
+          { ...wide, kind: 'wide' },
+          { ...tall, kind: 'tall' },
+        ].map(
+          ({ media, pic, kind }) =>
+            pic && (
+              <div class={`pic pic--${kind}`}>
+                <picture>
+                  {pic.sources.map((s) => (
+                    <source srcset={s.src} type={s.type} />
+                  ))}
+                  <img
+                    src={pic.src}
+                    width={media.width}
+                    height={media.height}
+                    alt={media.alt}
+                    loading="lazy"
+                    decoding="async"
+                    data-lane="tile"
+                  />
+                </picture>
+              </div>
+            )
+        )}
+      </div>
+    )
+  }
+</Section>
+
+<style>
+  /* The label in the margin, the paragraph in a column a step in. */
+  .impressions {
+    display: grid;
+    grid-template-columns: minmax(0, 13rem) minmax(0, 38rem);
+    gap: clamp(1.5rem, 1rem + 3vw, 5rem);
+  }
+
+  .impressions__label {
+    margin: 0;
+    padding-top: 0.9rem;
+    color: var(--muted);
+  }
+
+  .impressions__text {
+    margin: 0;
+  }
+
+  /*
+    The pictures in one box whose shape holds both, so nothing depends on the
+    images having loaded: the wide one at the right, out past the content's
+    inset to the screen's edge, 62% of the box wide at 16:10; the tall one at
+    30% from the left, 19% wide at 3:4, its top a little over half way down
+    the wide one, its foot below it. The box's height is the tall one's foot.
+  */
+  .pics {
+    position: relative;
+    aspect-ratio: 100 / 48;
+    margin-top: clamp(3rem, 2rem + 4vw, 6rem);
+    margin-right: calc(-1 * var(--inset-right));
+  }
+
+  .pic {
+    position: absolute;
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .pic :global(picture) {
+    display: contents;
+  }
+
+  .pic img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .pic--wide {
+    top: 0;
+    right: 0;
+    width: 62%;
+    aspect-ratio: 16 / 10;
+  }
+
+  .pic--tall {
+    top: 45.8%;
+    left: 30%;
+    width: 19%;
+    aspect-ratio: 3 / 4;
+  }
+
+  /* A phone: the paragraph over the pictures, the wide one nearly full
+     width, the tall one larger, over its corner. */
+  @media (max-width: 860px) {
+    .impressions {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .pics {
+      aspect-ratio: 100 / 96;
+      margin-right: calc(-1 * var(--inset-mobile));
+    }
+
+    .pic--wide {
+      width: 90%;
+    }
+
+    .pic--tall {
+      top: 43.75%;
+      left: 4%;
+      width: 40%;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .pics {
+        view-timeline: --pics block;
+      }
+
+      .pic--tall {
+        animation: lag linear both;
+        animation-timeline: --pics;
+        animation-range: cover 0% cover 100%;
+      }
+    }
+
+    /* Moving against the page's direction: the tall one rises slower. */
+    @keyframes lag {
+      from {
+        translate: 0 -12%;
+      }
+      to {
+        translate: 0 12%;
+      }
+    }
+  }
+</style>

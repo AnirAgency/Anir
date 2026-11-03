@@ -257,8 +257,9 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   owner's direction:** the showreel mosaic's tiles sit apart on 8px of the
   page's own ground, slightly out of line, like prints scattered on a table —
   it is the work on display, not structure. The wall of screens at the top of
-  each product page and the screens floating around the products page's name
-  are the same kind of surface.
+  each product page, the two pictures laid against each other in its
+  impressions, and the screens floating around the products page's name are
+  the same kind of surface.
 - No `border-radius` on UI surfaces: buttons, inputs, cards, media frames,
   the enquiry form. Geometric marks that are circular by nature are not UI
   surfaces. The eyebrow pills (100px) are the one rounded UI element.

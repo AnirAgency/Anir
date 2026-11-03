@@ -1,0 +1,316 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product's front page. For a redesign, old and new in one frame, split by
+  a line: the old site to the line's left, the new one to its right. The
+  section pins, and as you scroll the line sweeps from the right edge to the
+  left, the new site taking the frame over the old. For a product built from
+  nothing there is no old site, so the new front page alone, under its own
+  heading.
+
+  The sweep is compositor work only. The old site lies in a clipping box
+  over the new one; the box slides left while the picture inside it slides
+  right by as much, so the picture holds still and only the box's edge — the
+  line — moves. The line itself is the scroll's progress, so it is orange
+  (CLAUDE.md > The orange rule). The labels sit above the frame, never on
+  the pictures. Without scroll-driven animation, under reduced motion and
+  with JS off, the line stands in the middle, half of each.
+
+  The comparison needs both pictures there to show — the real encodes, or
+  their stand-ins on dev and preview builds. With the new one alone, the
+  section shows it as a product built new; with neither, before the shoot in
+  production, it is not emitted. Plain lazy <img>s in the tile lane.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { compare, fresh } = site.products.pages;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const after = { media: product.front.after, pic: pictureOf(product.front.after, placeholders) };
+const before = product.front.before
+  ? { media: product.front.before, pic: pictureOf(product.front.before, placeholders) }
+  : null;
+const mode = after.pic ? (before?.pic ? 'compare' : 'fresh') : null;
+const head = mode === 'compare' ? compare : fresh;
+const ratio = after.media.height / after.media.width;
+---
+
+{
+  mode && (
+    <Section tone="dark" id="front" label={head.title} heading={false}>
+      <div class:list={['track', `track--${mode}`]} style={`--ratio: ${ratio};`}>
+        <div class="pin">
+          <header class="head">
+            <h2 class="head__title t-display-l" data-reveal>{head.title}</h2>
+            <p class="head__note t-mono-label" data-reveal>{head.note}</p>
+          </header>
+
+          {mode === 'compare' && (
+            <p class="sides t-mono-label" aria-hidden="true">
+              <span>{compare.before}</span>
+              <span>{compare.after}</span>
+            </p>
+          )}
+
+          <div class="frame">
+            <picture>
+              {after.pic!.sources.map((s) => (
+                <source srcset={s.src} type={s.type} />
+              ))}
+              <img
+                class="shot"
+                src={after.pic!.src}
+                width={after.media.width}
+                height={after.media.height}
+                alt={after.media.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+            </picture>
+
+            {mode === 'compare' && before && (
+              <Fragment>
+                <div class="old">
+                  <div class="old__inner">
+                    <picture>
+                      {before.pic!.sources.map((s) => (
+                        <source srcset={s.src} type={s.type} />
+                      ))}
+                      <img
+                        class="shot"
+                        src={before.pic!.src}
+                        width={before.media.width}
+                        height={before.media.height}
+                        alt={before.media.alt}
+                        loading="lazy"
+                        decoding="async"
+                        data-lane="tile"
+                      />
+                    </picture>
+                  </div>
+                </div>
+                <div class="split" aria-hidden="true">
+                  <span class="split__line" />
+                  <span class="split__knob">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
+                    </svg>
+                  </span>
+                </div>
+              </Fragment>
+            )}
+          </div>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+<style>
+  .head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .head__title {
+    margin: 0;
+  }
+
+  .head__note {
+    margin: 0;
+    max-width: 44ch;
+    color: var(--muted);
+  }
+
+  .sides {
+    display: flex;
+    justify-content: space-between;
+    width: var(--frame-w);
+    margin: 0 auto;
+    color: var(--muted);
+  }
+
+  /*
+    The frame: the new site's shape, as wide as the content allows and, for
+    the comparison, short enough that the nav's clearance, the heading, the
+    labels and the frame fit the screen together while it is pinned — 15.25rem
+    of them besides the frame at 1440, measured. A new site alone is not
+    pinned, so it takes the content's full width.
+  */
+  .track {
+    --frame-w: min(100%, calc((100svh - 17rem) / var(--ratio)));
+  }
+
+  .track--fresh {
+    --frame-w: 100%;
+  }
+
+  .pin {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+  }
+
+  .frame {
+    position: relative;
+    width: var(--frame-w);
+    aspect-ratio: 1 / var(--ratio);
+    margin-inline: auto;
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .frame :global(picture) {
+    display: contents;
+  }
+
+  .shot {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* The old site, clipped to the line's left. At rest, half of it. */
+  .old,
+  .old__inner,
+  .split {
+    position: absolute;
+    inset: 0;
+  }
+
+  .old {
+    overflow: clip;
+    translate: -50% 0;
+  }
+
+  .old__inner {
+    translate: 50% 0;
+  }
+
+  /* The line at the split box's left edge; the box moves with the clip. */
+  .split {
+    translate: 50% 0;
+    pointer-events: none;
+  }
+
+  .split__line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 2px;
+    background: var(--orange);
+  }
+
+  /* A mark on the line, not a control: the scroll moves it. */
+  .split__knob {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 2px solid var(--orange);
+    border-radius: 50%;
+    background: var(--ink);
+    translate: -50% -50%;
+  }
+
+  .split__knob svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: none;
+    stroke: var(--orange);
+    stroke-width: 2;
+  }
+
+  @media (max-width: 860px) {
+    .track {
+      --frame-w: 100%;
+    }
+  }
+
+  /*
+    The pin and the sweep, only where both work. 240svh is how long the
+    visitor is held: the line crosses from 92% of the frame to 8% across the
+    middle of the 140svh during which the track covers the screen.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .track--compare {
+        height: 240svh;
+        view-timeline: --front block;
+      }
+
+      .track--compare .pin {
+        position: sticky;
+        top: 0;
+        justify-content: center;
+        height: 100svh;
+        padding-top: var(--header-h);
+      }
+
+      .old,
+      .old__inner,
+      .split {
+        animation: linear both;
+        animation-timeline: --front;
+        animation-range: contain 10% contain 85%;
+      }
+
+      .old {
+        animation-name: old-out;
+      }
+
+      .old__inner {
+        animation-name: old-hold;
+      }
+
+      .split {
+        animation-name: split-sweep;
+      }
+    }
+
+    @keyframes old-out {
+      from {
+        translate: -8% 0;
+      }
+      to {
+        translate: -92% 0;
+      }
+    }
+
+    @keyframes old-hold {
+      from {
+        translate: 8% 0;
+      }
+      to {
+        translate: 92% 0;
+      }
+    }
+
+    @keyframes split-sweep {
+      from {
+        translate: 92% 0;
+      }
+      to {
+        translate: 8% 0;
+      }
+    }
+  }
+</style>

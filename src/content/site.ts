@@ -198,6 +198,23 @@ export interface Product {
     /** More of the product, in a grid of two. */
     more: Media[];
   };
+  /** One big picture after the introduction, the screen's full width. */
+  feature: Media;
+  /** A paragraph on the product, with two pictures set against it. */
+  impressions: {
+    text: string;
+    /** A wide one, and a tall one laid over its lower corner. */
+    images: [Media, Media];
+  };
+  /**
+   * The product's front page. With `before` — the old site it replaced — its
+   * page compares the two, old on the left and new on the right; without it,
+   * a product built from nothing, it shows the new one alone.
+   */
+  front: {
+    before?: Media;
+    after: Media;
+  };
 }
 
 export interface Products {
@@ -248,6 +265,20 @@ export interface Products {
     mobile: string;
     more: string;
     next: string;
+    /** The label over a product's impressions. */
+    impressions: string;
+    /** Over the old and new front pages of a redesign. */
+    compare: {
+      title: string;
+      note: string;
+      before: string;
+      after: string;
+    };
+    /** Over the front page of a product built from nothing. */
+    fresh: {
+      title: string;
+      note: string;
+    };
   };
   items: Product[];
 }
@@ -448,6 +479,21 @@ const screen = (product: string, n: number, kind: 'wide' | 'phone' | 'grid', pla
   placeholder: `/media/placeholder/${placeholder}.avif`,
 });
 
+/**
+ * Any other picture on a product's own page, not shot yet: the big picture,
+ * the impressions, the front pages. Like `screen`, a labelled plate in
+ * production and the named placeholder on dev and preview builds.
+ */
+const still = (alt: string, width: number, height: number, label: string, format: string, placeholder: string): Media => ({
+  name: null,
+  alt,
+  width,
+  height,
+  label,
+  format,
+  placeholder: `/media/placeholder/${placeholder}.avif`,
+});
+
 export const site: Site = {
   meta: {
     title: 'Anir — Улаанбаатарын бүтээлч студи',
@@ -601,6 +647,18 @@ export const site: Site = {
       mobile: 'Гар утсанд',
       more: 'Ерөнхий сэтгэгдэл',
       next: 'Дараагийн бүтээгдэхүүн',
+      // New, with the impressions and the front pages. Bat-Enkh to proofread.
+      impressions: 'Сэтгэгдэл',
+      compare: {
+        title: 'Хуучин ба шинэ',
+        note: 'Доош гүйлгэх тусам шугам шилжиж, хуучин хувилбар шинээр солигдоно.',
+        before: 'Хуучин',
+        after: 'Шинэ',
+      },
+      fresh: {
+        title: 'Эхнээс нь шинээр',
+        note: 'Хуучин хувилбар гэж байгаагүй — бид анхны мөрөөс нь зохиож бүтээсэн.',
+      },
     },
     items: [
       {
@@ -639,6 +697,22 @@ export const site: Site = {
           screen('Ezmath', 6, 'grid', 'tile-05'),
           ],
         },
+        feature: still('Ezmath — ерөнхий зураг', 2400, 1350, 'Ezmath', 'Ерөнхий зураг · 16:9', 'tile-08'),
+        // New. Bat-Enkh to proofread; the owner to confirm it says what Ezmath is for.
+        impressions: {
+          text: 'Ezmath-ийг бид сурагч математикаа өдөр бүр бага багаар, өөрийн хурдаар бататгаж чадахаар бүтээсэн. Энгийн, ойлгомжтой дэлгэцүүд нь анхаарлыг зөвхөн бодлогод төвлөрүүлдэг.',
+          images: [
+            still('Ezmath — зөөврийн компьютер дээр', 1600, 1000, 'Ezmath', 'Сэтгэгдэл · 16:10', 'tile-05'),
+            still('Ezmath — гар утсан дээр', 900, 1200, 'Ezmath', 'Сэтгэгдэл · 3:4', 'tile-02'),
+          ],
+        },
+        // Built new, not a redesign: the `before` is set, by the owner's
+        // direction, so the comparison can be reviewed. It has no real image,
+        // so production shows the new front page alone.
+        front: {
+          before: still('Ezmath — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-06'),
+          after: still('Ezmath — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-07'),
+        },
       },
       {
         id: 'ethos',
@@ -676,6 +750,19 @@ export const site: Site = {
           screen('Ethos', 6, 'grid', 'tile-04'),
           ],
         },
+        feature: still('Ethos — ерөнхий зураг', 2400, 1350, 'Ethos', 'Ерөнхий зураг · 16:9', 'tile-07'),
+        // New. Bat-Enkh to proofread; the owner to confirm it says what Ethos is for.
+        impressions: {
+          text: 'Ethos сайн үйлсийг хүмүүстэй холбодог. Хандив хаашаа очиж, ямар тус болж байгааг ил тод харуулах нь бидний гол зорилго байсан.',
+          images: [
+            still('Ethos — зөөврийн компьютер дээр', 1600, 1000, 'Ethos', 'Сэтгэгдэл · 16:10', 'tile-06'),
+            still('Ethos — гар утсан дээр', 900, 1200, 'Ethos', 'Сэтгэгдэл · 3:4', 'tile-03'),
+          ],
+        },
+        // Built from nothing: no `before`, so its page shows the new front page alone.
+        front: {
+          after: still('Ethos — нүүр хуудас', 1600, 1000, 'Нүүр хуудас', 'Нүүр хуудас · 16:10', 'tile-04'),
+        },
       },
       {
         id: 'olymo',
@@ -712,6 +799,22 @@ export const site: Site = {
           screen('Olymo', 5, 'grid', 'tile-07'),
           screen('Olymo', 6, 'grid', 'tile-08'),
           ],
+        },
+        feature: still('Olymo — ерөнхий зураг', 2400, 1350, 'Olymo', 'Ерөнхий зураг · 16:9', 'tile-05'),
+        // New. Bat-Enkh to proofread; the owner to confirm it says what Olymo is for.
+        impressions: {
+          text: 'Olymo олимпиад, боловсролын мэдээллийг нэг дор цуглуулдаг. Сурагч, багш, эцэг эх хэн ч хэрэгтэй мэдээллээ хурдан олохоор бүтээсэн.',
+          images: [
+            still('Olymo — зөөврийн компьютер дээр', 1600, 1000, 'Olymo', 'Сэтгэгдэл · 16:10', 'tile-04'),
+            still('Olymo — гар утсан дээр', 900, 1200, 'Olymo', 'Сэтгэгдэл · 3:4', 'tile-01'),
+          ],
+        },
+        // Built new, not a redesign: the `before` is set, by the owner's
+        // direction, so the comparison can be reviewed. It has no real image,
+        // so production shows the new front page alone.
+        front: {
+          before: still('Olymo — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-08'),
+          after: still('Olymo — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-06'),
         },
       },
     ],

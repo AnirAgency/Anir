@@ -9,7 +9,9 @@ import type { Product } from '../content/site';
   and height, the picture a little taller than its frame and moving through
   it slower than the page, so it has depth as it passes. Translate only, on
   the frame's view timeline; without it, under reduced motion and with JS
-  off, the picture holds still, centred.
+  off, the picture holds still, centred. On a phone, by the owner's
+  direction, the screen's full width at its own shape, still — as the wall
+  above is there.
 
   Shown only where there is something to show — the real encode, or its
   stand-in on dev and preview builds — so before the shoot, in production,
@@ -73,8 +75,19 @@ const pic = pictureOf(media, placeholderMode({ dev: import.meta.env.DEV }));
     object-fit: cover;
   }
 
+  @media (max-width: 860px) {
+    .frame {
+      height: auto;
+    }
+
+    .image {
+      position: static;
+      height: auto;
+    }
+  }
+
   @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
+    @media (prefers-reduced-motion: no-preference) and (min-width: 861px) {
       .frame {
         view-timeline: --feature block;
       }

@@ -188,14 +188,14 @@ export interface Product {
   href?: string;
   /** A screen of the product. A labelled plate until it is shot. */
   shot: Media;
-  /** The screens on its own page, by kind, in the order they are shown.
-   *  Labelled plates until they are shot. */
+  /** Its screens, by kind. The wall at the top of its page is built from all
+   *  of them; `more` are also its general impressions, one after another. */
   gallery: {
-    /** Two wide screens, side by side. */
+    /** Two wide screens. */
     screens: [Media, Media];
-    /** Phone screens, in a row. */
+    /** Phone screens. */
     mobile: Media[];
-    /** More of the product, in a grid of two. */
+    /** More of the product: its general impressions. */
     more: Media[];
   };
   /** One big picture after the introduction, the screen's full width. */
@@ -262,11 +262,9 @@ export interface Products {
     back: string;
     /** On a product that has a public site. */
     visit: string;
-    /** The headings over a product's screens. */
-    screens: string;
-    mobile: string;
-    more: string;
     next: string;
+    /** Over a product's general impressions, in its three lines. */
+    overview: [string, string, string];
     /** The label over a product's impressions. */
     impressions: string;
     /** Over the old and new front pages of a redesign. */
@@ -659,10 +657,9 @@ export const site: Site = {
       open: 'Үзэх +',
       back: 'Бүх бүтээгдэхүүн',
       visit: 'Сайтыг үзэх +',
-      screens: 'Дэлгэцүүд',
-      mobile: 'Гар утсанд',
-      more: 'Ерөнхий сэтгэгдэл',
       next: 'Дараагийн бүтээгдэхүүн',
+      // New. Bat-Enkh to proofread.
+      overview: ['Энэ бүтээгдэхүүний', 'ерөнхий', 'сэтгэгдэл'],
       // New, with the impressions and the front pages. Bat-Enkh to proofread.
       impressions: 'Сэтгэгдэл',
       compare: {

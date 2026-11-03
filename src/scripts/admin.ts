@@ -56,6 +56,11 @@ const RULES = {
     'contact.form.fields.*.name',
     'contact.form.honeypot',
     'product.id',
+    // Read by screen readers only, or not shown on any page: kept out of the
+    // way, so what is left is what a visitor reads.
+    'hero.logoAlt',
+    'products.controls',
+    'products.pages.compare.control',
   ],
   /** Lists of images or words that may grow and shrink. */
   growable: ['product.gallery.more', 'product.gallery.mobile', 'product.responsive', 'contact.address'],
@@ -105,7 +110,38 @@ const seed = embedded.seed;
 /** The site as the build that made this admin published it: what the preview shows. */
 const published = embedded.published;
 const seedItems = (seed.products as Obj).items as Obj[];
-const SECTIONS = Object.keys(seed);
+/*
+  The left column, by page and in the order a visitor meets things. A view is
+  a section of site.ts, or some of its parts: the products section is the
+  home page's statement in one place and the product pages' shared words in
+  another. A view saves its whole section. Pricing and Team are on no page
+  today, so they are not listed; their content is kept.
+*/
+interface View {
+  id: string;
+  key: string;
+  parts?: string[];
+  group: 'home' | 'products' | 'other';
+  /** Where it shows; the first product's page for the product pages' words. */
+  page: string | null;
+}
+const VIEWS: View[] = [
+  { id: 'hero', key: 'hero', parts: ['tagline', 'lede', 'products'], group: 'home', page: '/' },
+  { id: 'marquee', key: 'marquee', group: 'home', page: '/' },
+  { id: 'statement', key: 'products', parts: ['statement', 'intro'], group: 'home', page: '/' },
+  { id: 'process', key: 'process', group: 'home', page: '/' },
+  { id: 'services', key: 'services', group: 'home', page: '/' },
+  { id: 'contact', key: 'contact', group: 'home', page: '/' },
+  { id: 'productPages', key: 'products', parts: ['pages', 'specLabels'], group: 'products', page: null },
+  { id: 'nav', key: 'nav', group: 'other', page: '/' },
+  { id: 'meta', key: 'meta', group: 'other', page: null },
+  { id: 'chrome', key: 'chrome', group: 'other', page: '/' },
+  { id: 'showreel', key: 'showreel', group: 'other', page: '/' },
+];
+const viewOf = (id: string) => VIEWS.find((v) => v.id === id) as View;
+
+/** A product's fields in the order its page shows them. */
+const PRODUCT_ORDER = ['name', 'tagline', 'description', 'spec', 'href', 'shot', 'feature', 'impressions', 'front', 'responsive', 'gallery', 'testimonial'];
 
 const clone = <T extends Json>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -137,7 +173,11 @@ interface Product {
 
 let saved: Record<string, Obj> = {};
 let products: Product[] = [];
-let view: { kind: 'section'; key: string } | { kind: 'product'; id: string } = { kind: 'section', key: 'hero' };
+let view: { kind: 'section'; key: string; id: string } | { kind: 'product'; id: string } = {
+  kind: 'section',
+  key: 'hero',
+  id: 'hero',
+};
 let draft: Obj = {};
 let dirty = false;
 
@@ -338,6 +378,10 @@ function objectField(value: Obj, path: (string | number)[], depth: number): HTML
       const key = parts[parts.length - 1];
       if (!keys.includes(key)) keys.push(key);
     }
+  }
+  // A product's parts in the order its page shows them.
+  if (path.length === 1 && path[0] === 'product') {
+    keys.sort((a, b) => (PRODUCT_ORDER.indexOf(a) + 1 || 99) - (PRODUCT_ORDER.indexOf(b) + 1 || 99));
   }
 
   for (const key of keys) {
@@ -618,7 +662,7 @@ function select(next: typeof view) {
 }
 
 function renderNav() {
-  const sectionButtons = SECTIONS.map((key) =>
+  const viewButton = (v: View) =>
     h(
       'li',
       {},
@@ -626,15 +670,15 @@ function renderNav() {
         'button',
         {
           type: 'button',
-          class: isUnused([key]) ? 'nav__item nav__item--unused' : 'nav__item',
-          'aria-current': view.kind === 'section' && view.key === key ? 'true' : undefined,
-          onclick: () => select({ kind: 'section', key }),
+          class: 'nav__item',
+          'aria-current': view.kind === 'section' && view.id === v.id ? 'true' : undefined,
+          onclick: () => select({ kind: 'section', key: v.key, id: v.id }),
         },
-        t.sections[key] ?? key,
-        isUnused([key]) ? h('span', { class: 'unused' }, t.notShown) : null
+        t.views[v.id] ?? v.id
       )
-    )
-  );
+    );
+  const of = (group: View['group']) => VIEWS.filter((v) => v.group === group).map(viewButton);
+  const otherOpen = view.kind === 'section' && viewOf(view.id).group === 'other';
 
   const productButtons = products.map((product, i) =>
     h(
@@ -656,16 +700,24 @@ function renderNav() {
   );
 
   navEl.replaceChildren(
-    h('p', { class: 'nav__title' }, t.sectionsTitle),
-    h('ul', { class: 'nav__list' }, ...sectionButtons),
-    h('p', { class: 'nav__title' }, t.productsTitle),
+    h('ol', { class: 'steps' }, ...t.steps.map((text) => h('li', {}, text))),
+    h('p', { class: 'nav__title' }, t.groups.home),
+    h('ul', { class: 'nav__list' }, ...of('home')),
+    h('p', { class: 'nav__title' }, t.groups.products),
     h('ul', { class: 'nav__list' }, ...productButtons),
-    h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => renderNewProduct() }, t.addProduct)
+    h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => renderNewProduct() }, t.addProduct),
+    h('ul', { class: 'nav__list' }, ...of('products')),
+    h(
+      'details',
+      { class: 'nav__more', open: otherOpen },
+      h('summary', { class: 'nav__title' }, t.groups.other),
+      h('ul', { class: 'nav__list' }, ...of('other'))
+    )
   );
 }
 
 function renderMain() {
-  const title = view.kind === 'section' ? (t.sections[view.key] ?? view.key) : String(draft.name || draft.id);
+  const title = view.kind === 'section' ? (t.views[view.id] ?? view.id) : String(draft.name || draft.id);
   const head = h(
     'div',
     { class: 'main__head' },
@@ -678,8 +730,8 @@ function renderMain() {
   const about = h(
     'div',
     { class: 'main__about' },
-    h('p', {}, view.kind === 'section' ? (t.sectionHelp[view.key] ?? '') : t.productHelp),
-    h('p', { class: 'main__hint' }, view.kind === 'section' && view.key === 'meta' ? t.noPageAt : `${t.page}: ${page ?? `/products/${draft.id}/`}`)
+    h('p', {}, view.kind === 'section' ? (t.viewHelp[view.id] ?? '') : t.productHelp),
+    h('p', { class: 'main__hint' }, view.kind === 'section' && view.id === 'meta' ? t.noPageAt : `${t.page}: ${page ?? `/products/${draft.id}/`}`)
   );
 
   const extra =
@@ -692,7 +744,15 @@ function renderMain() {
         )
       : null;
 
-  const form = objectField(draft, view.kind === 'section' ? [view.key] : ['product'], 0);
+  // A view of some parts of a section shows those parts, each under its name.
+  const parts = view.kind === 'section' ? viewOf(view.id).parts : undefined;
+  const form = parts
+    ? h(
+        'div',
+        { class: 'group__body' },
+        ...parts.map((part) => field(draft[part], [(view as { key: string }).key, part], (next) => (draft[part] = next), 1))
+      )
+    : objectField(draft, view.kind === 'section' ? [view.key] : ['product'], 0);
   const scroll = mainEl.scrollTop;
   mainEl.replaceChildren(head, about, extra ?? '', form);
   mainEl.scrollTop = scroll;
@@ -716,8 +776,13 @@ let device: 'desktop' | 'phone' = 'desktop';
 
 /** Where a section or product shows: its page, or null for a product not yet published. */
 function pageOf(v: typeof view): string | null {
-  if (v.kind === 'section') return '/';
   const items = ((published.products as Obj)?.items ?? []) as Obj[];
+  if (v.kind === 'section') {
+    const page = viewOf(v.id).page;
+    // The product pages' shared words: shown on the first product's page.
+    if (v.id === 'productPages') return items[0] ? `/products/${items[0].id}/` : null;
+    return page ?? '/';
+  }
   return items.some((item) => item.id === v.id) ? `/products/${v.id}/` : null;
 }
 

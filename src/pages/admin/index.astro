@@ -187,6 +187,27 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     text-transform: uppercase;
   }
 
+  .nav__more > summary {
+    cursor: pointer;
+  }
+
+  /* The three steps: choose, edit and save, publish. */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0 0 0.5rem;
+    padding: 0.75rem 0.75rem 0.75rem 2rem;
+    background: var(--ink-2);
+    color: var(--fg);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .steps li::marker {
+    color: var(--orange);
+  }
+
   .nav__title:first-child {
     margin-top: 0;
   }
@@ -404,17 +425,17 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     border: var(--hairline) solid var(--line);
   }
 
+  /* Group titles read as plain headings: normal case, the working size. */
   .group > summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 0.6rem 0.9rem;
+    padding: 0.75rem 0.9rem;
     cursor: pointer;
-    font-size: var(--size-mono-label);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    color: var(--fg);
   }
 
   .group[open] > summary {
@@ -427,9 +448,7 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
   }
 
   .group--item > summary {
-    text-transform: none;
-    letter-spacing: 0.04em;
-    color: var(--fg);
+    font-size: 0.8125rem;
   }
 
   .group--image {
@@ -438,10 +457,9 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
 
   .group__title {
     margin: 0 0 0.75rem;
-    font-size: var(--size-mono-label);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--muted);
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    color: var(--fg);
   }
 
   .f {
@@ -456,11 +474,11 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     gap: 0.6rem;
   }
 
+  /* A field's name: normal case, legible, not the site's tiny spaced capitals. */
   .f__label {
-    color: var(--muted);
-    font-size: var(--size-mono-label);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    color: var(--fg);
+    font-size: 0.8125rem;
+    letter-spacing: 0.01em;
   }
 
   .f input[type='text'],

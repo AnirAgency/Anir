@@ -2,7 +2,7 @@
 import '../../styles/fonts.css';
 import '../../styles/tokens.css';
 import '../../styles/base.css';
-import { seed } from '../../content/site';
+import { seed, site } from '../../content/site';
 import { admin } from '../../content/admin';
 import { placeholderMode } from '../../lib/placeholders.mjs';
 
@@ -11,17 +11,18 @@ import { placeholderMode } from '../../lib/placeholders.mjs';
   from anywhere and kept out of search; signing in is what guards it, and
   the database decides what a signed-in user may do.
 
-  The page is a shell: the app draws everything into #admin. site.ts as
-  written rides along as data, not code — the forms' shapes and templates,
-  and the content while the database holds nothing. `<` is escaped so no
-  string in it can close the script element.
+  The page is a shell: the app draws everything into #admin. Two copies of
+  the content ride along as data, not code: site.ts as written — the forms'
+  shapes and templates, and the content while the database holds nothing —
+  and the site as this build published it, which the preview finds on the
+  page. `<` is escaped so no string in them can close the script element.
 
   A production build leaves the placeholder paths out of it, as it leaves
   them out of every page (CLAUDE.md > Budget); the build lays the seed's back
   over whatever is saved, so preview builds still show them.
 */
 const placeholders = placeholderMode({ dev: import.meta.env.DEV });
-const data = JSON.stringify({ seed }, (_key, value) =>
+const data = JSON.stringify({ seed, published: site }, (_key, value) =>
   !placeholders && typeof value === 'string' && value.startsWith('/media/placeholder/') ? undefined : value
 ).replace(/</g, '\\u003c');
 ---
@@ -34,7 +35,7 @@ const data = JSON.stringify({ seed }, (_key, value) =>
     <meta name="robots" content="noindex, nofollow" />
     <title>{admin.title}</title>
   </head>
-  <body>
+  <body class="admin-page">
     <div class="admin" id="admin" data-state="loading">
       <p class="admin__message">{admin.loading}</p>
       <noscript><p class="admin__message">{admin.noscript}</p></noscript>
@@ -52,7 +53,13 @@ const data = JSON.stringify({ seed }, (_key, value) =>
     radii, mono for the working text. It is a tool, so it is plain — the
     orange marks what can be pressed and what is current, as on the site.
   */
+  /* A tool, not the site: no film grain over the forms. */
+  body.admin-page::after {
+    content: none;
+  }
+
   .admin {
+    --bar-h: 3.5rem;
     --bg: var(--ink);
     --fg: var(--paper);
     --muted: var(--dim);
@@ -91,7 +98,8 @@ const data = JSON.stringify({ seed }, (_key, value) =>
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem 1.25rem;
-    padding: 0.75rem 1.25rem;
+    min-height: var(--bar-h);
+    padding: 0.5rem 1.25rem;
     background: var(--ink);
     border-bottom: var(--hairline) solid var(--line);
   }
@@ -126,23 +134,49 @@ const data = JSON.stringify({ seed }, (_key, value) =>
 
   /* ------------------------------------------------------------- body */
 
+  /*
+    The whole screen: sections down the left, the form in the middle, the
+    page it edits on the right. Each column scrolls on its own, so the page
+    stays beside the field being edited.
+  */
   .body {
     display: grid;
-    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
-    min-height: calc(100svh - 3.5rem);
+    grid-template-columns: 16rem minmax(0, 1fr);
+    height: calc(100svh - var(--bar-h));
+  }
+
+  .admin[data-preview='on'] .body {
+    grid-template-columns: 16rem minmax(24rem, 1fr) minmax(0, 1.15fr);
+  }
+
+  .nav,
+  .main,
+  .preview {
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .nav {
-    position: sticky;
-    top: 3.5rem;
-    align-self: start;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: calc(100svh - 3.5rem);
     padding: 1.25rem;
-    overflow-y: auto;
     border-right: var(--hairline) solid var(--line);
+  }
+
+  .nav__item--unused {
+    color: var(--muted);
+  }
+
+  .unused {
+    margin-left: 0.6rem;
+    padding: 0.1rem 0.4rem;
+    border: var(--hairline) solid var(--line);
+    color: var(--muted);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: none;
+    white-space: nowrap;
   }
 
   .nav__title {
@@ -191,8 +225,141 @@ const data = JSON.stringify({ seed }, (_key, value) =>
   }
 
   .main {
-    padding: 1.5rem clamp(1.25rem, 1rem + 2vw, 3rem) 6rem;
-    max-width: 60rem;
+    padding: 1.5rem clamp(1.25rem, 1rem + 1.5vw, 2.5rem) 6rem;
+  }
+
+  .main__about {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1.5rem;
+    padding: 0.9rem 1rem;
+    border-left: 2px solid var(--line);
+    background: var(--ink-2);
+  }
+
+  .main__about p {
+    margin: 0;
+  }
+
+  .main__hint {
+    color: var(--muted);
+  }
+
+  /* ------------------------------------------------------------ help */
+
+  .f__label,
+  .summary__name,
+  .group__title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .help {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: var(--hairline) solid var(--muted);
+    border-radius: 50%;
+    color: var(--fg);
+    font-size: 0.6875rem;
+    letter-spacing: 0;
+    text-transform: none;
+    cursor: help;
+  }
+
+  .help:hover,
+  .help:focus-visible {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .help__tip {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 0.5rem);
+    z-index: 80;
+    display: none;
+    width: max-content;
+    max-width: 22rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    text-transform: none;
+    text-align: left;
+    white-space: normal;
+    translate: -30% 0;
+    pointer-events: none;
+  }
+
+  .help:hover .help__tip,
+  .help:focus .help__tip {
+    display: block;
+  }
+
+  /* ---------------------------------------------------------- preview */
+
+  .preview {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: var(--hairline) solid var(--line);
+  }
+
+  .preview[hidden] {
+    display: none;
+  }
+
+  .preview__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .preview__device[aria-pressed='true'] {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .preview__note {
+    flex: 1;
+    min-width: 14rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .preview__stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--ink-2);
+  }
+
+  /* Scaled to the pane and centred in it by the script (fit()). */
+  .preview__frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: 0;
+    background: var(--ink);
+    transform-origin: 0 0;
+  }
+
+  .preview__empty {
+    padding: 2rem;
+    color: var(--muted);
   }
 
   .main__head {
@@ -468,14 +635,32 @@ const data = JSON.stringify({ seed }, (_key, value) =>
     padding-top: 0;
   }
 
+  /* Narrow screens: one column, the page preview off (no room beside it). */
+  @media (max-width: 1099px) {
+    .admin[data-preview='on'] .body,
+    .body {
+      grid-template-columns: 14rem minmax(0, 1fr);
+    }
+
+    .preview,
+    .bar__preview {
+      display: none;
+    }
+  }
+
   @media (max-width: 860px) {
+    .admin[data-preview='on'] .body,
     .body {
       grid-template-columns: minmax(0, 1fr);
+      height: auto;
+    }
+
+    .nav,
+    .main {
+      overflow: visible;
     }
 
     .nav {
-      position: static;
-      max-height: none;
       border-right: 0;
       border-bottom: var(--hairline) solid var(--line);
     }

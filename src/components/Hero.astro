@@ -103,8 +103,10 @@ const topStyle = mark ? `--mark-cell-w: ${mark.grid.cell[0]}; --mark-cell-h: ${m
       <p class="hero__lede t-mono-body">{hero.lede}</p>
     </div>
 
+    {/* One row, a column a card, so the row is always whole: four at most —
+        the admin stops at four (src/scripts/admin.ts > RULES.max). */}
     <div class="hero__products">
-      <Grid cols={3}>
+      <Grid cols={Math.min(hero.products.length, 4)}>
         {
           hero.products.map((product) => {
             const Card = product.href ? 'a' : 'div';

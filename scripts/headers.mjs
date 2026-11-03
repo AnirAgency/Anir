@@ -82,7 +82,9 @@ const csp = [
   `media-src 'self'`,
   `connect-src 'self' ${supabase}`,
   `form-action 'self'`,
-  `frame-ancestors 'none'`,
+  // The admin shows the site's pages in a frame beside its forms; only this
+  // site may frame it, so a page can still never be framed by another one.
+  `frame-ancestors 'self'`,
   `base-uri 'none'`,
   `object-src 'none'`,
   `worker-src 'none'`,
@@ -101,7 +103,7 @@ const security = [
   ['X-Content-Type-Options', 'nosniff'],
   ['Referrer-Policy', 'strict-origin-when-cross-origin'],
   ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
-  ['X-Frame-Options', 'DENY'],
+  ['X-Frame-Options', 'SAMEORIGIN'],
   ['Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload'],
   ['Content-Security-Policy', csp],
 ];

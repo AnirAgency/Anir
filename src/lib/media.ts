@@ -69,6 +69,19 @@ export function resolveImage(media: Media): ResolvedMedia {
   return { ...resolved, present: resolved.fallback !== null };
 }
 
+/**
+ * What an image slot can show without a labelled plate: the real encodes, or,
+ * while the asset is unshot and `placeholders` is on (dev and preview builds),
+ * its stand-in. null when neither — for a composition that leaves the slot
+ * out rather than draw an empty plate in it.
+ */
+export function pictureOf(media: Media, placeholders: boolean): { sources: MediaSource[]; src: string } | null {
+  const real = resolveImage(media);
+  if (real.present && real.fallback) return { sources: real.sources, src: real.fallback };
+  if (placeholders && media.placeholder) return { sources: [], src: media.placeholder };
+  return null;
+}
+
 /** The sprite sheet's layout, as the render pipeline writes it to `${name}.json`. */
 export interface MarkGrid {
   cols: number;

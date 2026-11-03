@@ -4,36 +4,40 @@ import Section from './Section.astro';
 import { site } from '../content/site';
 
 /*
-  The products page's list: one large card per product, its screen and its
-  readout side by side, alternating sides down the page, ruled apart. The
-  whole card is the link to the product's own page.
+  The products page's list: one product after another, each its screen at
+  full width, and under it, across a rule, its name on the left and what it
+  is on the right. The whole card is the link to the product's own page.
 
-  Hover turns the name orange — large type, which clears 3:1 on --paper —
-  and draws an orange rule under the way in: the small label stays --ink,
-  because orange as small text on light fails (CLAUDE.md > Contrast).
+  The screen settles as it comes into view — it arrives a little enlarged in
+  its frame and eases to rest — and on hover it leans in a touch while the
+  name turns orange. Orange on --ink passes AA at any size.
 */
 
 const { pages, items } = site.products;
 const pad = (n: number) => String(n).padStart(2, '0');
 ---
 
-<Section tone="light" id="products-list" label={pages.title} heading={false}>
+<Section tone="dark" id="products-list" label={pages.title} heading={false}>
   <ol class="cards">
     {
       items.map((product, i) => (
-        <li class="card" data-reveal>
+        <li class="card">
           <a class="card__link" href={`/products/${product.id}/`}>
             <div class="card__shot">
-              <Plate media={product.shot} ratio="16 / 10" kind="image" />
+              <Plate media={product.shot} ratio={`${product.shot.width} / ${product.shot.height}`} kind="image" />
             </div>
-            <div class="card__text">
-              <p class="card__index t-mono-label">
-                {pad(i + 1)} / {pad(items.length)} · {product.spec.year}
-              </p>
-              <h2 class="card__name t-display-l">{product.name}</h2>
-              <p class="card__tagline t-serif-italic">{product.tagline}</p>
-              <p class="card__desc t-mono-body">{product.description}</p>
-              <span class="card__open t-mono-label">{pages.open}</span>
+            <div class="card__row" data-reveal>
+              <div class="card__head">
+                <p class="card__index t-mono-label">
+                  {pad(i + 1)} / {pad(items.length)} · {product.spec.year}
+                </p>
+                <h2 class="card__name t-display-l">{product.name}</h2>
+              </div>
+              <div class="card__about">
+                <p class="card__tagline t-serif-italic">{product.tagline}</p>
+                <p class="card__desc t-mono-body">{product.description}</p>
+                <span class="card__open t-mono-label">{pages.open}</span>
+              </div>
             </div>
           </a>
         </li>
@@ -44,42 +48,63 @@ const pad = (n: number) => String(n).padStart(2, '0');
 
 <style>
   .cards {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4rem, 2rem + 6vw, 9rem);
     margin: 0;
     padding: 0;
     list-style: none;
-    border-bottom: var(--hairline) solid var(--line);
-  }
-
-  .card {
-    border-top: var(--hairline) solid var(--line);
   }
 
   .card__link {
-    display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-    gap: clamp(1.75rem, 0.5rem + 3.5vw, 4.5rem);
-    align-items: center;
-    padding-block: clamp(2rem, 1rem + 3vw, 4rem);
+    display: block;
     color: var(--fg);
     text-decoration: none;
   }
 
-  /* Every other product swaps sides. */
-  .card:nth-child(even) .card__shot {
-    order: 1;
+  .card__shot :global(.plate__asset) {
+    transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
-  .card__text {
+  .card__link:hover .card__shot :global(.plate__asset),
+  .card__link:focus-visible .card__shot :global(.plate__asset) {
+    transform: scale(1.025);
+  }
+
+  /* Name on the left, what it is on the right, across a rule. */
+  .card__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+    gap: clamp(1.5rem, 1rem + 3vw, 4rem);
+    margin-top: clamp(1.25rem, 1rem + 1vw, 2rem);
+    padding-top: clamp(1.25rem, 1rem + 1vw, 2rem);
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .card__head {
     display: flex;
     flex-direction: column;
-    align-items: start;
-    gap: 0.9rem;
+    gap: 0.75rem;
   }
 
   .card__index,
   .card__desc {
     margin: 0;
     color: var(--muted);
+  }
+
+  /* The live product's mark: orange as a 2px rule, never as small text. */
+  .card__index {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .card__index::before {
+    content: '';
+    width: 1.25rem;
+    height: 2px;
+    background: var(--orange);
   }
 
   .card__name,
@@ -91,12 +116,15 @@ const pad = (n: number) => String(n).padStart(2, '0');
     transition: color 0.3s ease;
   }
 
-  .card__desc {
-    max-width: 40ch;
+  .card__about {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 0.75rem;
   }
 
   .card__open {
-    margin-top: 0.75rem;
+    margin-top: 0.5rem;
     padding-bottom: 0.35rem;
     border-bottom: 2px solid transparent;
     transition: border-color 0.3s ease;
@@ -113,12 +141,36 @@ const pad = (n: number) => String(n).padStart(2, '0');
   }
 
   @media (max-width: 860px) {
-    .card__link {
+    .card__row {
       grid-template-columns: minmax(0, 1fr);
     }
+  }
 
-    .card:nth-child(even) .card__shot {
-      order: 0;
+  /*
+    The settle: scale, while hover uses transform, so the two compose. Timed
+    on the frame by name — the plate clips with overflow: hidden, which makes
+    it a scroll container, and a bare view() on the image would bind to it.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .card__shot {
+        view-timeline: --card block;
+      }
+
+      .card__shot :global(.plate__asset) {
+        animation: settle linear both;
+        animation-timeline: --card;
+        animation-range: entry 0% cover 50%;
+      }
+    }
+
+    @keyframes settle {
+      from {
+        scale: 1.12;
+      }
+      to {
+        scale: 1;
+      }
     }
   }
 </style>

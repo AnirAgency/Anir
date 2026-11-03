@@ -1,16 +1,24 @@
 ---
 import Base from '../../layouts/Base.astro';
+import ProductWall from '../../components/ProductWall.astro';
 import ProductHero from '../../components/ProductHero.astro';
 import ProductGallery from '../../components/ProductGallery.astro';
 import ProductNext from '../../components/ProductNext.astro';
 import ContactCta from '../../components/ContactCta.astro';
 import Footer from '../../components/Footer.astro';
 import { site } from '../../content/site';
+import { pictureOf } from '../../lib/media';
+import { placeholderMode } from '../../lib/placeholders.mjs';
 
 /*
-  /products/<id>/ — one product's own page: what it is and Anir's part in it,
-  its screens, then the next product and the way to the enquiry form. One
-  page per product in site.ts, built from its data alone.
+  /products/<id>/ — one product's own page: the wall of its screens, what it
+  is and Anir's part in it, its screens, then the next product and the way
+  to the enquiry form. One page per product in site.ts, built from its data
+  alone.
+
+  The wall needs the shot to land on. Until there is one to show — before
+  the shoot, in production — the page opens on the product's name, with the
+  shot's labelled plate under it.
 */
 
 export function getStaticPaths() {
@@ -21,10 +29,12 @@ const { items } = site.products;
 const { index } = Astro.props;
 const product = items[index];
 const next = items[(index + 1) % items.length];
+const wall = pictureOf(product.shot, placeholderMode({ dev: import.meta.env.DEV })) !== null;
 ---
 
 <Base title={`${product.name} — Anir`} description={product.description} home={false}>
-  <ProductHero product={product} index={index} count={items.length} />
+  {wall && <ProductWall product={product} />}
+  <ProductHero product={product} index={index} count={items.length} shot={!wall} />
   <ProductGallery product={product} />
   <ProductNext product={next} />
   <ContactCta tone="light" />

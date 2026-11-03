@@ -1,0 +1,315 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import type { Media, Product } from '../content/site';
+
+/*
+  The top of a product's own page: a wall of its screens, five columns of
+  them scattered a little out of line, with the product's own shot in the
+  middle of the centre column. The section pins as the page opens, and as you
+  scroll the camera moves in on that shot: the wall grows around it until the
+  shot spans most of the screen with its neighbours just showing at the
+  edges, while the columns drift apart, the outer ones furthest. Then it holds
+  a moment and the pin lets go.
+
+  The same construction as the home page's mosaic (Showreel.astro): a tall
+  track with a sticky child, one transform on the wall and one on each side
+  column, all on the one view timeline, so everything moves in lockstep. No
+  scroll handler. Without scroll-driven animation, under reduced motion and
+  with JS off, it is the same wall, still.
+
+  The screens cycle through the product's media, so a column never repeats
+  one. Only the shot is announced; the rest are repeats of the gallery
+  below, so alt="". The wall is built only from the screens it can show — the real encode,
+  or its stand-in on dev and preview builds. The page renders it only when
+  the shot itself can be shown (products/[id].astro); before the shoot, in
+  production, the page opens on the product's name instead. Plain lazy
+  <img>s in the tile lane, as in the mosaic (CLAUDE.md > Budget).
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const { shot, gallery } = product;
+
+const pool = [shot, ...gallery.screens, ...gallery.more, ...gallery.mobile]
+  .map((media) => ({ media, pic: pictureOf(media, placeholders) }))
+  .filter((tile): tile is { media: Media; pic: NonNullable<typeof tile.pic> } => tile.pic !== null);
+const focus = pool[0];
+
+// Five tiles to each side column and two above and below the shot, dealt in
+// turn from the pool after the shot, so neighbours differ.
+let next = 0;
+const deal = (count: number) =>
+  Array.from({ length: count }, () => pool[1 + (next++ % Math.max(pool.length - 1, 1))] ?? focus);
+const left = [deal(5), deal(5)];
+const above = deal(2);
+const below = deal(2);
+const right = [deal(5), deal(5)];
+---
+
+<Section tone="dark" id="wall" label={product.name} layout="bleed">
+  <div class="track" style={`--ratio: ${shot.height / shot.width};`}>
+    <div class="pin">
+      <div class="wall">
+        {
+          left.map((col, i) => (
+            <div class={`col col--side col--${i === 0 ? 'outer-left' : 'inner-left'}`}>
+              {col.map(({ media, pic }) => (
+                <picture>
+                  {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
+                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                </picture>
+              ))}
+            </div>
+          ))
+        }
+
+        <div class="col col--centre">
+          {
+            above.map(({ media, pic }, i) => (
+              <picture>
+                {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
+                <img class={`tile cell cell--above-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+              </picture>
+            ))
+          }
+          <picture>
+            {focus.pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
+            <img class="tile cell cell--focus" src={focus.pic.src} width={focus.media.width} height={focus.media.height} alt={focus.media.alt} loading="lazy" decoding="async" data-lane="tile" />
+          </picture>
+          {
+            below.map(({ media, pic }, i) => (
+              <picture>
+                {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
+                <img class={`tile cell cell--below-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+              </picture>
+            ))
+          }
+        </div>
+
+        {
+          right.map((col, i) => (
+            <div class={`col col--side col--${i === 0 ? 'inner-right' : 'outer-right'}`}>
+              {col.map(({ media, pic }) => (
+                <picture>
+                  {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
+                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                </picture>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</Section>
+
+<style>
+  /*
+    The geometry. --k is a column's width as a share of the screen: five of
+    them overrun it, so the outer two are cut by its edges. The shot's cell
+    is a column wide and the shot's own shape tall. Growing the wall by --z
+    takes the cell to --end of the screen's width.
+
+    The track is a size container so a column's width can be a share of it in
+    cqw: an absolute length, like the height's svh.
+  */
+  .track {
+    container-type: inline-size;
+    --k: 0.22;
+    --end: 0.76;
+    --g: 8px;
+    --cw: calc(var(--k) * 100cqw);
+    --ch: calc(var(--cw) * var(--ratio));
+    --z: calc(var(--end) / var(--k));
+  }
+
+  :global(#wall) {
+    overflow: clip;
+  }
+
+  .pin {
+    position: relative;
+    height: 100svh;
+    background: var(--bg);
+  }
+
+  /* Five columns a column wide, centred, so they overrun both edges equally
+     and the wall's centre is the screen's: the zoom's origin, and the shot's. */
+  .wall {
+    display: grid;
+    grid-template-columns: repeat(5, var(--cw));
+    grid-template-rows: minmax(0, 1fr);
+    justify-content: center;
+    column-gap: var(--g);
+    height: 100%;
+  }
+
+  .wall :global(picture) {
+    display: contents;
+  }
+
+  .tile {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    background: var(--plate);
+  }
+
+  /* Each side column starts at its own height, so the seams fall in
+     different places across the wall: out of line on purpose. Tiles shorter
+     than the column's floor grow, and cover crops them. */
+  .col--side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--g);
+    align-self: start;
+    min-height: calc(1.4 * 100svh);
+  }
+
+  .col--side .tile {
+    flex: 1 0 auto;
+    min-height: 0;
+  }
+
+  .col--outer-left {
+    margin-top: calc(-0.12 * 100svh);
+  }
+
+  .col--inner-left {
+    margin-top: calc(-0.26 * 100svh);
+  }
+
+  .col--inner-right {
+    margin-top: calc(-0.07 * 100svh);
+  }
+
+  .col--outer-right {
+    margin-top: calc(-0.2 * 100svh);
+  }
+
+  /* The centre hangs off the shot at the screen's middle: two above, two
+     below, each the cell's size. */
+  .col--centre {
+    position: relative;
+  }
+
+  .cell {
+    position: absolute;
+    left: 0;
+    height: var(--ch);
+  }
+
+  .cell--focus {
+    top: calc(50% - var(--ch) / 2);
+  }
+
+  .cell--above-1 {
+    bottom: calc(50% + var(--ch) / 2 + var(--g));
+  }
+
+  .cell--above-2 {
+    bottom: calc(50% + 1.5 * var(--ch) + 2 * var(--g));
+  }
+
+  .cell--below-1 {
+    top: calc(50% + var(--ch) / 2 + var(--g));
+  }
+
+  .cell--below-2 {
+    top: calc(50% + 1.5 * var(--ch) + 2 * var(--g));
+  }
+
+  /* A phone shows the centre column and the halves of its neighbours. */
+  @media (max-width: 860px) {
+    .track {
+      --k: 0.44;
+      --end: 0.9;
+      --g: 4px;
+    }
+  }
+
+  /*
+    The pin and the zoom, only where both work. 300svh is how long the
+    visitor is held: the camera moves in across the first 80% of the 200svh
+    during which the track covers the screen, and the shot holds for the
+    rest. In equal ratios, as in the mosaic, so the pace is even.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .track {
+        height: 300svh;
+        view-timeline: --wall block;
+      }
+
+      .pin {
+        position: sticky;
+        top: 0;
+      }
+
+      .wall,
+      .col--side {
+        animation: linear both;
+        animation-timeline: --wall;
+        animation-range: contain 0% contain 80%;
+      }
+
+      .wall {
+        animation-name: zoom;
+      }
+
+      .col--side {
+        animation-name: drift;
+      }
+
+      .col--outer-left {
+        --drift: -22svh;
+      }
+
+      .col--inner-left {
+        --drift: 12svh;
+      }
+
+      .col--inner-right {
+        --drift: -12svh;
+      }
+
+      .col--outer-right {
+        --drift: 22svh;
+      }
+    }
+
+    @keyframes zoom {
+      0% {
+        scale: 1;
+      }
+      25% {
+        scale: pow(var(--z), 0.25);
+      }
+      50% {
+        scale: pow(var(--z), 0.5);
+      }
+      75% {
+        scale: pow(var(--z), 0.75);
+      }
+      100% {
+        scale: var(--z);
+      }
+    }
+
+    @keyframes drift {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 var(--drift);
+      }
+    }
+  }
+</style>

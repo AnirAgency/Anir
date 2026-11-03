@@ -6,16 +6,18 @@ import { site, type Product } from '../content/site';
 /*
   The top of a product's own page: the way back to all of them, the product's
   name and line, what it is and Anir's part in it — role, technology, year,
-  and its site once it has a public one — then its screen, full width.
+  and its site once it has a public one — then its screen, full width,
+  unless the wall above has already shown it (`shot`).
 */
 
 interface Props {
   product: Product;
   index: number;
   count: number;
+  shot?: boolean;
 }
 
-const { product, index, count } = Astro.props;
+const { product, index, count, shot = true } = Astro.props;
 const { pages, specLabels } = site.products;
 const pad = (n: number) => String(n).padStart(2, '0');
 ---
@@ -57,9 +59,13 @@ const pad = (n: number) => String(n).padStart(2, '0');
     </div>
   </div>
 
-  <div class="shot" data-reveal>
-    <Plate media={product.shot} ratio="16 / 10" kind="image" />
-  </div>
+  {
+    shot && (
+      <div class="shot" data-reveal>
+        <Plate media={product.shot} ratio="16 / 10" kind="image" />
+      </div>
+    )
+  }
 </Section>
 
 <style>

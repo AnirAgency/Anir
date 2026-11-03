@@ -1,48 +1,276 @@
 ---
 import Section from './Section.astro';
 import { site } from '../content/site';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
 
 /*
-  The head of the products page: what the page is, one large line, and why
-  these three. The page's only h1.
+  The head of the products page: the page's name, set large in the middle of
+  the first screen, with the products' screens floating around it at three
+  depths — far ones small, dimmed and soft, near ones large and sharp. As you
+  scroll, each depth moves at its own pace, near faster than the page and far
+  slower, so the field has depth without any 3D; the name drifts off as the
+  page carries it away. Then the line on why these three lights up word by
+  word, over the screens still passing.
+
+  The screens are the products' own media, repeated from the list below, so
+  here they are decorative: alt="" and out of the accessibility tree. Each is
+  shown only where there is something to show — the real encode, or its
+  stand-in on dev and preview builds — so in production, before the shoot,
+  the head is the name and the line alone. Plain lazy <img>s in the tile lane
+  (CLAUDE.md > Budget), as in the home page's mosaic.
+
+  Translate and opacity only, on one view timeline; without scroll-driven
+  animation, under reduced motion and with JS off, everything holds still
+  where it is placed.
 */
 
-const { pages } = site.products;
+const { pages, items } = site.products;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+
+// Four screens a product: its shot, a wide one, one more, a phone.
+const media = items.flatMap((p) => [p.shot, p.gallery.screens[1], p.gallery.more[0], p.gallery.mobile[0]]);
+
+/*
+  Where each one floats: left edge in % of the screen, top in svh from the
+  head's top, width in vw, depth. Placed by eye, out of the name's way in the
+  first screen and around the line in the second. Presentation, not copy.
+*/
+const places = [
+  { x: 17, y: 6, w: 6, d: 'far' },
+  { x: 39, y: 10, w: 8.5, d: 'mid' },
+  { x: 67, y: 1, w: 15, d: 'near' },
+  { x: 4, y: 21, w: 17, d: 'near' },
+  { x: 73, y: 64, w: 10, d: 'mid' },
+  { x: 22, y: 67, w: 8, d: 'far' },
+  { x: 44, y: 86, w: 12.5, d: 'near' },
+  { x: 86, y: 92, w: 7, d: 'far' },
+  { x: 7, y: 118, w: 11, d: 'mid' },
+  { x: 76, y: 132, w: 14, d: 'near' },
+  { x: 52, y: 168, w: 6.5, d: 'far' },
+  { x: 14, y: 178, w: 9, d: 'mid' },
+] as const;
+
+const floats = places
+  .map((place, i) => ({ place, media: media[i % media.length] }))
+  .map((f) => ({ ...f, pic: f.media ? pictureOf(f.media, placeholders) : null }))
+  .filter((f) => f.pic);
+
+const words = pages.headline.split(' ');
 ---
 
 <Section tone="dark" id="products-head" label={pages.title} heading={false}>
-  <header class="head">
-    <p class="head__eyebrow t-mono-label" data-reveal>{pages.title}</p>
-    <h1 class="head__title t-display-xl" data-reveal>{pages.headline}</h1>
-    <p class="head__intro t-serif-italic" data-reveal>{pages.intro}</p>
-  </header>
+  <div class="field" aria-hidden="true">
+    {
+      floats.map(({ place, media: m, pic }) => (
+        <div class={`float float--${place.d}`} style={`--x: ${place.x}%; --y: ${place.y}; --w: ${place.w};`}>
+          <picture>
+            {pic!.sources.map((source) => (
+              <source srcset={source.src} type={source.type} />
+            ))}
+            <img
+              src={pic!.src}
+              width={m.width}
+              height={m.height}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              data-lane="tile"
+            />
+          </picture>
+        </div>
+      ))
+    }
+  </div>
+
+  <div class="stage">
+    <h1 class="stage__title t-display-xl">{pages.title}</h1>
+  </div>
+
+  <div class="say">
+    <p class="say__text t-serif-display" style={`--n: ${words.length}`}>
+      {
+        words.map((word, i) => (
+          <span class="word" style={`--i: ${i}`}>
+            {word}{' '}
+          </span>
+        ))
+      }
+    </p>
+    <p class="say__sub t-mono-label">{pages.intro}</p>
+  </div>
 </Section>
 
 <style>
-  /* The first thing on the page clears the fixed nav bar. */
-  .head {
+  /* The screens move past the edges; clip, not hidden, which would make the
+     section a scroll container and freeze the timeline. */
+  :global(#products-head) {
+    overflow: clip;
+  }
+
+  /* Out to the section's edges, past the content's inset, with a faint lift
+     of the ground behind the name — depth from the palette's own two darks. */
+  .field {
+    position: absolute;
+    inset: 0 calc(-1 * var(--inset-right)) 0 calc(-1 * var(--inset));
+    inset-block: calc(-1 * var(--section-pad-y));
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 40% at 64% 24%, var(--ink-2), transparent 72%);
+  }
+
+  .float {
+    position: absolute;
+    left: var(--x);
+    top: calc(var(--y) * 1svh);
+    width: calc(var(--w) * 1vw);
+  }
+
+  .float img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--plate);
+  }
+
+  /* Distance is haze: the far screens sink into the ground and soften. */
+  .float--far {
+    opacity: 0.4;
+    filter: blur(3px);
+  }
+
+  .float--mid {
+    opacity: 0.75;
+  }
+
+  /* The name in the middle of the first screen. The stage is a fixed height,
+     so centring in it cannot shift as the page streams in. */
+  .stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: calc(100svh - var(--section-pad-y));
+  }
+
+  .stage__title {
+    text-align: center;
+  }
+
+  .say {
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: start;
-    gap: 1.5rem;
-    padding-top: var(--header-h);
+    align-items: center;
+    gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+    max-width: 52rem;
+    margin-inline: auto;
+    padding-block: 24svh 14svh;
+    text-align: center;
   }
 
-  .head__eyebrow {
+  .say__text {
     margin: 0;
-    padding: 0.4rem 0.75rem;
-    border: var(--hairline) solid var(--line);
-    border-radius: 100px;
-    color: var(--muted);
-  }
-
-  .head__title {
-    max-width: 16ch;
     text-wrap: balance;
   }
 
-  .head__intro {
+  .say__sub {
     margin: 0;
-    max-width: 34ch;
+    color: var(--muted);
+  }
+
+  /* Fewer, larger screens on a phone: the far ones would be specks. */
+  @media (max-width: 860px) {
+    .field {
+      inset-inline: calc(-1 * var(--inset-mobile));
+    }
+
+    .float {
+      width: calc(var(--w) * 2vw);
+    }
+
+    .float--far {
+      display: none;
+    }
+  }
+
+  /*
+    Each depth rises at its own pace across the whole head, from the top of
+    the page until it has gone: near ones faster than the page, far ones
+    slower. The name drifts down and fades as the first screen leaves. The
+    line's words come up one by one as it passes the middle of the screen.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .field {
+        view-timeline: --ph block;
+      }
+
+      .float {
+        animation: rise linear both;
+        animation-timeline: --ph;
+        animation-range: contain 0% exit 100%;
+      }
+
+      .float--far {
+        --rise: 30svh;
+      }
+
+      .float--mid {
+        --rise: -15svh;
+      }
+
+      .float--near {
+        --rise: -55svh;
+      }
+
+      .stage {
+        view-timeline: --stage block;
+      }
+
+      .stage__title {
+        animation: drift-off linear both;
+        animation-timeline: --stage;
+        animation-range: exit 0% exit 100%;
+      }
+
+      .say__text {
+        view-timeline: --say block;
+        --step: calc(40% / var(--n));
+      }
+
+      .word {
+        animation: word-in linear both;
+        animation-timeline: --say;
+        animation-range: cover calc(20% + var(--i) * var(--step)) cover calc(26% + var(--i) * var(--step));
+      }
+    }
+
+    @keyframes rise {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 var(--rise);
+      }
+    }
+
+    @keyframes drift-off {
+      from {
+        opacity: 1;
+        translate: 0 0;
+      }
+      to {
+        opacity: 0;
+        translate: 0 30svh;
+      }
+    }
+
+    @keyframes word-in {
+      from {
+        opacity: 0.16;
+      }
+      to {
+        opacity: 1;
+      }
+    }
   }
 </style>

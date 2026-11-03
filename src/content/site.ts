@@ -273,6 +273,8 @@ export interface Products {
       note: string;
       before: string;
       after: string;
+      /** The line's accessible name, for a screen reader and the keyboard. */
+      control: string;
     };
     /** Over the front page of a product built from nothing. */
     fresh: {
@@ -651,9 +653,10 @@ export const site: Site = {
       impressions: 'Сэтгэгдэл',
       compare: {
         title: 'Хуучин ба шинэ',
-        note: 'Доош гүйлгэх тусам шугам шилжиж, хуучин хувилбар шинээр солигдоно.',
+        note: 'Шугамыг чирж, хуучин болон шинэ хувилбарыг харьцуулаарай.',
         before: 'Хуучин',
         after: 'Шинэ',
+        control: 'Хуучин, шинэ хувилбарыг харьцуулах шугам',
       },
       fresh: {
         title: 'Эхнээс нь шинээр',

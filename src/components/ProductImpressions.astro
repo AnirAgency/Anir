@@ -5,21 +5,24 @@ import { placeholderMode } from '../lib/placeholders.mjs';
 import { site, type Product } from '../content/site';
 
 /*
-  A product's impressions: a label in the margin, a paragraph on what the
-  product is for, set large, and under it two pictures set against each
-  other — a wide one running out to the screen's right edge, and a tall one
-  laid over its lower-left corner and hanging below it. As the section
-  passes, the tall one rises a little slower than the wide one, so the two
+  A product's impressions, composed to one screen: a label in the margin, a
+  paragraph on what the product is for set large at the top left, and two
+  pictures set against it — a wide one at the right, running out to the
+  screen's edge, which the paragraph runs onto, and a tall one laid over the
+  wide one's lower-left corner. The section is exactly the screen's height,
+  so when it lies on the screen the whole composition is in view. As it
+  passes, the tall picture rises a little slower than the rest, so the two
   part like prints at different heights. Translate only, on one view
   timeline; still without it.
 
-  The pictures are the section's only media; each is shown only where there
-  is something to show — the real encode, or its stand-in on dev and
-  preview builds — so in production, before the shoot, the impressions are
-  the paragraph alone. Plain lazy <img>s in the tile lane.
+  Where the paragraph lies on the wide picture, a shade of the ground sits
+  between them, so the words keep their contrast whatever the screenshot
+  is — the rule the silk follows (CLAUDE.md > The orange rule).
 
-  The paragraph never runs onto the pictures: text on a screenshot cannot
-  promise its contrast.
+  Each picture is shown only where there is something to show — the real
+  encode, or its stand-in on dev and preview builds — so in production,
+  before the shoot, the impressions are the paragraph alone. Plain lazy
+  <img>s in the tile lane.
 */
 
 interface Props {
@@ -30,76 +33,97 @@ const { product } = Astro.props;
 const { pages } = site.products;
 const placeholders = placeholderMode({ dev: import.meta.env.DEV });
 const [wide, tall] = product.impressions.images.map((media) => ({ media, pic: pictureOf(media, placeholders) }));
+const pics = [
+  { ...wide, kind: 'wide' },
+  { ...tall, kind: 'tall' },
+].filter((p) => p.pic);
 ---
 
 <Section tone="dark" id="impressions" label={pages.impressions} heading={false}>
-  <div class="impressions">
-    <h2 class="impressions__label t-mono-label" data-reveal>{pages.impressions}</h2>
-    <p class="impressions__text t-serif-display" data-reveal>{product.impressions.text}</p>
-  </div>
+  <div class:list={['stage', { 'stage--text': pics.length === 0 }]}>
+    <h2 class="label t-mono-label" data-reveal>{pages.impressions}</h2>
+    <p class="text t-serif-display" data-reveal>{product.impressions.text}</p>
 
-  {
-    (wide.pic || tall.pic) && (
-      <div class="pics">
-        {[
-          { ...wide, kind: 'wide' },
-          { ...tall, kind: 'tall' },
-        ].map(
-          ({ media, pic, kind }) =>
-            pic && (
-              <div class={`pic pic--${kind}`}>
-                <picture>
-                  {pic.sources.map((s) => (
-                    <source srcset={s.src} type={s.type} />
-                  ))}
-                  <img
-                    src={pic.src}
-                    width={media.width}
-                    height={media.height}
-                    alt={media.alt}
-                    loading="lazy"
-                    decoding="async"
-                    data-lane="tile"
-                  />
-                </picture>
-              </div>
-            )
-        )}
-      </div>
-    )
-  }
+    {
+      pics.map(({ media, pic, kind }) => (
+        <div class={`pic pic--${kind}`}>
+          <picture>
+            {pic!.sources.map((s) => (
+              <source srcset={s.src} type={s.type} />
+            ))}
+            <img
+              src={pic!.src}
+              width={media.width}
+              height={media.height}
+              alt={media.alt}
+              loading="lazy"
+              decoding="async"
+              data-lane="tile"
+            />
+          </picture>
+        </div>
+      ))
+    }
+  </div>
 </Section>
 
 <style>
-  /* The label in the margin, the paragraph in a column a step in. */
-  .impressions {
-    display: grid;
-    grid-template-columns: minmax(0, 13rem) minmax(0, 38rem);
-    gap: clamp(1.5rem, 1rem + 3vw, 5rem);
-  }
-
-  .impressions__label {
-    margin: 0;
-    padding-top: 0.9rem;
-    color: var(--muted);
-  }
-
-  .impressions__text {
-    margin: 0;
+  /* Less padding than a section usually takes, so that the section and the
+     screen are the same height. */
+  :global(#impressions) {
+    --section-pad-y: 3rem;
   }
 
   /*
-    The pictures in one box whose shape holds both, so nothing depends on the
-    images having loaded: the wide one at the right, out past the content's
-    inset to the screen's edge, 62% of the box wide at 16:10; the tall one at
-    30% from the left, 19% wide at 3:4, its top a little over half way down
-    the wide one, its foot below it. The box's height is the tall one's foot.
+    The stage is the screen less that padding, and out past the content's
+    right inset to the screen's edge. Everything in it is placed in shares of
+    its width and height, so the composition holds at every screen size.
+
+    --wide-w is the wide picture's width: 64% of the stage, but never so wide
+    that, at 16:10 from 26% down, it and the tall one hanging off it would
+    run past the stage's foot — 0.95 of the stage's height is that limit. In
+    cqw, not %: it is also used in `top`, where a percentage would be of the
+    height.
   */
-  .pics {
+  .stage {
+    --stage-h: calc(100svh - 2 * var(--section-pad-y));
+    --wide-w: min(64cqw, calc(var(--stage-h) * 0.95));
+
+    container-type: inline-size;
     position: relative;
-    aspect-ratio: 100 / 48;
-    margin-top: clamp(3rem, 2rem + 4vw, 6rem);
+    height: var(--stage-h);
     margin-right: calc(-1 * var(--inset-right));
+  }
+
+  /* With no pictures to show, the paragraph alone takes only its own room. */
+  .stage--text {
+    height: auto;
+  }
+
+  .label {
+    position: absolute;
+    top: 0.9rem;
+    left: 0;
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .stage--text .label {
+    position: static;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Over the pictures: it may run onto the wide one. */
+  .text {
+    position: relative;
+    z-index: 2;
+    width: min(34rem, 46%);
+    margin: 0 0 0 15%;
+  }
+
+  .stage--text .text {
+    width: auto;
+    max-width: 34rem;
   }
 
   .pic {
@@ -120,57 +144,93 @@ const [wide, tall] = product.impressions.images.map((media) => ({ media, pic: pi
   }
 
   .pic--wide {
-    top: 0;
+    top: 26%;
     right: 0;
-    width: 62%;
+    width: var(--wide-w);
     aspect-ratio: 16 / 10;
   }
 
+  /* The shade under the paragraph: from the corner the words lie on. */
+  .pic--wide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--bg) 78%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 40%, transparent) 26%,
+      transparent 48%
+    );
+  }
+
+  /* A third of the wide one's width at 3:4, over its lower-left corner,
+     its top 60% of the way down the wide one. */
   .pic--tall {
-    top: 45.8%;
-    left: 30%;
-    width: 19%;
+    z-index: 1;
+    top: calc(26% + var(--wide-w) * 0.375);
+    left: calc(100% - var(--wide-w) * 1.12);
+    width: calc(var(--wide-w) * 0.3);
     aspect-ratio: 3 / 4;
   }
 
-  /* A phone: the paragraph over the pictures, the wide one nearly full
-     width, the tall one larger, over its corner. */
+  /*
+    A phone: the paragraph, then the pictures under it in their own box, the
+    paragraph's foot running onto the wide one, the tall one over its corner.
+    Stacked, it still comes to about a screen.
+  */
   @media (max-width: 860px) {
-    .impressions {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 1rem;
+    .stage {
+      display: grid;
+      height: auto;
+      margin-right: calc(-1 * var(--inset-mobile));
     }
 
-    .pics {
-      aspect-ratio: 100 / 96;
-      margin-right: calc(-1 * var(--inset-mobile));
+    .label {
+      position: static;
+      margin-bottom: 1rem;
+    }
+
+    .text {
+      width: auto;
+      margin: 0;
+      padding-right: var(--inset-mobile);
+    }
+
+    .pic--wide,
+    .pic--tall {
+      position: relative;
+      top: auto;
+      right: auto;
+      left: auto;
+      grid-column: 1;
     }
 
     .pic--wide {
       width: 90%;
+      margin: -2rem 0 0 auto;
     }
 
     .pic--tall {
-      top: 43.75%;
-      left: 4%;
       width: 40%;
+      margin: -24% 0 0 4%;
     }
   }
 
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
-      .pics {
-        view-timeline: --pics block;
+      .stage {
+        view-timeline: --stage block;
       }
 
       .pic--tall {
         animation: lag linear both;
-        animation-timeline: --pics;
+        animation-timeline: --stage;
         animation-range: cover 0% cover 100%;
       }
     }
 
-    /* Moving against the page's direction: the tall one rises slower. */
+    /* Against the page's direction, so the tall one rises slower; level
+       with the composition when the section lies on the screen. */
     @keyframes lag {
       from {
         translate: 0 -12%;

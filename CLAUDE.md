@@ -125,9 +125,10 @@ surface: an orange ground, with the service's name on it in `--ink`.
 
 **One exception, by the owner's direction:** the orange silk behind the home
 page's products statement — a still generated for Anir, on dark or, on /v2,
-on --paper — is decoration, and is allowed as such. A shade of the
-section's own ground sits between it and the words, so text is never set on
-bright orange; it never appears behind a heading anywhere else.
+on --paper — and, dimmed, behind each product page's introduction, is
+decoration, and is allowed as such. A shade of the section's own ground
+sits between it and the words, so text is never set on bright orange; it
+appears nowhere else.
 
 ### Contrast — measured, not assumed
 

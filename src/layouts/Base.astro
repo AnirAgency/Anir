@@ -112,6 +112,11 @@ const jsonLd = {
       first paint. Adds nothing when the visitor asked for reduced motion, which
       is what keeps that page completely static.
 
+      .shimmer lets the film grain boil (base.css): a fine pointer, no
+      saveData, more than four cores — the same gates as the hero mark. It
+      runs as long as the page is open, so a phone would pay for it in
+      battery; phones get the same grain, still.
+
       .js is for layouts that a script will drive, like the products reel, so
       they take their final shape at the first paint instead of when the
       script arrives — which, with the stream stalled, could be seconds later.
@@ -120,6 +125,9 @@ const jsonLd = {
       document.documentElement.classList.add('js');
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion');
+        if (matchMedia('(pointer: fine)').matches && !navigator.connection?.saveData && (navigator.hardwareConcurrency || 8) > 4) {
+          document.documentElement.classList.add('shimmer');
+        }
       }
     </script>
   </head>

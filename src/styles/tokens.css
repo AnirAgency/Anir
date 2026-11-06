@@ -22,10 +22,10 @@
     with the film grain over text and ground, read as stroke-sized boxes at
     the worst box (npm run contrast):
 
-      #7C828B on --ink    4.74:1  passes AA
-      #7C828B on --paper  3.13:1  fails
-      #5D636D on --paper  4.74:1  passes AA
-      #5D636D on --ink    3.03:1  fails
+      #7C828B on --ink    4.64:1  passes AA
+      #7C828B on --paper  3.05:1  fails
+      #5D636D on --paper  4.63:1  passes AA
+      #5D636D on --ink    2.98:1  fails
 
     Phase 16 moved --dim and --dim-2 a few levels so these still pass under
     the grain; CLAUDE.md > Contrast has the detail.
@@ -53,19 +53,20 @@
   /*
     Large type waiting to be made active — the Services list's rows at rest.
     Not a free choice: --paper on --ink has to clear the 3:1 large-text bar
-    under the grain, and 0.40 keeps one step above the floor (0.39 just
-    clears it, 0.38 does not); npm run contrast fails if it drops below. The
+    under the grain, and 0.40 keeps one step above the floor (0.39 lands
+    right on the bar); npm run contrast fails if it drops below. The
     list sits on dark. Never use it on text below 24px.
   */
   --rest-opacity: 0.4;
 
   /*
     Film grain over the whole page, the nav included (base.css > body::after).
-    A 168px tile, made by scripts/grain.mjs to the references the owner
-    chose: half its pixels white, half clear, single pixels that tend to
-    differ from their neighbours. At 5.3% the lit half lifts --ink by 13
-    levels, as the references lift their ground — so the black, on average,
-    reads about 6 levels lighter, a textured black.
+    A 168px tile, made by scripts/grain.mjs to visioned.ch's grain, as the
+    owner directed: half its pixels white, half black at 30% strength,
+    single pixels, at visioned's 5%. The white half lifts --ink by about 12
+    levels, as visioned's does; the black half darkens light grounds and
+    pictures at a third of theirs — full strength fails the contrast table.
+    On average --ink reads about 6 levels lighter, a textured black.
 
     It replaced sparse white specks (too few, too bright: dots) and then a
     soft-light grain (too faint on black to see). npm run contrast measures
@@ -73,7 +74,7 @@
     models.
   */
   --grain-image: url('../assets/grain.webp');
-  --grain-opacity: 0.053;
+  --grain-opacity: 0.05;
   --grain-blend: normal;
 
   /* ------------------------------------------------------------------ type */

@@ -1,20 +1,29 @@
 /**
  * Makes the film grain tile, src/assets/grain.webp.
  *
- * Matched, by the owner's direction, to the grain of the references they
- * chose, measured pixel by pixel: on a dark ground, half the pixels sit at
- * the ground and half are lighter by about 13 levels, nothing between, each
- * grain a single pixel, laid so neighbours tend to differ (a neighbour
- * correlation of about −0.16), never repeating at any scale, and still. Dense
- * and even, it reads as a texture of the black, not as specks on it.
+ * Matched, by the owner's direction, to visioned.ch's grain — their
+ * grain-slow.gif, read frame by frame: every pixel solid black or solid
+ * white, half and half, single pixels, laid over the whole page at 5%, in
+ * three frames of fresh noise shown for 0.15 s each. On a dark ground the
+ * white half lifts it by about 12 levels and the black half does nothing; on
+ * a light one the black half darkens it by as much; in the mid-tones and
+ * pictures both show. Dense and even, it reads as a texture, not specks.
  *
- * So the tile is white where a grain is lit and clear where it is not —
- * half and half — and the page lays it over itself at the opacity that lifts
- * --ink by those 13 levels (tokens.css > --grain-opacity). Grains are drawn
- * by thresholding Gaussian noise that has had a share of its neighbours'
- * average taken away (ANTI), which is what makes neighbours tend to differ.
- * The neighbours wrap at the edges, so the tile is seamless; the noise is
- * seeded, so the tile is the same on every run.
+ * So the tile is the same — half white, half black — but for one thing: its
+ * black half is at 30% of full strength (BLACK). At visioned's full black,
+ * grey text darkened by one patch of grains beside ground lightened by
+ * another fails the contrast table (--dim on --ink 4.36, --orange on --paper
+ * 2.82); at 30% everything passes, with orange on paper at 3.02. On the dark
+ * grounds, most of the site, black grains change nothing either way, so
+ * there it is visioned's grain exactly; on light grounds and pictures it
+ * darkens at a third of theirs. The page lays the tile over itself at 5%
+ * (tokens.css > --grain-opacity) and shows it at three offsets in turn
+ * (base.css), which reads as three fresh frames. Grains are
+ * drawn by thresholding Gaussian noise that has had a share of its
+ * neighbours' average taken away (ANTI), so neighbours tend to differ, as
+ * they do in the references the owner first sent. The neighbours wrap at the
+ * edges, so the tile is seamless; the noise is seeded, so the tile is the
+ * same on every run.
  *
  * The tile has to stay under 4 kB, so the build inlines it into the CSS and
  * the grain arrives with the page (scripts/budget.mjs fails the build
@@ -36,8 +45,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SIZE = Number(process.env.GRAIN_SIZE ?? 168);
 /** Share of the neighbours' average taken from each pixel before the threshold. */
 const ANTI = Number(process.env.GRAIN_ANTI ?? 1.5);
-/** Share of pixels lit: the references light half. */
+/** Share of pixels white; the rest are black. visioned's frames are half and half. */
 const LIT = 0.5;
+/** How strong the black half is beside the white, 0 to 1: visioned's is 1; 0.35 is the most the contrast table takes. */
+const BLACK = Number(process.env.GRAIN_BLACK ?? 0.3);
 const SEED = 0x416e6972; // "Anir"
 
 // A small seeded generator (mulberry32) and Box–Muller for the Gaussian.
@@ -66,11 +77,11 @@ for (let y = 0; y < SIZE; y++) {
 const threshold = [...sharpened].sort((a, b) => a - b)[Math.floor((1 - LIT) * sharpened.length)];
 const lit = sharpened.map((v) => (v >= threshold ? 1 : 0));
 
-// White, opaque where lit, clear elsewhere.
+// Solid white where lit; black elsewhere, at BLACK of full strength.
 const pixels = Buffer.alloc(SIZE * SIZE * 2);
 for (let i = 0; i < lit.length; i++) {
-  pixels[i * 2] = 255;
-  pixels[i * 2 + 1] = lit[i] ? 255 : 0;
+  pixels[i * 2] = lit[i] ? 255 : 0;
+  pixels[i * 2 + 1] = lit[i] ? 255 : Math.round(BLACK * 255);
 }
 
 // How alike neighbours are, to compare with the references' −0.16.
@@ -89,7 +100,7 @@ const info = await sharp(pixels, { raw: { width: SIZE, height: SIZE, channels: 2
   .webp({ lossless: true, effort: 6 })
   .toFile(out);
 console.log(
-  `  grain: ${SIZE} × ${SIZE}, ${Math.round(LIT * 100)}% lit, neighbour correlation ${(num / den).toFixed(2)} → ${out} (${info.size} bytes)`
+  `  grain: ${SIZE} × ${SIZE}, ${Math.round(LIT * 100)}% white, the rest black at ${BLACK}, neighbour correlation ${(num / den).toFixed(2)} → ${out} (${info.size} bytes)`
 );
 if (info.size >= 4096) {
   console.error('  over 4 kB: it would not be inlined. Use a smaller tile.');

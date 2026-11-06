@@ -139,48 +139,52 @@ appears nowhere else.
 ### Contrast — measured, not assumed
 
 Measured in Phase 02; re-measured in Phase 16 with the film grain in place,
-and again when the grain was matched, by the owner's direction, to the
-references they chose. The grain — a 168px tile made by `scripts/grain.mjs`:
-half its pixels white, half clear, single pixels that tend to differ from
-their neighbours, laid over the page at 5.3% — lifts the lit half of `--ink`
-by 13 levels, as the references lift theirs, and lies over the whole page,
-the nav included, so it moves text and ground alike. One grain does not
-change how readable a letter is; the eye integrates over the stroke. So the
-grain is read as a local average over a stroke-sized box, 3 × 3 at body size,
-at every position of the tile — each pixel blended exactly as CSS blends it —
-and each "with grain" figure is the **worst** pairing: the text under the box
-that moves it most against the ground under the box that moves it most the
-other way. On `--ink` the boxes lift it between 0 and 11.6 levels, 6.5 on
-average. The grain is still, so the set of boxes is the page's.
+and again when the grain was matched, by the owner's direction, to
+visioned.ch's. The grain — a 168px tile made by `scripts/grain.mjs`: half
+its pixels white, half black at 30% strength, single pixels that tend to
+differ from their neighbours, laid over the page at 5% and shown at three
+offsets in turn, 0.15 s each — lifts the white half of `--ink` by about 12
+levels, as visioned's does, and lies over the whole page, the nav included,
+so it moves text and ground alike. One grain does not change how readable a
+letter is; the eye integrates over the stroke. So the grain is read as a
+local average over a stroke-sized box, 3 × 3 at body size, at every position
+of the tile — each pixel blended exactly as CSS blends it — and each "with
+grain" figure is the **worst** pairing: the text under the box that moves it
+most against the ground under the box that moves it most the other way. On
+`--ink` the boxes move it between −0.1 and +11.0 levels, +6.1 on average.
+The boil only moves the tile, so the set of boxes never changes.
 
 | Pair | Flat | With grain | Verdict |
 |---|---|---|---|
-| `--dim` on `--ink` | 5.14 : 1 | 4.74 : 1 | passes AA |
-| `--dim` on `--paper` | 3.39 : 1 | 3.13 : 1 | **fails** |
-| `--dim-2` on `--paper` | 5.30 : 1 | 4.74 : 1 | passes AA |
-| `--dim-2` on `--ink` | 3.29 : 1 | 3.03 : 1 | **fails** |
-| `--orange` on `--ink` | 5.43 : 1 | 5.00 : 1 | passes AA |
-| `--orange` on `--paper` | 3.21 : 1 | 3.11 : 1 | **fails** for text below large size |
-| `--ink` on `--orange` | 5.43 : 1 | 5.00 : 1 | passes AA |
-| white on `--orange` | 3.67 : 1 | 3.55 : 1 | **fails** |
-| `--paper` at `--rest-opacity` (0.40) on `--ink` | 3.43 : 1 | 3.16 : 1 | passes 3:1, large text only |
+| `--dim` on `--ink` | 5.14 : 1 | 4.64 : 1 | passes AA |
+| `--dim` on `--paper` | 3.39 : 1 | 3.05 : 1 | **fails** |
+| `--dim-2` on `--paper` | 5.30 : 1 | 4.63 : 1 | passes AA |
+| `--dim-2` on `--ink` | 3.29 : 1 | 2.98 : 1 | **fails** |
+| `--orange` on `--ink` | 5.43 : 1 | 4.89 : 1 | passes AA |
+| `--orange` on `--paper` | 3.21 : 1 | 3.02 : 1 | **fails** for text below large size |
+| `--ink` on `--orange` | 5.43 : 1 | 4.89 : 1 | passes AA |
+| white on `--orange` | 3.67 : 1 | 3.45 : 1 | **fails** |
+| `--paper` at `--rest-opacity` (0.40) on `--ink` | 3.43 : 1 | 3.11 : 1 | passes 3:1, large text only |
 
 The last row is the Services list at rest: rows sit at `--rest-opacity` and
 the hovered or open one goes to full. 0.40 keeps one step above the floor —
-at 0.39 the worst pairing is 3.05, at 0.38 it is 2.95. Opacity is never a way
+at 0.39 the worst pairing is 3.00, right on the bar. Opacity is never a way
 to dim text below 24px; that is what `--muted` is for.
 
 Phase 16 moved the two greys and nothing else: `--dim` #767C85 → #7C828B,
 `--dim-2` #656B75 → #5D636D. Under the speck grain of the time, the Phase 02
 values fell to 4.17 and 4.07. `--paper` stays #EEF0F3 — `--orange` on it
-holds 3.11 against its 3.0 bar — and `--orange` stays: the logo fixes it.
+holds 3.02 against its 3.0 bar — and `--orange` stays: the logo fixes it.
 
-The grain could be a little stronger: at 7% the worst pairings are 4.57 and
-3.05; at 8%, 4.47 and 2.99, and the build fails. The references' ground is a
-charcoal (#1A1A1A), not `--ink`; on it the same grain shows more, but
-`--orange` and `--dim` fail on it as text (4.19 and 3.97), so `--ink` stays.
-Two grains came before this one and were set aside: sparse white specks,
-too few and too bright, and a soft-light grain, too faint on black to see.
+The grain is at its ceiling. At 6% `--orange` on `--paper` falls to 2.99 and
+the build fails; so does visioned's black half at full strength (`--dim` on
+`--ink` 4.36, `--orange` on `--paper` 2.82), which is why it is at 30% — on
+the dark grounds a black grain changes nothing either way, so there it is
+visioned's exactly. Their ground, though, is a charcoal (#1A1A1A), where
+the same grain shows more than on `--ink`'s near-black; `--orange` and
+`--dim` fail on that charcoal as text (4.19 and 3.97), so `--ink` stays. Three grains came before this one and were set aside: sparse white
+specks, too few and too bright; a soft-light grain, too faint on black; and
+this one still, which the owner, watching visioned's, found lifeless.
 
 `npm run contrast` measures this table from `tokens.css` and the shipped tile,
 and fails if a pair that must pass does not. `npm run budget` runs it. If it
@@ -192,7 +196,7 @@ Three rules follow:
 1. **`--muted` is tone-split.** One grey cannot serve both grounds — a grey dark
    enough for `--paper` fails on `--ink`. Section sets `--dim` on dark and
    `--dim-2` on light.
-2. On light sections, orange fails the 4.5:1 small-text bar (3.11:1 with the
+2. On light sections, orange fails the 4.5:1 small-text bar (3.02:1 with the
    grain) but passes the 3:1 large-text bar. It may be used as text only at >=24px
    regular or >=18.66px bold — Display/M (26–34px) qualifies. Below that it
    is a mark, not a text colour: use --muted and return the orange as a 2px

@@ -52,90 +52,37 @@ body {
 }
 
 /*
-  Film grain. Large near-black grounds band on 8-bit panels, and noise
-  dithers the steps away; and it gives the page the faint life of film. Fixed,
+  Film grain. Large near-black grounds band on 8-bit panels, and the grain
+  dithers the steps away; and it gives the black the texture of film. Fixed,
   so it reads as the screen itself rather than a texture printed on the page.
 
-  Grey noise around mid-grey, laid over the page with soft-light (tokens.css
-  > --grain-blend): every point a little lighter or a little darker, soft
-  clumps rather than dots — smooth scaling softens them a little more on a
-  2× screen — lifting nothing on average, and showing most in the mid-tones
-  and the pictures, as film does, least in the deep black.
+  Matched, by the owner's direction, to the references they chose
+  (scripts/grain.mjs): half the pixels lifted by about 13 levels, half left
+  alone, single pixels, dense and even — a texture of the black, not specks
+  on it. Drawn pixel for pixel: smooth scaling on a 2× or 3× screen would
+  melt single grains into a haze.
+
+  Still, as in the references. It moved once, at seven frames a second and
+  then at twenty-four, and both read as flicker over the reading.
 
   It lies over everything, the nav included: one layer, so there is nothing
   to keep in step. The hairline grids paint every cell in the ground colour
   (Grid.astro), so a grain beneath content would vanish across the cards and
   rows; over everything, the page is one even surface, and the contrast table
   in CLAUDE.md is measured with grain on text and ground alike.
-
-  On capable desktops it moves at film's own rate — a new frame of grain 24
-  times a second, so it reads as a fine, even fizz, not a flicker. A frame is
-  the layer at a new offset: a transform of an already rasterised layer,
-  compositor work, the same class as the scroll animations, never a repaint.
-  Never animate background-position here; that is the repaint. Twelve offsets,
-  scattered and none a multiple of the 120px tile, so no two frames line up;
-  the layer bleeds one tile past the viewport on every side and every offset
-  is under 120px, so no edge ever shows. Phones, saveData, slow devices and
-  reduced motion get the same grain, still (html.shimmer, set in Base.astro).
 */
 body::after {
   content: '';
   position: fixed;
-  inset: -120px;
+  inset: 0;
   z-index: 60;
   pointer-events: none;
   background-image: var(--grain-image);
   background-repeat: repeat;
-  background-size: 120px 120px;
+  background-size: 168px 168px;
+  image-rendering: pixelated;
   mix-blend-mode: var(--grain-blend);
   opacity: var(--grain-opacity);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  html.shimmer body::after {
-    will-change: transform;
-    animation: grain-shimmer 0.5s steps(1, end) infinite;
-  }
-}
-
-/* Twelve frames in half a second: 24 a second. */
-@keyframes grain-shimmer {
-  0% {
-    transform: translate3d(0, 0, 0);
-  }
-  8.333% {
-    transform: translate3d(-73px, 41px, 0);
-  }
-  16.667% {
-    transform: translate3d(58px, -96px, 0);
-  }
-  25% {
-    transform: translate3d(-21px, -59px, 0);
-  }
-  33.333% {
-    transform: translate3d(97px, 23px, 0);
-  }
-  41.667% {
-    transform: translate3d(-112px, 87px, 0);
-  }
-  50% {
-    transform: translate3d(35px, 109px, 0);
-  }
-  58.333% {
-    transform: translate3d(-88px, -14px, 0);
-  }
-  66.667% {
-    transform: translate3d(14px, 66px, 0);
-  }
-  75% {
-    transform: translate3d(-47px, -118px, 0);
-  }
-  83.333% {
-    transform: translate3d(81px, -37px, 0);
-  }
-  91.667% {
-    transform: translate3d(-5px, 93px, 0);
-  }
 }
 
 h1,

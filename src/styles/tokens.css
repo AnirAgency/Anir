@@ -22,10 +22,10 @@
     with the film grain over text and ground, read as stroke-sized boxes at
     the worst box (npm run contrast):
 
-      #7C828B on --ink    4.60:1  passes AA
-      #7C828B on --paper  3.09:1  fails
-      #5D636D on --paper  4.73:1  passes AA
-      #5D636D on --ink    2.93:1  fails
+      #7C828B on --ink    4.74:1  passes AA
+      #7C828B on --paper  3.13:1  fails
+      #5D636D on --paper  4.74:1  passes AA
+      #5D636D on --ink    3.03:1  fails
 
     Phase 16 moved --dim and --dim-2 a few levels so these still pass under
     the grain; CLAUDE.md > Contrast has the detail.
@@ -52,29 +52,29 @@
 
   /*
     Large type waiting to be made active — the Services list's rows at rest.
-    Not a free choice: it is the lowest opacity at which --paper on --ink
-    still clears the 3:1 large-text bar under the grain (0.39 does not), and
-    npm run contrast fails if it drops below. The list sits on dark; on
-    --paper the floor would be 0.48. Never use it on text below 24px.
+    Not a free choice: --paper on --ink has to clear the 3:1 large-text bar
+    under the grain, and 0.40 keeps one step above the floor (0.39 just
+    clears it, 0.38 does not); npm run contrast fails if it drops below. The
+    list sits on dark. Never use it on text below 24px.
   */
   --rest-opacity: 0.4;
 
   /*
     Film grain over the whole page, the nav included (base.css > body::after).
-    A 120px tile of soft grey noise around mid-grey, made by
-    scripts/grain.mjs — Gaussian, softened into small clumps, seamless — and
-    laid over the page with soft-light, which leaves mid-grey untouched: the
-    grain lightens and darkens by turns, lifts nothing on average, and shows
-    in the mid-tones and the pictures more than in the deep black, as film
-    does.
+    A 168px tile, made by scripts/grain.mjs to the references the owner
+    chose: half its pixels white, half clear, single pixels that tend to
+    differ from their neighbours. At 5.3% the lit half lifts --ink by 13
+    levels, as the references lift their ground — so the black, on average,
+    reads about 6 levels lighter, a textured black.
 
-    By the owner's direction it replaced sparse white specks, which read as
-    dots on the black and flickered. npm run contrast measures whichever
-    tile, opacity and blend are set here; the blend must be one it models.
+    It replaced sparse white specks (too few, too bright: dots) and then a
+    soft-light grain (too faint on black to see). npm run contrast measures
+    whichever tile, opacity and blend are set here; the blend must be one it
+    models.
   */
   --grain-image: url('../assets/grain.webp');
-  --grain-opacity: 0.25;
-  --grain-blend: soft-light;
+  --grain-opacity: 0.053;
+  --grain-blend: normal;
 
   /* ------------------------------------------------------------------ type */
 

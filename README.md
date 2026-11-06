@@ -23,6 +23,7 @@ npm run dev          # http://localhost:4321
 | `npm run preview` | Serves the built `dist/` locally |
 | `npm run budget` | Builds, then enforces the weight budget and the contrast table. **Exits non-zero if the page is over or a pair fails.** |
 | `npm run contrast` | Measures the CLAUDE.md contrast table under the film grain, from `tokens.css` and the shipped tile |
+| `npm run grain` | Remakes the film grain tile, `src/assets/grain.webp` — run `npm run contrast` after |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
 | `npm run test:publish` | Exercises the admin's publish endpoint against stubs — see [The admin](#the-admin) |

@@ -24,7 +24,8 @@
     "postinstall": "node scripts/content-pull.mjs --ensure",
     "test:publish": "node scripts/test-publish.ts",
     "pretest:enquiry": "node scripts/content-pull.mjs --ensure",
-    "pretest:publish": "node scripts/content-pull.mjs --ensure"
+    "pretest:publish": "node scripts/content-pull.mjs --ensure",
+    "grain": "node scripts/grain.mjs"
   },
   "dependencies": {
     "astro": "^5.0.0",

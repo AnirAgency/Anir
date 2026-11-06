@@ -10,9 +10,11 @@
  * under the box that moves it most the other way. The mean box is printed
  * beside it, so the gap between the average and the worst stays visible.
  *
- * Token values, the tile and its opacity are read from what ships —
- * src/styles/tokens.css and src/assets/grain.webp. Exits non-zero if a pair
- * that must pass does not.
+ * Token values, the tile, its opacity and its blend mode are read from what
+ * ships — src/styles/tokens.css and src/assets/grain.webp. Each box is the
+ * colour laid under each of its pixels through that blend, averaged — exact
+ * for any blend, linear or not. Exits non-zero if a pair that must pass does
+ * not.
  *
  *   npm run contrast
  */
@@ -59,46 +61,55 @@ try {
 
 const tilePath = join(root, 'src', 'assets', 'grain.webp');
 const opacity = Number(token('grain-opacity'));
+const blend = token('grain-blend');
 const { data, info } = await sharp(tilePath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const { width, height } = info;
 
 /*
-  One box W composites a colour c, per channel, to c × (1 − A) + B, where A is
-  the box's mean coverage (alpha × opacity) and B its mean added light
-  (grey × alpha × opacity). Collect every distinct (A, B) over the tile.
+  What one tile pixel — its grey g and alpha a, out of 255 — does to one
+  channel c of the colour under it, at the layer's opacity, by the CSS
+  compositing spec: the blended colour B(c, g), then mixed over c by
+  alpha × opacity.
 */
-const at = (x, y, offset) => data[(((y + height) % height) * width + ((x + width) % width)) * 4 + offset];
-const boxes = new Map();
-let sumA = 0;
-let sumB = 0;
+const BLENDS = {
+  normal: (_c, g) => g,
+  overlay: (c, g) => (c <= 127.5 ? (2 * c * g) / 255 : 255 - (2 * (255 - c) * (255 - g)) / 255),
+  'soft-light': (c, g) => {
+    const cb = c / 255;
+    const cs = g / 255;
+    const d = cb <= 0.25 ? ((16 * cb - 12) * cb + 4) * cb : Math.sqrt(cb);
+    const r = cs <= 0.5 ? cb - (1 - 2 * cs) * cb * (1 - cb) : cb + (2 * cs - 1) * (d - cb);
+    return r * 255;
+  },
+};
+if (!BLENDS[blend]) throw new Error(`--grain-blend: ${blend} is not modelled here; add it to BLENDS.`);
+const mix = (c, g, a) => c + (BLENDS[blend](c, g) - c) * (a / 255) * opacity;
+
+// Every box over the tile, as its pixels — wrapping, since it tiles.
+const at = (x, y) => (((y + height) % height) * width + ((x + width) % width)) * 4;
+const windows = [];
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
-    let a = 0;
-    let b = 0;
-    for (let dy = 0; dy < BOX; dy++) {
-      for (let dx = 0; dx < BOX; dx++) {
-        const cover = (at(x + dx, y + dy, 3) / 255) * opacity;
-        a += cover;
-        b += at(x + dx, y + dy, 0) * cover;
-      }
-    }
-    a /= BOX * BOX;
-    b /= BOX * BOX;
-    sumA += a;
-    sumB += b;
-    boxes.set(`${a.toFixed(6)},${b.toFixed(6)}`, [a, b]);
+    const box = [];
+    for (let dy = 0; dy < BOX; dy++) for (let dx = 0; dx < BOX; dx++) box.push(at(x + dx, y + dy));
+    windows.push(box);
   }
 }
-const windows = [...boxes.values()];
-const meanBox = [sumA / (width * height), sumB / (width * height)];
-const under = (colour, [a, b]) => colour.map((c) => c * (1 - a) + b);
+
+/** A colour under one box: each channel laid under each pixel, averaged. */
+const under = (colour, box) =>
+  colour.map((c) => box.reduce((sum, i) => sum + mix(c, data[i], data[i + 3]), 0) / box.length);
+
+/** A colour under the whole tile, averaged: what the grain does on average. */
+const allPixels = Array.from({ length: width * height }, (_, i) => i * 4);
+const onAverage = (colour) => under(colour, allPixels);
 
 /** The extremes of a colour's luminance across every box: its darkest and lightest. */
 const span = (colour) => {
   let lo = colour;
   let hi = colour;
-  for (const w of windows) {
-    const c = under(colour, w);
+  for (const box of windows) {
+    const c = under(colour, box);
     if (luminance(c) < luminance(lo)) lo = c;
     if (luminance(c) > luminance(hi)) hi = c;
   }
@@ -142,11 +153,11 @@ const pairs = [
   ['--paper at rest', '--ink', 3, true], // large text only: the Services list
 ];
 
-const lift = (w) => under(colours['--ink'], w)[0] - colours['--ink'][0];
-const lifts = windows.map(lift);
+const [inkLo, inkHi] = span(colours['--ink']);
+const shift = (c) => (c[0] - colours['--ink'][0]).toFixed(1);
 console.log(
-  `\n  CONTRAST - grain read as ${BOX} × ${BOX} stroke boxes over the ${width}px tile at ${opacity * 100}%` +
-    `\n  lift on --ink: mean ${lift(meanBox).toFixed(1)}, brightest box ${Math.max(...lifts).toFixed(1)}\n`
+  `\n  CONTRAST - grain read as ${BOX} × ${BOX} stroke boxes over the ${width}px tile, ${blend} at ${opacity * 100}%` +
+    `\n  on --ink: mean ${shift(onAverage(colours['--ink']))} levels, boxes from ${shift(inkLo)} to +${shift(inkHi)}\n`
 );
 console.log(`  ${'pair'.padEnd(26)} ${'flat'.padStart(6)} ${'mean'.padStart(6)} ${'worst'.padStart(6)}   bar`);
 
@@ -155,7 +166,7 @@ for (const [text, ground, bar, mustPass] of pairs) {
   const t = colours[text];
   const g = colours[ground];
   const flat = ratio(t, g);
-  const mean = ratio(under(t, meanBox), under(g, meanBox));
+  const mean = ratio(onAverage(t), onAverage(g));
   const low = worst(t, g);
   const verdict = low >= bar ? 'pass' : mustPass ? 'FAIL' : 'fails (documented, unused)';
   console.log(

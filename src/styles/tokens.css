@@ -22,10 +22,10 @@
     with the film grain over text and ground, read as stroke-sized boxes at
     the worst box (npm run contrast):
 
-      #7C828B on --ink    4.52:1  passes AA
-      #7C828B on --paper  3.03:1  fails
-      #5D636D on --paper  4.54:1  passes AA
-      #5D636D on --ink    2.90:1  fails
+      #7C828B on --ink    4.60:1  passes AA
+      #7C828B on --paper  3.09:1  fails
+      #5D636D on --paper  4.73:1  passes AA
+      #5D636D on --ink    2.93:1  fails
 
     Phase 16 moved --dim and --dim-2 a few levels so these still pass under
     the grain; CLAUDE.md > Contrast has the detail.
@@ -60,20 +60,21 @@
   --rest-opacity: 0.4;
 
   /*
-    Film grain over the whole page, under the nav (base.css > body::after). A
-    96px tile of sparse white specks — 12% of pixels opaque, the rest clear —
-    which the build inlines as a data URI, so it costs no request. The tile
-    IS that spec, not a supplied file: any tile built to it (96 × 96, 12% of
-    pixels opaque white at random, the rest transparent) is the asset.
+    Film grain over the whole page, the nav included (base.css > body::after).
+    A 120px tile of soft grey noise around mid-grey, made by
+    scripts/grain.mjs — Gaussian, softened into small clumps, seamless — and
+    laid over the page with soft-light, which leaves mid-grey untouched: the
+    grain lightens and darkens by turns, lifts nothing on average, and shows
+    in the mid-tones and the pictures more than in the deep black, as film
+    does.
 
-    Sparse, not dense: dense grey noise spends almost all of its opacity
-    lifting the black by the noise's mean and very little on visible texture.
-    At 10% these specks lift --ink by about 3 levels, against 5 for the dense
-    tile that read as nothing, with about three times its speckle. npm run
-    contrast measures whichever tile and opacity are set here.
+    By the owner's direction it replaced sparse white specks, which read as
+    dots on the black and flickered. npm run contrast measures whichever
+    tile, opacity and blend are set here; the blend must be one it models.
   */
   --grain-image: url('../assets/grain.webp');
-  --grain-opacity: 0.1;
+  --grain-opacity: 0.25;
+  --grain-blend: soft-light;
 
   /* ------------------------------------------------------------------ type */
 

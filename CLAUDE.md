@@ -138,41 +138,47 @@ appears nowhere else.
 
 ### Contrast — measured, not assumed
 
-Measured in Phase 02; re-measured in Phase 16 with the film grain in place.
-The grain — sparse white specks, 12% coverage at 10% — lies over the whole
-page, the nav included, so it moves text and ground alike. A single speck does
-not change how readable a letter is; the eye integrates over the stroke. So
-the grain is read as a local average over a stroke-sized box, 3 × 3 at body
-size, at every position of the tile, and each "with grain" figure is the
-**worst** pairing: the text under the box that moves it most against the
-ground under the box that moves it most the other way. The average box lifts
-`--ink` by about 3 levels; the brightest by 16.5, and that is what the table
-gates on. The shimmer only moves the tile, so the set of boxes never changes.
+Measured in Phase 02; re-measured in Phase 16 with the film grain in place,
+and again when the grain became film-like, by the owner's direction. The
+grain — soft grey noise around mid-grey, a 120px tile made by
+`scripts/grain.mjs`, laid over the page with `soft-light` at 25% — lies over
+the whole page, the nav included, so it moves text and ground alike. One grain
+does not change how readable a letter is; the eye integrates over the stroke.
+So the grain is read as a local average over a stroke-sized box, 3 × 3 at body
+size, at every position of the tile — each pixel blended exactly as CSS
+blends it — and each "with grain" figure is the **worst** pairing: the text
+under the box that moves it most against the ground under the box that moves
+it most the other way. On `--ink` the boxes move it between −0.8 and +2.3
+levels; the grain shows in the mid-tones, where the greys are, so the greys
+are what the table gates on. The shimmer only moves the tile, so the set of
+boxes never changes.
 
 | Pair | Flat | With grain | Verdict |
 |---|---|---|---|
-| `--dim` on `--ink` | 5.14 : 1 | 4.52 : 1 | passes AA |
-| `--dim` on `--paper` | 3.39 : 1 | 3.03 : 1 | **fails** |
-| `--dim-2` on `--paper` | 5.30 : 1 | 4.54 : 1 | passes AA |
-| `--dim-2` on `--ink` | 3.29 : 1 | 2.90 : 1 | **fails** |
-| `--orange` on `--ink` | 5.43 : 1 | 4.78 : 1 | passes AA |
-| `--orange` on `--paper` | 3.21 : 1 | 3.06 : 1 | **fails** for text below large size |
-| `--ink` on `--orange` | 5.43 : 1 | 4.78 : 1 | passes AA |
-| white on `--orange` | 3.67 : 1 | 3.50 : 1 | **fails** |
-| `--paper` at `--rest-opacity` (0.40) on `--ink` | 3.43 : 1 | 3.02 : 1 | passes 3:1, large text only |
+| `--dim` on `--ink` | 5.14 : 1 | 4.60 : 1 | passes AA |
+| `--dim` on `--paper` | 3.39 : 1 | 3.09 : 1 | **fails** |
+| `--dim-2` on `--paper` | 5.30 : 1 | 4.73 : 1 | passes AA |
+| `--dim-2` on `--ink` | 3.29 : 1 | 2.93 : 1 | **fails** |
+| `--orange` on `--ink` | 5.43 : 1 | 5.28 : 1 | passes AA |
+| `--orange` on `--paper` | 3.21 : 1 | 3.10 : 1 | **fails** for text below large size |
+| `--ink` on `--orange` | 5.43 : 1 | 5.28 : 1 | passes AA |
+| white on `--orange` | 3.67 : 1 | 3.58 : 1 | **fails** |
+| `--paper` at `--rest-opacity` (0.40) on `--ink` | 3.43 : 1 | 3.05 : 1 | passes 3:1, large text only |
 
 The last row is the Services list at rest: rows sit at `--rest-opacity` and
 the hovered or open one goes to full. 0.40 is the floor — at 0.39 the worst
-pairing is 2.92. Opacity is never a way to dim text below 24px; that is what
+pairing is 2.95. Opacity is never a way to dim text below 24px; that is what
 `--muted` is for.
 
 Phase 16 moved the two greys and nothing else: `--dim` #767C85 → #7C828B,
-`--dim-2` #656B75 → #5D636D. At the Phase 02 values the brightest boxes take
-them to 4.17 and 4.07. `--paper` stays #EEF0F3 — `--orange` on it holds 3.06
-against its 3.0 bar — and `--orange` stays: the logo fixes it.
+`--dim-2` #656B75 → #5D636D. Under the speck grain of the time, the Phase 02
+values fell to 4.17 and 4.07. `--paper` stays #EEF0F3 — `--orange` on it
+holds 3.10 against its 3.0 bar — and `--orange` stays: the logo fixes it.
 
-The tile matters as much as the opacity: the same specks at 17% take `--dim`
-on `--ink` to 4.19 even with these greys.
+The grain's strength is near its ceiling: the same tile at 30% takes `--dim`
+on `--ink` to 4.49 and the Services rows to 2.98. Overlay, the other usual
+film blend, was measured and set aside — it puts the grain almost wholly into
+the mid-grey text, which fails, and leaves the black ground bare.
 
 `npm run contrast` measures this table from `tokens.css` and the shipped tile,
 and fails if a pair that must pass does not. `npm run budget` runs it. If it
@@ -184,7 +190,7 @@ Three rules follow:
 1. **`--muted` is tone-split.** One grey cannot serve both grounds — a grey dark
    enough for `--paper` fails on `--ink`. Section sets `--dim` on dark and
    `--dim-2` on light.
-2. On light sections, orange fails the 4.5:1 small-text bar (3.06:1 with the
+2. On light sections, orange fails the 4.5:1 small-text bar (3.10:1 with the
    grain) but passes the 3:1 large-text bar. It may be used as text only at >=24px
    regular or >=18.66px bold — Display/M (26–34px) qualifies. Below that it
    is a mark, not a text colour: use --muted and return the orange as a 2px

@@ -60,6 +60,20 @@ export const admin = {
   unsaved: 'Хадгалаагүй өөрчлөлт байна',
   saveFailed: 'Хадгалж чадсангүй. Нэг минутын дараа дахин оролдоно уу; болохгүй бол «Дэлгэрэнгүй»-г сайтыг хөгжүүлсэн хүнд үзүүлнэ үү.',
   network: 'Холболт тасарлаа. Интернэтээ шалгаад нэг минутын дараа дахин оролдоно уу.',
+  /**
+   * What the Worker sends the team on its own (worker/watch.ts): flagged
+   * enquiries at most once an hour, in exactly these words; and once a day
+   * if enquiries flood in.
+   */
+  notify: {
+    digest: 'Шалгах: {n} шинэ',
+    flood: 'Өнөөдөр {n} хүсэлт хадгалагдлаа — ердийнхөөс хэт олон, робот байж магадгүй. Удирдлагын «Хүсэлтүүд»-ийг шалгана уу.',
+  },
+  /** Trouble the Worker recorded (worker/alerts.ts), on the status line under the bar. */
+  alerts: {
+    limiter: 'Хүсэлтийн хязгаарлагч {when}-д ажиллаагүй тул тэр үед хүсэлтийг хязгааргүй хүлээн авсан. Хүсэлт алдагдаагүй; сайтыг хөгжүүлсэн хүнд хэлнэ үү.',
+  },
+
   /** Someone saved this part after it was opened here: nothing is overwritten, the typing is kept. */
   conflict: 'Өөр хүн энэ хэсгийг хадгалсан байна. Дахин нээж, өөрчлөлтөө оруулна уу.',
   reopen: 'Дахин нээх',

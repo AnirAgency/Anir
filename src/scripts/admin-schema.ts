@@ -372,6 +372,8 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
   for (const filter of ['new', 'flagged', 'read', 'replied', 'closed']) {
     if (!t.inbox.filters[filter]) problems.add(`no name for the inbox filter "${filter}"`);
   }
+  if (!t.notify.digest.includes('{n}') || !t.notify.flood.includes('{n}')) problems.add('the Telegram digest and flood messages need their words, with {n}');
+  if (!t.alerts.limiter.includes('{when}')) problems.add('the limiter alert needs its words, with {when}');
   for (const flag of ['name', 'contact', 'body']) {
     if (!(t.inbox.flags as Record<string, string>)[flag]) problems.add(`no words for the enquiry flag "${flag}"`);
   }

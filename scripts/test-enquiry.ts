@@ -17,7 +17,7 @@
  */
 import assert from 'node:assert/strict';
 
-import { drain, onRequestPost } from '../worker/enquiry.ts';
+import { drain, onHealth, onRequestPost } from '../worker/enquiry.ts';
 
 type Row = Record<string, unknown>;
 
@@ -54,9 +54,15 @@ function refusedBy(row: Row): string | null {
   return null;
 }
 
+let alerts: Row[] = [];
+
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: any, init: any) => {
   const url = String(input);
+  if (url.includes('/rest/v1/worker_alerts')) {
+    alerts.push(JSON.parse(String(init.body)));
+    return new Response('', { status: 201 });
+  }
   if (url.includes('/rest/v1/enquiries')) {
     preferHeaders.push(init.headers?.Prefer ?? '');
     if (supabaseStatus >= 300) return new Response('', { status: supabaseStatus });
@@ -511,6 +517,65 @@ await check('every enquiry notifies the team, saying which path it took', async 
   assert.ok(notified.slice(2).every((n) => n.text.includes('BUFFERED')));
   assert.ok(notified.every((n) => n.text.includes(valid.name)));
   return 'email + telegram; "Stored in Supabase." then "BUFFERED"';
+});
+
+await check('a flagged enquiry is stored, and does not ring the team\'s phone', async () => {
+  notified = [];
+  captured = [];
+  await onRequestPost({ request: post({ ...valid, budget: 'spam' }, { json: true, ip: '198.51.100.43' }), env: notifying() });
+  await onRequestPost({ request: rawPost('{"broken', 'application/json', { 'CF-Connecting-IP': '198.51.100.44' }), env: notifying() });
+  assert.equal(captured.length, 2, 'both stored');
+  assert.equal(notified.length, 0, 'neither told at once — the hourly digest counts them');
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.45' }), env: notifying() });
+  assert.equal(notified.length, 2, 'one with nothing to check is told at once, on both channels');
+  return 'flagged: stored, silent; unflagged: told at once';
+});
+
+// ------------------------------------------- the limiter fails open, aloud
+
+await check('a limiter that cannot reach KV lets the enquiry in — and says so', async () => {
+  captured = [];
+  alerts = [];
+  const errors: string[] = [];
+  const keep = console.error;
+  console.error = (...args: unknown[]) => void errors.push(String(args[0]));
+  const broken = { ...env(), RATE_LIMIT: { ...kv(), get: async () => Promise.reject(new Error('KV is down')) } };
+  const unbound = { ...env(), RATE_LIMIT: undefined };
+  const a = await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.90' }), env: broken });
+  const b = await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.91' }), env: unbound });
+  console.error = keep;
+  assert.deepEqual([a.status, b.status], [200, 200], 'never fails closed');
+  assert.equal(captured.length, 2, 'both stored');
+  assert.deepEqual(alerts.map((x) => x.kind), ['limiter-open', 'limiter-open']);
+  assert.match(String(alerts[0].detail), /KV unreachable: KV is down/);
+  assert.match(String(alerts[1].detail), /RATE_LIMIT is not bound/);
+  assert.ok(errors.filter((line) => line.includes('ALERT limiter-open')).length === 2, 'logged');
+  return 'KV down, KV unbound: 200, stored, logged, recorded for the admin';
+});
+
+await check('a limiter that works raises nothing', async () => {
+  alerts = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.92' }), env: env() });
+  assert.equal(alerts.length, 0);
+  return 'no alert';
+});
+
+// ------------------------------------------------- the health preflight
+
+await check('GET /api/health says whether this Worker holds the secret, and stores nothing', async () => {
+  captured = [];
+  const ask = (secret?: string) =>
+    new Request('https://aniragency.mn/api/health', { headers: secret === undefined ? {} : { 'X-Health-Check': secret } });
+  const holding = { ...env(), HEALTH_CHECK_SECRET: 'health-secret' };
+  const codes = [
+    (await onHealth(ask('health-secret'), holding)).status,
+    (await onHealth(ask('guess'), holding)).status,
+    (await onHealth(ask(), holding)).status,
+    (await onHealth(ask('health-secret'), env())).status,
+  ];
+  assert.deepEqual(codes, [200, 401, 401, 503]);
+  assert.equal(captured.length, 0);
+  return 'yes 200; wrong or none 401; not set 503 — nothing stored, ever';
 });
 
 await check('a failed notification never fails the request', async () => {

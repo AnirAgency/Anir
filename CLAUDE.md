@@ -35,7 +35,7 @@ These are not preferences. Breaking one is a bug.
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
-| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form, the admin's — publishing, and, by the owner's direction, the enquiries inbox — for editors only, and the build's report on itself, with its own secret. |
+| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form and its health check, the admin's — publishing, and, by the owner's direction, the enquiries inbox and the Worker's alerts — for editors only, and the build's report on itself, with its own secret; and the 15-minute schedule (drain, digest, flood). |
 | Enquiries | **No visitor input may cause one not to be stored.** What does not match the published form is stored as sent and flagged — even a body that cannot be read — never refused; only the honeypot and the rate limit (5 per IP an hour, the only bound on the table) keep one out. Nothing about a request's *shape* discards it: the health check is known by a credential (`HEALTH_CHECK_SECRET`), never by its body. The table checks only the lengths the Worker cuts to. `scripts/test-enquiry.ts` holds it with hundreds of hostile inputs. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
@@ -397,9 +397,14 @@ site stays static.
   badge keeps counting people.
 - **The order to switch publishing on** (README > The admin): migrations,
   the build secret, the merge with the build command unchanged, the same
-  value as a Worker secret, `DEPLOY_HOOK_URL` — and only then the build
-  command to `npm run ci`, or the first report posts to a route not yet
-  deployed.
+  value as a Worker secret, `DEPLOY_HOOK_URL`, `HEALTH_CHECK_SECRET` (required:
+  unset, a health check stores junk) — and only then the build command to
+  `npm run ci`, or the first report posts to a route not yet deployed.
+- **Notifications serve people, not the table.** Only an enquiry with
+  nothing to check notifies at once; flagged ones are one «Шалгах: N шинэ»
+  an hour at most, and a day past 50 stored enquiries sends one flood
+  message (`worker/watch.ts`). The rate limiter fails open, never closed —
+  but never silently: logged, recorded, shown in the admin.
 - **The build** pulls the content first (`scripts/content-pull.mjs`): every
   upload is cut to its slot's `width` × `height` and encoded AVIF, WebP and
   JPEG into `public/media/live/`, so the site serves it itself. The content is

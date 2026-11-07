@@ -33,6 +33,8 @@
     "copy:export": "node scripts/copy-export.ts",
     "precopy:export": "node scripts/content-pull.mjs",
     "test:builds": "node scripts/test-builds.ts",
+    "test:watch": "node scripts/test-watch.ts",
+    "pretest:watch": "node scripts/content-pull.mjs --ensure",
     "pretest:builds": "node scripts/content-pull.mjs --ensure",
     "grain": "node scripts/grain.mjs"
   },

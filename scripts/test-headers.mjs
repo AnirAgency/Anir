@@ -12,7 +12,10 @@
  * cause an enquiry not to be stored, so any body without the secret is an
  * enquiry, and a body that meant "do not store me" would let anyone who had
  * read the code drop one on purpose. Without the secret this skips its POST
- * rather than leave an enquiry behind.
+ * rather than leave an enquiry behind — and with one, it first asks GET
+ * /api/health, which reads no body and stores nothing, whether this Worker
+ * holds the same secret. Only on a yes does it post: a check pointed at a
+ * Worker with no secret set, or another one, leaves nothing behind.
  *
  *   HEALTH_CHECK_SECRET=… node scripts/test-headers.mjs https://anir.<account>.workers.dev
  */
@@ -44,7 +47,9 @@ const pick = (response) => Object.fromEntries(SECURITY.map((name) => [name, resp
 
 const secret = process.env.HEALTH_CHECK_SECRET ?? '';
 const home = await fetch(`${base}/`);
-const api = secret
+// Does this Worker hold the same secret? Asked where nothing can be stored.
+const holds = secret ? (await fetch(`${base}/api/health`, { headers: { 'X-Health-Check': secret } })).status === 200 : false;
+const api = holds
   ? await fetch(`${base}/api/enquiry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Health-Check': secret },
@@ -69,6 +74,8 @@ if (api) {
     assert.deepEqual(pick(api), pick(home));
     return 'identical';
   });
+} else if (secret) {
+  results.push(['POST /api/enquiry', 'skipped — this Worker does not hold that HEALTH_CHECK_SECRET; posting would store an enquiry']);
 } else {
   results.push(['POST /api/enquiry', 'skipped — set HEALTH_CHECK_SECRET, or this would store an enquiry']);
 }

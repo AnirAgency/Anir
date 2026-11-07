@@ -339,7 +339,9 @@ let statusEl: HTMLElement | null = null;
 let stripEl: HTMLElement | null = null;
 let issueEl: HTMLElement | null = null;
 let publishEl: HTMLElement | null = null;
-const showStrip = () => stripEl && (stripEl.hidden = !issueEl?.childNodes.length && !publishEl?.childNodes.length);
+let alertEl: HTMLElement | null = null;
+const showStrip = () =>
+  stripEl && (stripEl.hidden = !issueEl?.childNodes.length && !publishEl?.childNodes.length && !alertEl?.childNodes.length);
 
 function status(text: string, tone: Tone = '', detail = '', action?: Action) {
   const loud = tone === 'bad' || !!detail || !!action;
@@ -351,6 +353,28 @@ function status(text: string, tone: Tone = '', detail = '', action?: Action) {
 function publishStatus(text: string, tone: Tone = '', detail = '') {
   paint(publishEl, text, tone, detail);
   showStrip();
+}
+
+/**
+ * What the Worker recorded for a person to know (worker/alerts.ts): today,
+ * the contact form's rate limiter letting everything through because it
+ * could not reach KV. Shown on the status line for a day after it last
+ * happened, as a failed publish is.
+ */
+const ALERT_FOR_MS = 24 * 60 * 60 * 1000;
+async function readAlerts() {
+  if (!session || root.dataset.state !== 'ready') return;
+  try {
+    const { response, body } = await worker('/api/alerts');
+    if (!response.ok) return;
+    const limiter = ((body.alerts ?? []) as { kind: string; last_at: string; detail: string | null }[]).find(
+      (alert) => alert.kind === 'limiter-open' && Date.now() - Date.parse(alert.last_at) < ALERT_FOR_MS
+    );
+    paint(alertEl, limiter ? t.alerts.limiter.replace('{when}', when(limiter.last_at)) : '', limiter ? 'bad' : '', limiter?.detail ?? '');
+    showStrip();
+  } catch {
+    /* no word rather than a wrong one; the next check tries again */
+  }
 }
 
 // --------------------------------------------------------------- drafts
@@ -2037,8 +2061,9 @@ async function load() {
 
   statusEl = h('div', { class: 'bar__status', role: 'status', 'aria-live': 'polite' });
   issueEl = h('div', { class: 'strip__line', role: 'status', 'aria-live': 'polite' });
-  publishEl = h('div', { class: 'strip__line', role: 'status', 'aria-live': 'polite' });
-  stripEl = h('div', { class: 'strip', hidden: true }, issueEl, publishEl);
+  publishEl = h('div', { class: 'strip__line strip__line--publish', role: 'status', 'aria-live': 'polite' });
+  alertEl = h('div', { class: 'strip__line strip__line--alert', role: 'status', 'aria-live': 'polite' });
+  stripEl = h('div', { class: 'strip', hidden: true }, alertEl, issueEl, publishEl);
   navEl = h('nav', { class: 'nav', 'aria-label': t.sectionsTitle });
   mainEl = h('main', { class: 'main' });
   const preview = buildPreview();
@@ -2079,8 +2104,9 @@ async function load() {
   dirty = false;
   select({ kind: 'inbox' });
   readStorage();
-  setInterval(readCounts, 2 * 60 * 1000);
-  addEventListener('focus', readCounts);
+  readAlerts();
+  setInterval(() => (readCounts(), readAlerts()), 2 * 60 * 1000);
+  addEventListener('focus', () => (readCounts(), readAlerts()));
 
   // A build started before a reload is followed again.
   try {

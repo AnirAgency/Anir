@@ -16,6 +16,7 @@
 import assert from 'node:assert/strict';
 
 import { onEnquiries, onEnquiryStatus, onStorage } from '../worker/inbox.ts';
+import { onAlerts } from '../worker/alerts.ts';
 import worker from '../worker/index.ts';
 
 const SUPABASE = 'https://tyrzajpotvtirfjmacfm.supabase.co';
@@ -66,6 +67,10 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // PostgREST's array filters, as the Worker sends them: {} is "nothing to check".
     const flagged = url.includes('unrecognised=neq.%7B%7D') ? true : url.includes('unrecognised=eq.%7B%7D') ? false : null;
     return Response.json(rows().filter((row) => row.status === wanted && (flagged === null || (row.unrecognised.length > 0) === flagged)));
+  }
+  if (url.includes('/rest/v1/worker_alerts')) {
+    assert.equal(auth, SERVICE);
+    return Response.json([{ kind: 'limiter-open', last_at: '2026-11-07T02:00:00Z', detail: 'KV unreachable' }]);
   }
   if (url.endsWith('/rest/v1/rpc/storage_used_bytes')) {
     assert.equal(auth, SERVICE);
@@ -187,6 +192,15 @@ await check('no route deletes an enquiry', async () => {
   }
   assert.ok(!calls.some((call) => call.url.includes('/enquiries') && call.method !== 'GET'));
   return 'DELETE, PUT, PATCH fall through to a 404; the table never touched';
+});
+
+await check('the Worker\'s alerts: for editors, with the service key', async () => {
+  const response = await onAlerts(get('/api/alerts', 'editor-token'), env, stub);
+  const body = (await response.json()) as { alerts: { kind: string }[] };
+  assert.deepEqual(body.alerts.map((a) => a.kind), ['limiter-open']);
+  assert.equal((await onAlerts(get('/api/alerts', 'visitor-token'), env, stub)).status, 403);
+  assert.equal((await onAlerts(get('/api/alerts', undefined), env, stub)).status, 401);
+  return 'the limiter row for an editor; 403 and 401 for anyone else';
 });
 
 await check('storage used', async () => {

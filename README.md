@@ -225,8 +225,23 @@ npm run deploy         # runs the budget, then uploads
 
 ### When an enquiry arrives
 
-Every enquiry sends a notification (Telegram now, email too once the domain exists — see setup step 7)
-that starts with one of two lines:
+Every enquiry **with nothing to check** sends a notification at once (Telegram now,
+email too once the domain exists — see setup step 7). A **flagged** one — stored
+like any other, under the inbox's «Шалгах» — does not: Telegram is the only channel
+until the domain exists, and a channel full of bot submissions is how a real enquiry
+gets missed. Instead the Worker's 15-minute schedule (`worker/watch.ts`) sends:
+
+- **«Шалгах: N шинэ»** — at most one message an hour, nothing else: how many flagged
+  enquiries arrived since the last one.
+- **«Өнөөдөр N хүсэлт хадгалагдлаа…»** — once, the day (Ulaanbaatar's) the stored
+  enquiries pass 50, buffered ones counted. The rate limiter is the only bound on the
+  table and it fails open, so a flood is made visible rather than stopped.
+- If the limiter ever fails open — KV unreachable, or unbound — the Worker logs
+  `ALERT limiter-open`, records it in `worker_alerts`, and the admin shows it on its
+  status line for a day. The limiter is never made to fail closed: a dropped
+  enquiry is worse than an unbounded table.
+
+An immediate notification starts with one of two lines:
 
 - **"Stored in Supabase."** — the normal case. It is in the `enquiries` table.
 - **"BUFFERED in Cloudflare KV"** — Supabase did not take it, almost always
@@ -600,11 +615,13 @@ How it fits together (CLAUDE.md > The admin has the rules):
 4. **Publishing, in this order — each step needs the one before it.**
 
    1. **The migrations.** Paste [`0004_enquiry_status.sql`](supabase/migrations/0004_enquiry_status.sql),
-      then [`0005_keep_every_enquiry_and_build_status.sql`](supabase/migrations/0005_keep_every_enquiry_and_build_status.sql),
-      into the SQL editor and run them. 0004 gives enquiries a status (the inbox);
-      0005 drops the checks that refused an enquiry, adds its flags, and makes the
-      one-row `build_status` table. Neither adds a policy to `enquiries`, and none
-      should ever be added. The Worker that the merge deploys needs both.
+      [`0005_keep_every_enquiry_and_build_status.sql`](supabase/migrations/0005_keep_every_enquiry_and_build_status.sql)
+      and [`0006_worker_alerts.sql`](supabase/migrations/0006_worker_alerts.sql), in that
+      order, into the SQL editor and run them. 0004 gives enquiries a status (the
+      inbox); 0005 drops the checks that refused an enquiry, adds its flags, and makes
+      the one-row `build_status` table; 0006 makes `worker_alerts`, where the Worker
+      records the rate limiter failing open. None adds a policy to `enquiries`, and
+      none should ever be added. The Worker that the merge deploys needs all three.
    2. **The build secret.** Make one random secret —
       `node -e "console.log(crypto.randomBytes(32).toString('hex'))"` — and add it as a
       build secret: Workers & Pages → anir → Settings → Build → Variables and secrets →
@@ -622,8 +639,15 @@ How it fits together (CLAUDE.md > The admin has the rules):
       can start builds — and set it as a Worker secret, never in a file:
       `npx wrangler secret put DEPLOY_HOOK_URL`. If the URL ever leaks, delete the hook
       and make a new one.
-   6. **Only then, the build command**: `npm run budget` → `npm run ci`. Do it straight
-      after step 5: a publish in between would start a build that does not report, and
+   6. **The health check's secret — required, not optional:** `npx wrangler secret put
+      HEALTH_CHECK_SECRET`, any long random string. Since every POST without it is
+      stored as an enquiry, a health check run against a Worker that does not hold it
+      would leave a junk enquiry behind every time — the bug the secret exists to fix.
+      `scripts/test-headers.mjs` asks `GET /api/health` first (it stores nothing) and
+      posts only when this Worker holds the same secret, but **do not point the health
+      check at production until this step is done.**
+   7. **Only then, the build command**: `npm run budget` → `npm run ci`. Do it straight
+      after step 6: a publish in between would start a build that does not report, and
       show the fifteen-minute silence.
 
    The report's secret can write the one status row and nothing else: at worst, a
@@ -631,11 +655,11 @@ How it fits together (CLAUDE.md > The admin has the rules):
    token is involved. Until aniragency.mn is the address, the report goes to
    `anir.b-batuka0627.workers.dev`; after, set the build variable `BUILD_REPORT_URL` to
    `https://aniragency.mn/api/builds`.
-5. **The health check** (optional, for `npm run test:headers` against the live site):
-   `npx wrangler secret put HEALTH_CHECK_SECRET`, any long random string, and the same
-   value in the shell that runs the check. It is how the Worker knows a health check —
-   by a credential, never by its body: every POST without it is an enquiry and is
-   stored.
+5. **Running the health check**: `HEALTH_CHECK_SECRET=… npm run test:headers --
+   https://…`, with the value from step 4.6. It is how the Worker knows a health
+   check — by a credential, never by its body: every POST without it is an enquiry and
+   is stored. Without the secret in the shell the check skips its POST; with one the
+   Worker does not hold, it asks first and skips too.
 
 ### When a publish does not show up
 
@@ -665,6 +689,10 @@ Cloudflare API is ever called.
 production branch is kept; it writes one row; a failure's cause is read from its
 lines; a late "started" never undoes how a build ended; and the reporter stays quiet,
 and exits 0, anywhere but a production build.
+
+`npm run test:watch` exercises the schedule's watches: the flagged digest at most hourly,
+exactly «Шалгах: N шинэ»; the flood message once per Ulaanbaatar day past 50, buffered
+enquiries counted; one watch failing never stops the other.
 
 `npm run test:inbox` exercises the inbox: only editors get anything; enquiries are read
 and changed with the service key only; a status change records who and when; and no

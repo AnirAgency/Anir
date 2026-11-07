@@ -264,9 +264,12 @@ is opened, which saves data.
 **What happens to an enquiry:**
 
 1. It is stored in the **Supabase** database, the studio's online database.
-2. The team gets a **Telegram** message for each enquiry. Email notifications
-   will be added once the aniragency.mn domain is registered and set up for
-   email.
+2. The team gets a **Telegram** message for each enquiry with nothing odd about it,
+   straight away. Enquiries that need checking (almost always robots) do not each
+   send a message. Instead, at most once an hour, one short line arrives:
+   «Шалгах: N шинэ» ("Check: N new"). If more than 50 enquiries arrive in one day,
+   one extra message says so, so a flood of spam is noticed. Email notifications
+   will be added once the aniragency.mn domain is registered and set up for email.
 3. **If the database is asleep**, the enquiry is not lost. On the free plan,
    Supabase pauses a project after a week without use. When that happens, the
    enquiry is held safely in a second store at Cloudflare for up to 30 days. Once
@@ -744,10 +747,11 @@ versions:
 
 - [ ] **Switch publishing on, in exactly this order.** Each step needs the one
   before it; the developer's version is in the README (The admin › Setting it up).
-  1. **Two database changes.** In Supabase, run
+  1. **Three database changes.** In Supabase, run
      `supabase/migrations/0004_enquiry_status.sql` (enquiries get a status, for the
-     inbox), then `0005_keep_every_enquiry_and_build_status.sql`. The second stops
-     the database refusing an enquiry, and adds the build status.
+     inbox), then `0005_keep_every_enquiry_and_build_status.sql` (the database stops
+     refusing enquiries, and gets the build status), then `0006_worker_alerts.sql`
+     (where the site notes trouble for the admin to show).
   2. **The build secret.** A developer makes one random secret and stores it in
      Cloudflare as `BUILD_REPORT_SECRET` (Settings → Build → Variables and secrets).
      It lets the build tell the admin how it went, and can do nothing else. No
@@ -760,9 +764,12 @@ versions:
   5. **The Publish button's key**: the publish hook (see "Deploy hook" in the
      [glossary](#12-glossary)), stored with `npx wrangler secret put
      DEPLOY_HOOK_URL`, typed at the prompt, never into a file or a chat.
-  6. **Only then, the build command**, changed to `npm run ci`. Done earlier, the
+  6. **The health check's secret**, stored with `npx wrangler secret put
+     HEALTH_CHECK_SECRET`. This one is required. Without it, the site's automatic
+     health check would leave a fake enquiry behind every time it runs.
+  7. **Only then, the build command**, changed to `npm run ci`. Done earlier, the
      first build would report to an address that does not exist yet, and the admin
-     would wait fifteen minutes on a build that worked. Do it straight after step 5,
+     would wait fifteen minutes on a build that worked. Do it straight after step 6,
      before anyone presses **Нийтлэх**.
 - [ ] **After the merge: limit publishing** to once every two minutes, so repeated
   clicks cannot use up the build minutes Cloudflare allows.

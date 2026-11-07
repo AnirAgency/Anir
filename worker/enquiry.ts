@@ -39,7 +39,8 @@
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type
 // stripping both resolve it, so the test harness can import this file directly.
 import { site } from '../src/content/site.ts';
-import { same } from './auth.ts';
+import { raiseAlert } from './alerts.ts';
+import { answer, same } from './auth.ts';
 
 interface KVNamespace {
   get(key: string): Promise<string | null>;
@@ -188,17 +189,20 @@ async function ipKey(ip: string) {
  * Fails open. If the KV binding is missing or KV itself errors, the enquiry is
  * allowed through: losing a real client's message is a worse outcome than
  * letting one extra submission past, and this is a contact form, not a login.
+ * But never silently: `open` says why, and the handler logs it and raises an
+ * alert the admin shows (./alerts.ts). Now that nothing a visitor sends is
+ * refused, this limit is the only bound on the table.
  */
-async function underRateLimit(env: Env, ip: string): Promise<boolean> {
-  if (!env.RATE_LIMIT) return true;
+async function rateLimit(env: Env, ip: string): Promise<{ allowed: boolean; open?: string }> {
+  if (!env.RATE_LIMIT) return { allowed: true, open: 'RATE_LIMIT is not bound' };
   try {
     const key = await ipKey(ip);
     const count = Number((await env.RATE_LIMIT.get(key)) ?? '0');
-    if (count >= RATE_LIMIT_MAX) return false;
+    if (count >= RATE_LIMIT_MAX) return { allowed: false };
     await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: RATE_LIMIT_WINDOW_SECONDS });
-    return true;
-  } catch {
-    return true;
+    return { allowed: true };
+  } catch (error) {
+    return { allowed: true, open: `KV unreachable: ${(error as Error)?.message ?? error}` };
   }
 }
 
@@ -345,10 +349,20 @@ function describe(row: Enquiry, path: Path) {
  * Tells the team an enquiry arrived — by email through Resend, by Telegram,
  * or both, whichever has its secrets set. Runs after the reply, and no
  * failure here can reach the visitor: the enquiry is already safe.
+ *
+ * Only an enquiry with nothing to check is told at once. A flagged one —
+ * almost always a bot's, now that nothing is refused — is stored the same,
+ * and told in the hourly digest instead (./watch.ts): Telegram is the only
+ * channel until the domain exists, and a channel full of bots is how a real
+ * enquiry gets missed.
  */
 export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> {
   const subject = `New enquiry from ${row.name}${path === 'buffered' ? ' (buffered)' : ''}`;
-  const text = describe(row, path);
+  await tell(env, subject, describe(row, path), `enquiry notification (${path})`);
+}
+
+/** One message on every channel that has its secrets set. Never throws. */
+export async function tell(env: Env, subject: string, text: string, what: string): Promise<void> {
   const sends: Array<[string, Promise<Response>]> = [];
 
   if (env.RESEND_API_KEY && env.NOTIFY_EMAIL) {
@@ -361,7 +375,7 @@ export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> 
           from: env.NOTIFY_FROM || 'Anir site <onboarding@resend.dev>',
           to: env.NOTIFY_EMAIL.split(',').map((address) => address.trim()),
           subject,
-          text,
+          text: text || subject,
         }),
       }),
     ]);
@@ -372,20 +386,35 @@ export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> 
       fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: `${subject}\n\n${text}` }),
+        // A message with no body — the digest — is its one line, nothing else.
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: text ? `${subject}\n\n${text}` : subject }),
       }),
     ]);
   }
 
   if (sends.length === 0) {
-    console.warn(`enquiry notification: no channel configured (${path}). Set RESEND_API_KEY + NOTIFY_EMAIL or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.`);
+    console.warn(`${what}: no channel configured. Set RESEND_API_KEY + NOTIFY_EMAIL or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.`);
     return;
   }
   const results = await Promise.allSettled(sends.map(([, send]) => send));
   results.forEach((result, i) => {
     const sent = result.status === 'fulfilled' && result.value.ok;
-    console.log(`enquiry notification via ${sends[i][0]}: ${sent ? 'sent' : 'FAILED'} (${path})`);
+    console.log(`${what} via ${sends[i][0]}: ${sent ? 'sent' : 'FAILED'}`);
   });
+}
+
+/**
+ * GET /api/health — whether this Worker holds the caller's health-check
+ * secret, and nothing else: no body is read, nothing is stored. The health
+ * check asks this first and only posts its enquiry-shaped request if the
+ * answer is yes — so a check pointed at a Worker without the secret, or
+ * with another one, cannot leave a junk enquiry behind.
+ */
+export async function onHealth(request: Request, env: Env): Promise<Response> {
+  const probe = request.headers.get('X-Health-Check');
+  if (!env.HEALTH_CHECK_SECRET) return answer(503, { ok: false, error: 'not-configured' });
+  if (!probe || !(await same(probe, env.HEALTH_CHECK_SECRET))) return answer(401, { ok: false, error: 'refused' });
+  return answer(200, { ok: true });
 }
 
 /* ------------------------------------------------------------------ handler */
@@ -454,8 +483,15 @@ export async function onRequestPost(context: Context): Promise<Response> {
   if (!contact || !looksContactable(contact)) unrecognised.push('contact');
 
   const ip = request.headers.get('CF-Connecting-IP') ?? '0.0.0.0';
-  if (!(await underRateLimit(env, ip))) {
+  const limit = await rateLimit(env, ip);
+  if (!limit.allowed) {
     return reply(request, 429, false, messages.tooMany);
+  }
+  // Let through because the limiter could not count: said, never silent.
+  if (limit.open) {
+    const raised = raiseAlert(env, 'limiter-open', limit.open);
+    if (context.waitUntil) context.waitUntil(raised);
+    else await raised;
   }
 
   const row: Enquiry = {
@@ -485,9 +521,12 @@ export async function onRequestPost(context: Context): Promise<Response> {
     return reply(request, 502, false, messages.error);
   }
 
-  const told = notify(env, row, path).catch(() => {});
-  if (context.waitUntil) context.waitUntil(told);
-  else await told;
+  // Told at once only when there is nothing to check; flagged ones wait for the hourly digest.
+  if (!row.unrecognised?.length) {
+    const told = notify(env, row, path).catch(() => {});
+    if (context.waitUntil) context.waitUntil(told);
+    else await told;
+  }
 
   return reply(request, 200, true, messages.success);
 }

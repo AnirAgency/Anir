@@ -747,12 +747,14 @@ versions:
 
 - [ ] **Switch publishing on, in exactly this order.** Each step needs the one
   before it; the developer's version is in the README (The admin › Setting it up).
-  1. **Four database changes — done on 7 November.** In Supabase,
+  1. **Five database changes — done on 7 November.** In Supabase,
      `supabase/migrations/0004_enquiry_status.sql` (enquiries get a status, for the
      inbox), then `0005_keep_every_enquiry_and_build_status.sql` (the database stops
      refusing enquiries, and gets the build status), then `0006_worker_alerts.sql`
      (where the site notes trouble for the admin to show), then
-     `0007_any_alert_kind.sql` (so a new kind of trouble is never turned away).
+     `0007_any_alert_kind.sql` (so a new kind of trouble is never turned away), then
+     `0008_user_agent_room_and_diagnostics.sql` (room for the long description that
+     phone browsers inside Facebook and Instagram send about themselves).
   2. **The build secret.** A developer makes one random secret and stores it in
      Cloudflare as `BUILD_REPORT_SECRET` (Settings → Build → Variables and secrets).
      It lets the build tell the admin how it went, and can do nothing else. No

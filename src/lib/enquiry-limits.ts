@@ -10,15 +10,22 @@
  *
  * A value past its limit is never refused — the table would refuse the whole
  * row, and that is an enquiry lost. The Worker keeps the first `max`
- * characters, stores the enquiry, and flags it `cut:<field>:<characters it
- * came with>`.
+ * characters and stores the enquiry. A cut form field or chip — which the
+ * form's own maxlength keeps a browser inside, so a cut means it did not
+ * come from one — is flagged `cut:<field>:<characters it came with>` in
+ * `unrecognised`. A cut User-Agent is only noted, in `diagnostics`.
  */
 export const ENQUIRY_MAX = {
   name: 100,
   contact: 120,
   message: 2000,
-  /** A request header, not a form field: a browser's is 100–300; a crawler's can be thousands. */
-  user_agent: 400,
+  /**
+   * A request header, not a form field, and no sign of whether a visitor is
+   * real. In-app browsers run long — Facebook's appends an FBAN/FBAV/FBDV/…
+   * block, around 400 characters on Android — so this leaves every real
+   * browser room (migration 0008). Past it: cut, noted, never flagged.
+   */
+  user_agent: 1000,
   /** A chip's value or an answer to a question added in the admin — a short code; no column check, kept whole enough to read when forged. */
   choice: 200,
 } as const;

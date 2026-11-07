@@ -495,12 +495,17 @@ else is a static file.
   the inbox and the notification say what to check. The text is made storable
   first (no NUL, no broken character) and cut to what its column holds
   ([`src/lib/enquiry-limits.ts`](src/lib/enquiry-limits.ts): name 100, contact
-  120, message 2000, User-Agent 400 characters, counted as Postgres counts them),
-  so the table can never refuse what the Worker sends. A cut is never silent: the
-  enquiry is flagged `cut:<field>:<characters it came with>`, and the inbox says
-  what was cut. The User-Agent is a header, not a form field — a browser's runs
-  100–300 characters, a crawler's to thousands. Even a body that cannot be read is
-  stored, its raw text in the message. Answers to questions added in the admin go in `answers`. Only the
+  120, message 2000, User-Agent 1000 characters, counted as Postgres counts them),
+  so the table can never refuse what the Worker sends. A cut is never silent. A cut
+  name, contact, message or chip is flagged `cut:<field>:<characters it came with>`
+  — the form's own maxlength keeps a browser inside those, so a cut means the
+  enquiry did not come from the form. A cut User-Agent is **not** a flag: it is a
+  header, its length says nothing about whether a visitor is real (the Facebook and
+  Instagram in-app browsers, where much of the traffic opens, append a block that
+  runs to about 400 characters), so it is only noted in `diagnostics` (migration
+  0008) — never «Шалгах», never a held-back notification. 1000 leaves every real
+  browser room. Even a body that cannot be read is stored, its raw text in the
+  message. Answers to questions added in the admin go in `answers`. Only the
   honeypot and the rate limit keep one out — and the health check, known by its
   credential (`HEALTH_CHECK_SECRET`), never by its shape.
 - **The rate limit is the only bound on the table now.** It stands in front of
@@ -646,9 +651,12 @@ How it fits together (CLAUDE.md > The admin has the rules):
       the one-row `build_status` table; 0006 makes `worker_alerts`, where the Worker
       records the rate limiter failing open. Then
       [`0007_any_alert_kind.sql`](supabase/migrations/0007_any_alert_kind.sql), which
-      lets `worker_alerts` take any kind the Worker raises. None adds a policy to
-      `enquiries`, and none should ever be added. The Worker that the merge deploys
-      needs all four. (On the live project all four were applied on 7 November.)
+      lets `worker_alerts` take any kind the Worker raises, and
+      [`0008_user_agent_room_and_diagnostics.sql`](supabase/migrations/0008_user_agent_room_and_diagnostics.sql),
+      which gives the User-Agent 1000 characters and adds `diagnostics`, the notes
+      that route nothing. None adds a policy to `enquiries`, and none should ever be
+      added. The Worker that the merge deploys needs all five. (On the live project
+      all five were applied on 7 November.)
    2. **The build secret.** Make one random secret —
       `node -e "console.log(crypto.randomBytes(32).toString('hex'))"` — and add it as a
       build secret: Workers & Pages → anir → Settings → Build → Variables and secrets →

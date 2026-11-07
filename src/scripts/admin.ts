@@ -1169,24 +1169,32 @@ interface Enquiry {
   unrecognised?: string[];
   /** Answers to questions added in the admin, by the question's code. */
   answers?: Record<string, string>;
+  /** Notes that route nothing: a cut User-Agent (migration 0008). */
+  diagnostics?: string[];
+}
+
+const publishedForm = () => ((published.contact as Obj)?.form ?? {}) as Obj;
+
+/** cut:<field>:<characters it came with> — kept to its limit, the rest cut (worker/enquiry.ts) — in words. */
+function cutWords(code: string): string {
+  const form = publishedForm();
+  const [, part, length] = code.split(':');
+  const label =
+    part === 'user_agent'
+      ? t.inbox.flags.userAgent
+      : String(((form.fields ?? {}) as Record<string, Obj>)[part]?.label ?? ((form.groups ?? []) as Obj[]).find((g) => g.name === part)?.legend ?? part);
+  const max = (ENQUIRY_MAX as Record<string, number>)[part] ?? ENQUIRY_MAX.choice;
+  return t.inbox.flags.cut.replace('{field}', label).replace('{length}', length ?? '?').replace('{max}', String(max));
 }
 
 /** Why an enquiry is worth a second look, in words: each field it was stored with unmatched, or cut. */
 function flagsOf(enquiry: Enquiry): string[] {
-  const form = ((published.contact as Obj)?.form ?? {}) as Obj;
-  const groups = (form.groups ?? []) as Obj[];
-  const inputs = (form.fields ?? {}) as Record<string, Obj>;
+  const groups = (publishedForm().groups ?? []) as Obj[];
   return (enquiry.unrecognised ?? []).map((field) => {
     if (field === 'name') return t.inbox.flags.name;
     if (field === 'contact') return t.inbox.flags.contact;
     if (field === 'body') return t.inbox.flags.body;
-    // cut:<field>:<characters it came with> — kept to its limit, the rest cut (worker/enquiry.ts).
-    if (field.startsWith('cut:')) {
-      const [, part, length] = field.split(':');
-      const label = part === 'user_agent' ? t.inbox.flags.userAgent : String(inputs[part]?.label ?? groups.find((g) => g.name === part)?.legend ?? part);
-      const max = (ENQUIRY_MAX as Record<string, number>)[part] ?? ENQUIRY_MAX.choice;
-      return t.inbox.flags.cut.replace('{field}', label).replace('{length}', length ?? '?').replace('{max}', String(max));
-    }
+    if (field.startsWith('cut:')) return cutWords(field);
     const value = (enquiry as unknown as Record<string, unknown>)[field] ?? enquiry.answers?.[field] ?? '';
     const legend = String(groups.find((g) => g.name === field)?.legend ?? field);
     return t.inbox.flags.choice.replace('{legend}', legend).replace('{value}', String(value));
@@ -1303,6 +1311,8 @@ async function renderInbox() {
           flagsOf(enquiry).length
             ? h('div', { class: 'enquiry__flags' }, h('p', {}, t.inbox.flags.title), ...flagsOf(enquiry).map((text) => h('p', {}, text)))
             : null,
+          // A note, not a flag: outside «Шалгах», in the quiet hint style.
+          ...(enquiry.diagnostics ?? []).map((note) => h('p', { class: 'main__hint' }, note.startsWith('cut:') ? cutWords(note) : note)),
           h(
             'p',
             { class: 'main__hint' },

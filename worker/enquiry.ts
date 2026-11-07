@@ -26,7 +26,9 @@
  * `unrecognised` so the team knows to look. The text is made storable first
  * (no NUL, no broken character) and cut to what its column holds — the
  * User-Agent header too — so the table can never refuse what the Worker
- * sends; a cut is flagged, never silent. Only the honeypot and the rate limit keep an enquiry out,
+ * sends. A cut is never silent: a form field's is flagged, the User-Agent's
+ * only noted (`diagnostics`), since a long one says nothing about the
+ * visitor. Only the honeypot and the rate limit keep an enquiry out,
  * and both are defences against bots, not readings of a visitor's answers.
  * Even a body that cannot be read is stored: its raw text in the message,
  * flagged 'body'. Nothing about a request's shape discards it — a shape
@@ -234,6 +236,8 @@ interface Enquiry {
   unrecognised?: string[];
   /** Answers to questions added in the admin; only when there are any. */
   answers?: Record<string, string>;
+  /** Notes that route nothing — a cut User-Agent (migration 0008); only when there are any. */
+  diagnostics?: string[];
 }
 
 type Path = 'live' | 'buffered';
@@ -478,7 +482,9 @@ export async function onRequestPost(context: Context): Promise<Response> {
 
   // Every value cut to what its column holds — never refused, since a value
   // the table refuses loses the whole enquiry. What came longer is kept to
-  // its limit and said: `cut:<field>:<characters it came with>`.
+  // its limit and said: `cut:<field>:<characters it came with>`. For these
+  // fields that is a flag: the form's maxlength keeps a browser inside them,
+  // so a cut means the enquiry did not come from the form.
   const cut: string[] = [];
   const take = (field: string, value: unknown, max: number) => {
     const { text, cutFrom } = fit(value, max);
@@ -491,8 +497,11 @@ export async function onRequestPost(context: Context): Promise<Response> {
   const contact = take('contact', payload.contact, ENQUIRY_MAX.contact);
   // An unreadable body's own text, where the message would be: whatever it said is kept.
   const message = take('message', payload.message, ENQUIRY_MAX.message) || take('message', unreadable, ENQUIRY_MAX.message);
-  // A header, not a form field: no hostile body reaches it, and a crawler's runs to thousands.
-  const userAgent = take('user_agent', request.headers.get('User-Agent'), ENQUIRY_MAX.user_agent);
+  // A header, not a form field, and no evidence about the visitor: in-app
+  // browsers run long. Its own fit, so a cut is only ever a note on the row
+  // (`diagnostics`) — never a flag, never «Шалгах», never a held-back message.
+  const agent = fit(request.headers.get('User-Agent'), ENQUIRY_MAX.user_agent);
+  const diagnostics = agent.cutFrom === undefined ? [] : [`cut:user_agent:${agent.cutFrom}`];
 
   // Checked against the published form, and never refused: what does not
   // match is stored as sent, and named.
@@ -530,11 +539,12 @@ export async function onRequestPost(context: Context): Promise<Response> {
     name,
     contact,
     message: message || null,
-    user_agent: userAgent || null,
+    user_agent: agent.text || null,
     // Only when there is something to say: an ordinary enquiry is the same
     // row it always was, and stores even before migration 0005.
     ...(unrecognised.length ? { unrecognised } : {}),
     ...(Object.keys(answers).length ? { answers } : {}),
+    ...(diagnostics.length ? { diagnostics } : {}),
   };
 
   // Supabase, or failing that the KV buffer. Only when neither kept it is the

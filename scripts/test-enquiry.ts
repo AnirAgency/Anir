@@ -52,7 +52,7 @@ let notifyStatus = 200;
  * a length over a check, or text Postgres cannot hold — a NUL, or half a
  * surrogate pair, which is not valid UTF-8. Null when it would take the row.
  */
-const COLUMNS = new Set(['id', 'created_at', 'service', 'budget', 'timing', 'name', 'contact', 'message', 'user_agent', 'unrecognised', 'answers']);
+const COLUMNS = new Set(['id', 'created_at', 'service', 'budget', 'timing', 'name', 'contact', 'message', 'user_agent', 'unrecognised', 'answers', 'diagnostics']);
 const chars = (text: string) => [...text].length;
 const unstorable = (text: string) => /\u0000/.test(text) || /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
 function refusedBy(row: Row): string | null {
@@ -65,6 +65,7 @@ function refusedBy(row: Row): string | null {
   }
   if ('unrecognised' in row && !(Array.isArray(row.unrecognised) && row.unrecognised.every((f) => typeof f === 'string'))) return 'unrecognised';
   if ('answers' in row && (typeof row.answers !== 'object' || row.answers === null || Array.isArray(row.answers))) return 'answers';
+  if ('diagnostics' in row && !(Array.isArray(row.diagnostics) && row.diagnostics.every((note) => typeof note === 'string'))) return 'diagnostics';
   const texts: string[] = [];
   const collect = (v: unknown): void => {
     if (typeof v === 'string') texts.push(v);
@@ -302,19 +303,21 @@ await check('at, just past and far past every limit: stored, cut to fit, said', 
     assert.deepEqual(flags(emojiOver), [`cut:${field}:${max + 1}`]);
     tried += 5;
   }
-  // The header no body-shaped attack reaches.
+  // The header no body-shaped attack reaches: cut to fit all the same, but only noted — never a flag.
   const max = ENQUIRY_MAX.user_agent;
   const browser = await send(valid, 'M'.repeat(max));
   assert.equal(browser.user_agent, 'M'.repeat(max));
   assert.equal(browser.unrecognised, undefined, 'a User-Agent at its limit is an ordinary enquiry');
+  assert.equal(browser.diagnostics, undefined);
   const crawler = await send(valid, `Mozilla/5.0 (compatible; ${'x'.repeat(3974)})`);
-  assert.equal(chars(crawler.user_agent as string), max, 'a 4000-character User-Agent is cut to 400');
-  assert.deepEqual(crawler.unrecognised, ['cut:user_agent:4000']);
+  assert.equal(chars(crawler.user_agent as string), max, `a 4000-character User-Agent is cut to ${max}`);
+  assert.equal(crawler.unrecognised, undefined, 'a cut User-Agent is not a flag');
+  assert.deepEqual(crawler.diagnostics, ['cut:user_agent:4000'], 'only a note on the row');
   // And a chip value — no column check, but cut all the same, and said.
   const chip = await send({ ...valid, budget: 'b'.repeat(ENQUIRY_MAX.choice * 10) });
   assert.equal(chip.budget, 'b'.repeat(ENQUIRY_MAX.choice));
   assert.deepEqual(chip.unrecognised, ['budget', `cut:budget:${ENQUIRY_MAX.choice * 10}`]);
-  return `${tried + 3} enquiries: at the limit kept whole; past it cut to fit, stored, flagged cut:<field>:<n> — User-Agent 4000 → 400`;
+  return `${tried + 3} enquiries: at the limit kept whole; form fields past it cut, flagged cut:<field>:<n>; User-Agent 4000 → ${max}, noted only`;
 });
 
 await check('an ordinary enquiry carries no flags at all', async () => {
@@ -598,6 +601,40 @@ await check('every enquiry notifies the team, saying which path it took', async 
   assert.ok(notified.slice(2).every((n) => n.text.includes('BUFFERED')));
   assert.ok(notified.every((n) => n.text.includes(valid.name)));
   return 'email + telegram; "Stored in Supabase." then "BUFFERED"';
+});
+
+/*
+  A User-Agent is no evidence about the visitor: the Facebook and Instagram
+  in-app browsers — where much of this site's traffic opens — append a long
+  FBAN/FBAV/FBDV/… block, around 400 characters on Android. Its length must
+  never decide whether a person hears about an enquiry.
+*/
+await check('a long in-app browser\'s User-Agent: stored whole, unflagged, told at once', async () => {
+  const base =
+    'Mozilla/5.0 (Linux; Android 14; SM-S928B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+    'Version/4.0 Chrome/129.0.6668.100 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/484.0.0.62.109;IABMV/1;' +
+    'FBDM/{density=3.0,width=1080,height=2340};FBLC/mn_MN;FBRV/0;FBCR/Unitel;FBMF/samsung;FBBD/samsung;' +
+    'FBPN/com.facebook.katana;FBDV/SM-S928B;FBSV/14;FBOP/1;FBCA/arm64-v8a:;';
+  const facebook = `${base}FBPX/`.padEnd(419, '7') + ']';
+  assert.equal(facebook.length, 420);
+  captured = [];
+  notified = [];
+  const response = await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.43', agent: facebook }), env: notifying() });
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].user_agent, facebook, 'stored whole');
+  assert.equal(captured[0].unrecognised, undefined, 'not flagged: «Шинэ», not «Шалгах»');
+  assert.equal(captured[0].diagnostics, undefined, 'not even a note: it fits');
+  assert.equal(notified.length, 2, 'told at once, on both channels');
+  // Past even 1000: cut and noted on the row — and still told at once.
+  captured = [];
+  notified = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.44', agent: `${facebook}${'9'.repeat(3580)}` }), env: notifying() });
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].unrecognised, undefined);
+  assert.deepEqual(captured[0].diagnostics, ['cut:user_agent:4000']);
+  assert.equal(notified.length, 2, 'a note never holds back the message');
+  return `420 characters: stored whole, unflagged, 2 notifications; 4000: cut to ${ENQUIRY_MAX.user_agent}, noted, still 2`;
 });
 
 await check('a flagged enquiry is stored, and does not ring the team\'s phone', async () => {

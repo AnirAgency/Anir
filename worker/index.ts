@@ -90,8 +90,10 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Drain first, so the watch counts what the buffer held (./watch.ts).
+  // Drain first, so the watch counts what the buffer held and knows why
+  // anything is still in it (./watch.ts > stuck). The drain never throws, so
+  // the watch always runs.
   async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(drain(env).then(() => watch(env)));
+    ctx.waitUntil(drain(env).then((drained) => watch(env, new Date(), fetch, drained)));
   },
 };

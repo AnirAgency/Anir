@@ -18,6 +18,7 @@
  * holder change the build command and deploy anything.
  */
 import { answer, bearer, same } from './auth.ts';
+import { fit } from './text.ts';
 import { PRODUCTION_BRANCH } from '../src/lib/placeholders.mjs';
 
 export interface Env {
@@ -112,7 +113,9 @@ export async function onBuildReport(request: Request, env: Env, fetcher: typeof 
       sha,
       code,
       reason: failed ? causeOf(lines) : null,
-      detail: failed ? telling(lines).slice(-12).join('\n').slice(0, 4000) || null : null,
+      // Cut as build_status.detail counts — characters, never inside one: a
+      // split emoji in a log line would make Postgres refuse the report.
+      detail: failed ? fit(telling(lines).slice(-12).join('\n'), 4000).text || null : null,
       reported_at: new Date().toISOString(),
     };
     const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/build_status`, {

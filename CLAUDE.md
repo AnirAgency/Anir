@@ -404,7 +404,11 @@ site stays static.
   nothing to check notifies at once; flagged ones are one «Шалгах: N шинэ»
   an hour at most, and a day past 50 stored enquiries sends one flood
   message (`worker/watch.ts`). The rate limiter fails open, never closed —
-  but never silently: logged, recorded, shown in the admin.
+  but never silently: logged, recorded, shown in the admin. Nor does the
+  buffer hold an enquiry silently: one waiting over an hour raises a
+  `drain-stuck` alert with Supabase's reason and one Telegram line, cleared
+  when the buffer empties. Every kind of alert is listed in the Worker
+  (`ALERT_KINDS`), never in the table.
 - **The build** pulls the content first (`scripts/content-pull.mjs`): every
   upload is cut to its slot's `width` × `height` and encoded AVIF, WebP and
   JPEG into `public/media/live/`, so the site serves it itself. The content is

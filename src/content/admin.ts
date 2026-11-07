@@ -68,10 +68,14 @@ export const admin = {
   notify: {
     digest: 'Шалгах: {n} шинэ',
     flood: 'Өнөөдөр {n} хүсэлт хадгалагдлаа — ердийнхөөс хэт олон, робот байж магадгүй. Удирдлагын «Хүсэлтүүд»-ийг шалгана уу.',
+    /** An enquiry waiting in the buffer over an hour (worker/watch.ts > stuck): once, and again a day later if it lasts. */
+    stuck: '{n} хүсэлт Supabase-д хадгалагдаж чадалгүй нэг цагаас удаан түр санд хүлээж байна. Хүсэлт алдагдаагүй; Supabase түр зогссон эсэхийг шалгаад сайтыг хөгжүүлсэн хүнд хэлнэ үү.',
   },
   /** Trouble the Worker recorded (worker/alerts.ts), on the status line under the bar. */
   alerts: {
     limiter: 'Хүсэлтийн хязгаарлагч {when}-д ажиллаагүй тул тэр үед хүсэлтийг хязгааргүй хүлээн авсан. Хүсэлт алдагдаагүй; сайтыг хөгжүүлсэн хүнд хэлнэ үү.',
+    /** drain-stuck: an enquiry waiting in the buffer over an hour; gone from the line once the buffer empties. */
+    drain: 'Хүсэлт {when}-д ч Supabase-д хадгалагдаж чадаагүй, нэг цагаас удаан түр санд хүлээж байна. Хүсэлт алдагдаагүй; «Дэлгэрэнгүй»-г сайтыг хөгжүүлсэн хүнд үзүүлнэ үү.',
     /** A kind of trouble these words do not cover yet (worker/alerts.ts > ALERT_KINDS): shown by its code, never hidden. */
     other: 'Сайт {when}-д «{kind}» гэсэн анхааруулга бүртгэсэн. «Дэлгэрэнгүй»-г сайтыг хөгжүүлсэн хүнд үзүүлнэ үү.',
   },

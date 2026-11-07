@@ -374,6 +374,8 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
   }
   if (!t.notify.digest.includes('{n}') || !t.notify.flood.includes('{n}')) problems.add('the Telegram digest and flood messages need their words, with {n}');
   if (!t.alerts.limiter.includes('{when}')) problems.add('the limiter alert needs its words, with {when}');
+  if (!t.alerts.drain.includes('{when}')) problems.add('the stuck-enquiry alert needs its words, with {when}');
+  if (!t.notify.stuck.includes('{n}')) problems.add('the stuck-enquiry Telegram line needs its words, with {n}');
   if (!['{kind}', '{when}'].every((slot) => t.alerts.other.includes(slot))) problems.add('an alert of a kind with no words of its own needs words, with {kind} and {when}');
   for (const flag of ['name', 'contact', 'body', 'userAgent']) {
     if (!(t.inbox.flags as Record<string, string>)[flag]) problems.add(`no words for the enquiry flag "${flag}"`);

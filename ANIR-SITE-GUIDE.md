@@ -274,7 +274,11 @@ is opened, which saves data.
    Supabase pauses a project after a week without use. When that happens, the
    enquiry is held safely in a second store at Cloudflare for up to 30 days. Once
    the database is woken up (**Restore** in the Supabase dashboard), the waiting
-   enquiries move across within 15 minutes, with their original times.
+   enquiries move across within 15 minutes, with their original times. If an
+   enquiry is still waiting after an hour — whatever the reason — the team gets
+   one Telegram message saying so (again a day later if it lasts), and the admin's
+   status line says so too, with the database's own reason under «Дэлгэрэнгүй». The
+   line goes away by itself once nothing is waiting.
 4. The visitor sees an error only if **both** stores fail.
    - **Nothing a visitor writes or picks makes an enquiry fail.** If something
      looks wrong (no name, a contact that is not an email or phone number), the

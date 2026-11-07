@@ -359,15 +359,17 @@ function publishStatus(text: string, tone: Tone = '', detail = '') {
 /**
  * What the Worker recorded for a person to know (worker/alerts.ts > ALERT_KINDS):
  * the contact form's rate limiter letting everything through because it
- * could not reach KV, or any kind added since. Shown on the status line for
- * a day after it last happened, as a failed publish is — the latest in
- * words, every one in «Дэлгэрэнгүй». A kind with no words of its own is
- * shown by its code, never hidden.
+ * could not reach KV; an enquiry stuck in the buffer over an hour; or any
+ * kind added since. Shown on the status line for a day after it last
+ * happened, as a failed publish is — the latest in words, every one in
+ * «Дэлгэрэнгүй». A kind with no words of its own is shown by its code,
+ * never hidden.
  */
 const ALERT_FOR_MS = 24 * 60 * 60 * 1000;
 type Alert = { kind: string; last_at: string; detail: string | null };
+const ALERT_WORDS: Record<string, string> = { 'limiter-open': t.alerts.limiter, 'drain-stuck': t.alerts.drain };
 const alertWords = (alert: Alert) =>
-  (alert.kind === 'limiter-open' ? t.alerts.limiter : t.alerts.other.replace('{kind}', alert.kind)).replace('{when}', when(alert.last_at));
+  (ALERT_WORDS[alert.kind] ?? t.alerts.other.replace('{kind}', alert.kind)).replace('{when}', when(alert.last_at));
 async function readAlerts() {
   if (!session || root.dataset.state !== 'ready') return;
   try {

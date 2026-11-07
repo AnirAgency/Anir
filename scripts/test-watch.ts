@@ -7,13 +7,16 @@
  * an hour, exactly «Шалгах: N шинэ», counting only those since the last;
  * a flood is told once a day when stored enquiries pass 50 — buffered ones
  * counted too — and the day is Ulaanbaatar's; one watch failing never stops
- * the other.
+ * the other; an enquiry stuck in the buffer over an hour raises a
+ * drain-stuck alert with Supabase's own reason and one Telegram line, clears
+ * when the buffer empties, and is told even with no database to write to.
  *
  *   node scripts/test-watch.ts
  */
 import assert from 'node:assert/strict';
 
-import { digest, flood, ubDay, watch, FLOOD_AT } from '../worker/watch.ts';
+import { admin as t } from '../src/content/admin.ts';
+import { digest, flood, stuck, ubDay, watch, FLOOD_AT } from '../worker/watch.ts';
 
 interface Row {
   created_at: string;
@@ -23,6 +26,8 @@ interface Row {
 let rows: Row[] = [];
 let telegram: string[] = [];
 let supabaseDown = false;
+/** What reached worker_alerts: a POST raises or refreshes a row, a DELETE clears it. */
+let alertCalls: Array<{ method: string; kind: string; detail?: string }> = [];
 
 const kv = () => {
   const store = new Map<string, string>();
@@ -43,6 +48,13 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.hostname === 'api.telegram.org') {
     telegram.push(JSON.parse(String(init?.body)).text);
     return Response.json({ ok: true });
+  }
+  if (url.pathname === '/rest/v1/worker_alerts') {
+    if (supabaseDown) return new Response('down', { status: 503 });
+    const method = init?.method ?? 'GET';
+    if (method === 'DELETE') alertCalls.push({ method, kind: (url.searchParams.get('kind') ?? '').replace(/^eq./, '') });
+    else alertCalls.push({ method, ...(JSON.parse(String(init?.body)) as { kind: string; detail: string }) });
+    return new Response('', { status: 201 });
   }
   if (url.pathname === '/rest/v1/enquiries') {
     if (supabaseDown) return new Response('down', { status: 503 });
@@ -78,6 +90,7 @@ let failures = 0;
 async function check(label: string, run: () => Promise<string> | string) {
   rows = [];
   telegram = [];
+  alertCalls = [];
   supabaseDown = false;
   try {
     results.push([label, await run()]);
@@ -173,6 +186,65 @@ await check('buffered enquiries count too — a flood while Supabase sleeps', as
   await flood(e, at('2026-11-07T02:00:00Z'), stub);
   assert.match(telegram[0] ?? '', /^Өнөөдөр 55 хүсэлт/);
   return '40 stored + 15 buffered today = 55: told';
+});
+
+// ------------------------------------------------------------ stuck enquiry
+
+const twoHoursBefore = (iso: string) => new Date(Date.parse(iso) - 2 * 60 * 60 * 1000).toISOString();
+const NOW = '2026-11-07T06:00:00.000Z';
+const refusal = "Supabase answered 400 PGRST204: Could not find the 'diagnostics' column of 'enquiries' in the schema cache";
+
+await check("an enquiry stuck over an hour: an alert with Supabase's reason, one Telegram line", async () => {
+  const e = env();
+  await e.ENQUIRY_BUFFER.put(`enquiry:${twoHoursBefore(NOW)}-abcd1234`, '{}');
+  await e.ENQUIRY_BUFFER.put(`enquiry:${NOW}-fresh000`, '{}'); // just arrived: not stuck yet
+  const said = await stuck(e, at(NOW), { buffered: 2, written: 0, kept: 2, why: refusal }, stub);
+  assert.match(said, /^told/);
+  assert.deepEqual(alertCalls.map((c) => [c.method, c.kind]), [['POST', 'drain-stuck']]);
+  assert.match(alertCalls[0].detail ?? '', /^1 enquiries waiting in the buffer over an hour, the oldest since .*PGRST204/);
+  assert.deepEqual(telegram, [t.notify.stuck.replace('{n}', '1')]);
+  // Fifteen minutes on, still stuck: the row's last_at refreshed for the admin, Telegram quiet.
+  const again = await stuck(e, at('2026-11-07T06:15:00.000Z'), { buffered: 2, written: 0, kept: 2, why: refusal }, stub);
+  assert.match(again, /^alert refreshed/);
+  assert.equal(alertCalls.length, 2);
+  assert.equal(telegram.length, 1, 'one line, not one every 15 minutes');
+  return 'worker_alerts drain-stuck with the refusal; «' + telegram[0].slice(0, 32) + '…» once; refreshed, not re-sent';
+});
+
+await check('the buffer empties: the alert is cleared, and the next one is told afresh', async () => {
+  const e = env();
+  const key = `enquiry:${twoHoursBefore(NOW)}-abcd1234`;
+  await e.ENQUIRY_BUFFER.put(key, '{}');
+  await stuck(e, at(NOW), { buffered: 1, written: 0, kept: 1, why: refusal }, stub);
+  await e.ENQUIRY_BUFFER.delete(key); // the drain wrote it
+  const over = await stuck(e, at('2026-11-07T06:15:00.000Z'), { buffered: 1, written: 1, kept: 0 }, stub);
+  assert.match(over, /^cleared/);
+  assert.deepEqual(alertCalls.at(-1), { method: 'DELETE', kind: 'drain-stuck' });
+  await e.ENQUIRY_BUFFER.put(`enquiry:${twoHoursBefore('2026-11-08T06:00:00.000Z')}-beef0000`, '{}');
+  await stuck(e, at('2026-11-08T06:00:00.000Z'), { buffered: 1, written: 0, kept: 1, why: refusal }, stub);
+  assert.equal(telegram.length, 2, 'a new episode is told');
+  return 'DELETE drain-stuck when nothing waits; a later one told again';
+});
+
+await check('under an hour in the buffer is not stuck', async () => {
+  const e = env();
+  await e.ENQUIRY_BUFFER.put(`enquiry:${new Date(Date.parse(NOW) - 59 * 60 * 1000).toISOString()}-abcd1234`, '{}');
+  const said = await stuck(e, at(NOW), { buffered: 1, written: 0, kept: 1, why: refusal }, stub);
+  assert.equal(alertCalls.length + telegram.length, 0);
+  return said;
+});
+
+await check('a paused project: the alert cannot be written, Telegram still says it', async () => {
+  const e = env();
+  supabaseDown = true;
+  await e.ENQUIRY_BUFFER.put(`enquiry:${twoHoursBefore(NOW)}-abcd1234`, '{}');
+  const said = await watch(e, at(NOW), stub, { buffered: 1, written: 0, kept: 1, why: 'Supabase answered 540' });
+  assert.match(said.stuck, /^told/);
+  assert.equal(telegram.length, 1);
+  const keysGone = await watch({ ...env(), SUPABASE_URL: '', ENQUIRY_BUFFER: e.ENQUIRY_BUFFER }, at(NOW), stub);
+  assert.match(keysGone.digest, /^skipped/);
+  assert.match(keysGone.stuck, /^alert refreshed/, 'the stuck watch runs without a database');
+  return 'worker_alerts down, Telegram told; no database at all: digest skipped, stuck still watched';
 });
 
 // ------------------------------------------------------------------ watch

@@ -45,6 +45,7 @@ import { site } from '../src/content/site.ts';
 import { ENQUIRY_MAX } from '../src/lib/enquiry-limits.ts';
 import { raiseAlert } from './alerts.ts';
 import { answer, same } from './auth.ts';
+import { fit } from './text.ts';
 
 interface KVNamespace {
   get(key: string): Promise<string | null>;
@@ -150,35 +151,7 @@ const reply = (request: Request, status: number, ok: boolean, message: string) =
 
 /* --------------------------------------------------------------- validation */
 
-/**
- * Text Postgres will always take: no NUL (text cannot hold one) and no
- * half of a surrogate pair (not valid UTF-8, so the insert would fail).
- */
-const storable = (text: string) =>
-  text.replace(/\u0000/g, '').replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '�');
-
-/** Whatever was sent, as text: a JSON number or list is kept, not dropped. */
-const asText = (value: unknown) =>
-  typeof value === 'string' ? value : value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
-
-/** Characters as Postgres's char_length counts them: storable text has no half pairs, so each pair is one. */
-const PAIR = /[\ud800-\udbff][\udc00-\udfff]/g;
-const characters = (text: string) => text.length - (text.match(PAIR)?.length ?? 0);
-
-/**
- * Text as it is stored: made storable, trimmed, and at most `max`
- * characters, counted as the table's checks count them — so the table can
- * never refuse it, a character is never split, and text that fits is never
- * cut. `cutFrom` is how many characters came, when that was too many.
- */
-function fit(value: unknown, max: number): { text: string; cutFrom?: number } {
-  const text = storable(asText(value)).trim();
-  if (text.length <= max) return { text }; // never more characters than UTF-16 units
-  const length = characters(text);
-  if (length <= max) return { text };
-  // The first `max` characters lie within the first 2 × max units, each whole.
-  return { text: Array.from(text.slice(0, max * 2)).slice(0, max).join(''), cutFrom: length };
-}
+// Text made storable and cut to fit, in characters as the table counts them (./text.ts).
 
 /** An email, or a Mongolian phone number with or without country code. */
 function looksContactable(value: string) {
@@ -246,8 +219,9 @@ const BUFFER_PREFIX = 'enquiry:';
 /** A backstop for a drain that never runs. */
 const BUFFER_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-async function writeToSupabase(env: Env, row: Enquiry, { drained = false } = {}): Promise<boolean> {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
+/** Whether Supabase took the row, and if not, why — in words a person can act on. */
+async function writeToSupabase(env: Env, row: Enquiry, { drained = false } = {}): Promise<{ ok: boolean; why?: string }> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { ok: false, why: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set' };
   try {
     const response = await fetch(`${env.SUPABASE_URL}/rest/v1/enquiries`, {
       method: 'POST',
@@ -260,9 +234,13 @@ async function writeToSupabase(env: Env, row: Enquiry, { drained = false } = {})
       },
       body: JSON.stringify(row),
     });
-    return response.ok;
-  } catch {
-    return false;
+    if (response.ok) return { ok: true };
+    // PostgREST names the refusal in `code` and `message`; its `details` would
+    // repeat the visitor's row, so that stays out of logs and alerts.
+    const said = (await response.json().catch(() => ({}))) as { code?: unknown; message?: unknown };
+    return { ok: false, why: `Supabase answered ${response.status}${said.code ? ` ${said.code}` : ''}${said.message ? `: ${said.message}` : ''}` };
+  } catch (error) {
+    return { ok: false, why: `Supabase unreachable: ${(error as Error)?.message ?? error}` };
   }
 }
 
@@ -285,37 +263,65 @@ async function buffer(env: Env, row: Enquiry): Promise<boolean> {
   }
 }
 
+export interface Drained {
+  buffered: number;
+  written: number;
+  kept: number;
+  /** Why the last entry kept was kept — Supabase's own words — for the watch's alert (./watch.ts > stuck). */
+  why?: string;
+}
+
 /**
  * Moves every buffered enquiry into Supabase, deleting each once it is in.
  * Run on a schedule (worker/index.ts). Idempotent: an entry that fails to
  * write stays for the next run, and one written but not deleted is skipped
- * by its id when it comes round again.
+ * by its id when it comes round again. Never throws, so the watch after it
+ * always runs: it is the watch that tells a person when an enquiry has
+ * waited too long (./watch.ts > stuck), and why, from `why` here.
  */
-export async function drain(env: Env): Promise<{ buffered: number; written: number; kept: number }> {
+export async function drain(env: Env): Promise<Drained> {
   if (!env.ENQUIRY_BUFFER) {
     console.warn('enquiry drain: ENQUIRY_BUFFER is not bound');
     return { buffered: 0, written: 0, kept: 0 };
   }
   const keys: string[] = [];
   let cursor: string | undefined;
-  do {
-    const page = await env.ENQUIRY_BUFFER.list({ prefix: BUFFER_PREFIX, cursor });
-    keys.push(...page.keys.map((key) => key.name));
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
+  try {
+    do {
+      const page = await env.ENQUIRY_BUFFER.list({ prefix: BUFFER_PREFIX, cursor });
+      keys.push(...page.keys.map((key) => key.name));
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+  } catch (error) {
+    const why = `the buffer could not be listed: ${(error as Error)?.message ?? error}`;
+    console.error(`enquiry drain: ${why}`);
+    return { buffered: 0, written: 0, kept: 0, why };
+  }
 
   let written = 0;
+  let why: string | undefined;
   for (const key of keys) {
-    const value = await env.ENQUIRY_BUFFER.get(key);
+    let value: string | null;
+    try {
+      value = await env.ENQUIRY_BUFFER.get(key);
+    } catch (error) {
+      why = `${key} could not be read: ${(error as Error)?.message ?? error}`;
+      continue;
+    }
     if (!value) continue;
     let row: Enquiry;
     try {
       row = JSON.parse(value) as Enquiry;
     } catch {
-      console.error(`enquiry drain: ${key} is not valid JSON; left in place`);
+      why = `${key} is not valid JSON; left in place`;
+      console.error(`enquiry drain: ${why}`);
       continue;
     }
-    if (!(await writeToSupabase(env, row, { drained: true }))) continue;
+    const write = await writeToSupabase(env, row, { drained: true });
+    if (!write.ok) {
+      why = write.why;
+      continue;
+    }
     written += 1;
     try {
       await env.ENQUIRY_BUFFER.delete(key);
@@ -324,9 +330,9 @@ export async function drain(env: Env): Promise<{ buffered: number; written: numb
     }
   }
 
-  const result = { buffered: keys.length, written, kept: keys.length - written };
+  const result: Drained = { buffered: keys.length, written, kept: keys.length - written, ...(why ? { why } : {}) };
   console.log(
-    `enquiry drain: ${result.buffered} buffered, ${result.written} written to Supabase, ${result.kept} kept for the next run`
+    `enquiry drain: ${result.buffered} buffered, ${result.written} written to Supabase, ${result.kept} kept for the next run${why ? ` — last kept because ${why}` : ''}`
   );
   return result;
 }
@@ -550,13 +556,14 @@ export async function onRequestPost(context: Context): Promise<Response> {
   // Supabase, or failing that the KV buffer. Only when neither kept it is the
   // visitor told something went wrong — and then nothing was kept.
   let path: Path;
-  if (await writeToSupabase(env, row)) {
+  const live = await writeToSupabase(env, row);
+  if (live.ok) {
     path = 'live';
   } else if (await buffer(env, row)) {
     path = 'buffered';
-    console.warn('enquiry buffered: Supabase did not take the write');
+    console.warn(`enquiry buffered: Supabase did not take the write — ${live.why}`);
   } else {
-    console.error('enquiry LOST: Supabase and the KV buffer both failed');
+    console.error(`enquiry LOST: Supabase and the KV buffer both failed — ${live.why}`);
     return reply(request, 502, false, messages.error);
   }
 

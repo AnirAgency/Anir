@@ -13,6 +13,17 @@
  *                      FLOOD_AT, and not again that day. The rate limiter
  *                      is the only bound on the table and it fails open, so
  *                      a flood has to be seen rather than stopped.
+ *   a stuck enquiry    one waiting in the buffer over STUCK_AFTER_MS: the
+ *                      drain has failed on it every pass since — a paused
+ *                      project, a revoked grant, a column the table does not
+ *                      have yet. A worker_alerts row (drain-stuck) on every
+ *                      pass while it lasts, so the admin's status line says
+ *                      so, with Supabase's own reason; one Telegram line,
+ *                      again a day later if it is still stuck; and the row
+ *                      cleared once the buffer is empty. Runs with or without
+ *                      a database: a project with its keys gone or paused is
+ *                      exactly when the admin cannot be read and Telegram is
+ *                      the one who says.
  *
  * Counts are exact: read from the table (as the drain has just filled it)
  * plus whatever still waits in the buffer. The "already sent" marks live in
@@ -20,10 +31,13 @@
  * waits for the next run; it never throws.
  */
 import { admin as t } from '../src/content/admin.ts';
-import { tell, type Env } from './enquiry.ts';
+import { clearAlert, raiseAlert } from './alerts.ts';
+import { tell, type Drained, type Env } from './enquiry.ts';
 
 export const DIGEST_EVERY_MS = 60 * 60 * 1000;
 export const FLOOD_AT = 50;
+export const STUCK_AFTER_MS = 60 * 60 * 1000;
+const STUCK_MARK = 'notify:stuck-at';
 /** Ulaanbaatar is UTC+8 all year; "the day" is the studio's. */
 const UB_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DIGEST_MARK = 'notify:digest-at';
@@ -54,18 +68,21 @@ export function ubDay(now: Date): { day: string; start: Date } {
   return { day, start: new Date(Date.parse(`${day}T00:00:00Z`) - UB_OFFSET_MS) };
 }
 
-/** Buffered enquiries that arrived since `since`: their keys carry their arrival (./enquiry.ts > buffer). */
-async function bufferedSince(env: Env, since: Date): Promise<number> {
-  if (!env.ENQUIRY_BUFFER) return 0;
-  let n = 0;
+/** When each buffered enquiry arrived: their keys carry it (./enquiry.ts > buffer). */
+async function arrivals(env: Env): Promise<number[]> {
+  if (!env.ENQUIRY_BUFFER) return [];
+  const times: number[] = [];
   let cursor: string | undefined;
   do {
     const page = await env.ENQUIRY_BUFFER.list({ prefix: 'enquiry:', cursor });
-    for (const { name } of page.keys) if (Date.parse(name.slice('enquiry:'.length, name.lastIndexOf('-'))) >= since.getTime()) n += 1;
+    for (const { name } of page.keys) times.push(Date.parse(name.slice('enquiry:'.length, name.lastIndexOf('-'))));
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
-  return n;
+  return times;
 }
+
+/** Buffered enquiries that arrived since `since`. */
+const bufferedSince = async (env: Env, since: Date) => (await arrivals(env)).filter((time) => time >= since.getTime()).length;
 
 export async function digest(env: Env, now: Date, fetcher: typeof fetch = fetch): Promise<string> {
   const kv = env.ENQUIRY_BUFFER;
@@ -93,9 +110,46 @@ export async function flood(env: Env, now: Date, fetcher: typeof fetch = fetch):
   return `sent — ${stored} today`;
 }
 
-/** Both watches, each on its own: one failing never keeps the other from running. */
-export async function watch(env: Env, now = new Date(), fetcher: typeof fetch = fetch): Promise<{ digest: string; flood: string }> {
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { digest: 'skipped — no database', flood: 'skipped — no database' };
+/**
+ * What still waits in the buffer after the drain, and for how long. An
+ * enquiry there is safe, but no person can see it — so past an hour it is
+ * said: a worker_alerts row every pass (its last_at stays fresh while it
+ * lasts), Telegram once and again a day later, and the row cleared when
+ * nothing waits. `drained.why` is Supabase's own reason, from the drain.
+ */
+export async function stuck(env: Env, now: Date, drained?: Drained, fetcher: typeof fetch = fetch): Promise<string> {
+  const kv = env.ENQUIRY_BUFFER;
+  if (!kv) return 'skipped — no ENQUIRY_BUFFER';
+  const times = await arrivals(env);
+  const waiting = times.filter((time) => now.getTime() - time > STUCK_AFTER_MS);
+  if (waiting.length === 0) {
+    // Over: the admin stops saying so, and the next time is told afresh.
+    if (await kv.get(STUCK_MARK)) {
+      await kv.delete(STUCK_MARK);
+      await clearAlert(env, 'drain-stuck', fetcher);
+      return `cleared — ${times.length} buffered, none over an hour`;
+    }
+    return `${times.length} buffered, none over an hour`;
+  }
+  const oldest = new Date(Math.min(...waiting)).toISOString();
+  const detail = `${waiting.length} enquiries waiting in the buffer over an hour, the oldest since ${oldest}. ${drained?.why ? `Last refusal: ${drained.why}` : 'The drain gave no reason — is it running?'}`;
+  await raiseAlert(env, 'drain-stuck', detail, fetcher);
+  if (await kv.get(STUCK_MARK)) return `alert refreshed — ${detail}`;
+  await tell(env, t.notify.stuck.replace('{n}', String(waiting.length)), '', 'enquiry stuck');
+  await kv.put(STUCK_MARK, now.toISOString(), { expirationTtl: 24 * 60 * 60 });
+  return `told — ${detail}`;
+}
+
+/**
+ * Every watch, each on its own: one failing never keeps another from
+ * running. `drained` is what the drain just did (./index.ts > scheduled).
+ */
+export async function watch(
+  env: Env,
+  now = new Date(),
+  fetcher: typeof fetch = fetch,
+  drained?: Drained
+): Promise<{ digest: string; flood: string; stuck: string }> {
   const run = async (name: string, job: () => Promise<string>) => {
     try {
       const said = await job();
@@ -107,5 +161,8 @@ export async function watch(env: Env, now = new Date(), fetcher: typeof fetch = 
       return said;
     }
   };
-  return { digest: await run('digest', () => digest(env, now, fetcher)), flood: await run('flood', () => flood(env, now, fetcher)) };
+  // Needs no database: a project paused or its keys gone is when Telegram is the one who says.
+  const stuckSaid = await run('stuck', () => stuck(env, now, drained, fetcher));
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return { digest: 'skipped — no database', flood: 'skipped — no database', stuck: stuckSaid };
+  return { digest: await run('digest', () => digest(env, now, fetcher)), flood: await run('flood', () => flood(env, now, fetcher)), stuck: stuckSaid };
 }

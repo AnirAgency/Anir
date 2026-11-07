@@ -570,9 +570,28 @@ await check('the drain keeps what it cannot write, for the next run', async () =
   await onRequestPost({ request: post(valid, { json: true }), env: environment });
   const result = await drain(environment);
   supabaseStatus = 201;
-  assert.deepEqual(result, { buffered: 1, written: 0, kept: 1 });
+  const { why, ...counts } = result;
+  assert.deepEqual(counts, { buffered: 1, written: 0, kept: 1 });
+  assert.equal(why, 'Supabase answered 500', 'why it was kept, for the stuck alert');
   assert.equal(environment.ENQUIRY_BUFFER.store.size, 1);
-  return '0 written, 1 kept';
+  return `0 written, 1 kept — "${why}"`;
+});
+
+await check('the drain says why in Supabase\'s words, and never throws', async () => {
+  // A row the table refuses (a column it does not have — a schema behind the Worker).
+  const environment = env();
+  await environment.ENQUIRY_BUFFER.put('enquiry:2026-11-07T01:00:00.000Z-abcd1234', JSON.stringify({ ...valid, id: crypto.randomUUID(), not_a_column: 1 }));
+  const refused = await drain(environment);
+  assert.equal(refused.kept, 1);
+  assert.equal(refused.why, 'Supabase answered 400: unknown column not_a_column');
+  // A buffer that cannot even be listed: said, not thrown — the watch after it must still run.
+  const broken = { ...env(), ENQUIRY_BUFFER: { ...kv(), list: async () => { throw new Error('KV is down'); } } };
+  const keep = console.error;
+  console.error = () => {};
+  const unlisted = await drain(broken);
+  console.error = keep;
+  assert.deepEqual(unlisted, { buffered: 0, written: 0, kept: 0, why: 'the buffer could not be listed: KV is down' });
+  return `"${refused.why}"; KV down: "${unlisted.why}"`;
 });
 
 await check('a live enquiry never uses the drain\'s duplicate-skipping', async () => {
@@ -679,6 +698,20 @@ await check('an alert of a kind the Worker does not list is recorded all the sam
   console.error = keep;
   assert.deepEqual(alerts.map((x) => x.kind), ['a-kind-from-next-year']);
   return 'written to worker_alerts, not dropped — the table checks no kind since 0007';
+});
+
+await check('an alert\'s detail is cut to its 500, never inside a character', async () => {
+  alerts = [];
+  const keep = console.error;
+  console.error = () => {};
+  // A cut by UTF-16 units at 500 would land inside the first emoji — half a pair, which Postgres refuses.
+  await raiseAlert(env(), 'drain-stuck', `${'a'.repeat(499)}😀😀`);
+  console.error = keep;
+  const detail = String(alerts[0]?.detail);
+  assert.equal(chars(detail), 500);
+  assert.ok(!unstorable(detail), 'no half pair');
+  assert.ok(detail.endsWith('😀'));
+  return '500 characters, the emoji whole — the row the table takes';
 });
 
 await check('a limiter that works raises nothing', async () => {

@@ -239,7 +239,14 @@ gets missed. Instead the Worker's 15-minute schedule (`worker/watch.ts`) sends:
 - If the limiter ever fails open — KV unreachable, or unbound — the Worker logs
   `ALERT limiter-open`, records it in `worker_alerts`, and the admin shows it on its
   status line for a day. The limiter is never made to fail closed: a dropped
-  enquiry is worse than an unbounded table. The kinds of alert are listed in the
+  enquiry is worse than an unbounded table.
+- **An enquiry stuck in the buffer** over an hour — the drain has failed on it every
+  pass: a paused project, a revoked grant, a schema behind the Worker — raises a
+  `drain-stuck` alert on every pass while it lasts, its detail carrying Supabase's
+  own reason (`PGRST204: Could not find the 'diagnostics' column…`), and sends one
+  Telegram line, «N хүсэлт … түр санд хүлээж байна», again a day later if it lasts.
+  This watch needs no database, so a paused project — when the admin cannot load —
+  is still told. Once nothing waits, the alert is cleared. The kinds of alert are listed in the
   Worker (`ALERT_KINDS` in `worker/alerts.ts`), not in the table — migration 0007
   dropped its check, so a new kind is never refused — and the admin shows a kind it
   has no words for by its code rather than hiding it.

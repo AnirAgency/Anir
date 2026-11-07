@@ -15,6 +15,7 @@
  * for rather than hiding it.
  */
 import { answer, callerOf, refusal } from './auth.ts';
+import { fit } from './text.ts';
 
 export interface Env {
   SUPABASE_URL: string;
@@ -22,12 +23,17 @@ export interface Env {
 }
 
 /**
- * Every kind of trouble the Worker raises. 'limiter-open': the contact
- * form's rate limiter let everything through because it could not reach KV
- * (./enquiry.ts). Add a kind here, and its words in src/content/admin.ts >
- * alerts.
+ * Every kind of trouble the Worker raises. Add a kind here, and its words in
+ * src/content/admin.ts > alerts.
+ *
+ *   limiter-open  the contact form's rate limiter let everything through
+ *                 because it could not reach KV (./enquiry.ts).
+ *   drain-stuck   an enquiry has waited in the KV buffer over an hour:
+ *                 Supabase will not take it — paused, a revoked grant, a
+ *                 schema behind the Worker (./watch.ts > stuck). Cleared
+ *                 when the buffer empties.
  */
-export const ALERT_KINDS = ['limiter-open'] as const;
+export const ALERT_KINDS = ['limiter-open', 'drain-stuck'] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
 const service = (env: Env) => ({
@@ -45,11 +51,27 @@ export async function raiseAlert(env: Env, kind: AlertKind, detail: string, fetc
     const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/worker_alerts`, {
       method: 'POST',
       headers: { ...service(env), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ kind, last_at: new Date().toISOString(), detail: detail.slice(0, 500) }),
+      // Cut as the column counts, never inside a character: a split emoji would make Postgres refuse the alert itself.
+      body: JSON.stringify({ kind, last_at: new Date().toISOString(), detail: fit(detail, 500).text }),
     });
     if (!response.ok) console.error(`enquiry ALERT ${kind}: not recorded — worker_alerts answered ${response.status}`);
   } catch (error) {
     console.error(`enquiry ALERT ${kind}: not recorded — ${(error as Error).message}`);
+  }
+}
+
+/** The trouble is over — for a kind that is a state, not an event (drain-stuck). Never throws. */
+export async function clearAlert(env: Env, kind: AlertKind, fetcher: typeof fetch = fetch): Promise<void> {
+  console.log(`enquiry ALERT ${kind}: cleared`);
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return;
+  try {
+    const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/worker_alerts?kind=eq.${encodeURIComponent(kind)}`, {
+      method: 'DELETE',
+      headers: { ...service(env), Prefer: 'return=minimal' },
+    });
+    if (!response.ok) console.error(`enquiry ALERT ${kind}: not cleared — worker_alerts answered ${response.status}`);
+  } catch (error) {
+    console.error(`enquiry ALERT ${kind}: not cleared — ${(error as Error).message}`);
   }
 }
 

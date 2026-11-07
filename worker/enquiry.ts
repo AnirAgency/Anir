@@ -24,8 +24,9 @@
  * published form's, a contact that is neither an email nor a phone number,
  * an empty name — each is stored as sent, and named in the row's
  * `unrecognised` so the team knows to look. The text is made storable first
- * (no NUL, no broken character), so the table can never refuse what the
- * Worker sends. Only the honeypot and the rate limit keep an enquiry out,
+ * (no NUL, no broken character) and cut to what its column holds — the
+ * User-Agent header too — so the table can never refuse what the Worker
+ * sends; a cut is flagged, never silent. Only the honeypot and the rate limit keep an enquiry out,
  * and both are defences against bots, not readings of a visitor's answers.
  * Even a body that cannot be read is stored: its raw text in the message,
  * flagged 'body'. Nothing about a request's shape discards it — a shape
@@ -39,6 +40,7 @@
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type
 // stripping both resolve it, so the test harness can import this file directly.
 import { site } from '../src/content/site.ts';
+import { ENQUIRY_MAX } from '../src/lib/enquiry-limits.ts';
 import { raiseAlert } from './alerts.ts';
 import { answer, same } from './auth.ts';
 
@@ -86,13 +88,6 @@ interface Context {
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
-const MAX = {
-  name: 100,
-  contact: 120,
-  message: 2000,
-  userAgent: 400,
-} as const;
-
 const messages = site.contact.form.messages;
 
 /** The form's chip values, taken from the same published source the form
@@ -103,8 +98,6 @@ const allowed: Record<string, Set<string>> = Object.fromEntries(
 
 /** The questions with a column of their own; any other the admin adds goes in `answers`. */
 const COLUMNS = ['service', 'budget', 'timing'] as const;
-/** A chip value is a short code; this keeps a forged one whole enough to read. */
-const RAW_MAX = 200;
 
 const HONEYPOT = site.contact.form.honeypot.name;
 
@@ -166,8 +159,24 @@ const storable = (text: string) =>
 const asText = (value: unknown) =>
   typeof value === 'string' ? value : value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 
-// Cut, then made storable again: a cut can split an emoji in two.
-const clean = (value: unknown, max: number) => storable(storable(asText(value)).trim().slice(0, max));
+/** Characters as Postgres's char_length counts them: storable text has no half pairs, so each pair is one. */
+const PAIR = /[\ud800-\udbff][\udc00-\udfff]/g;
+const characters = (text: string) => text.length - (text.match(PAIR)?.length ?? 0);
+
+/**
+ * Text as it is stored: made storable, trimmed, and at most `max`
+ * characters, counted as the table's checks count them — so the table can
+ * never refuse it, a character is never split, and text that fits is never
+ * cut. `cutFrom` is how many characters came, when that was too many.
+ */
+function fit(value: unknown, max: number): { text: string; cutFrom?: number } {
+  const text = storable(asText(value)).trim();
+  if (text.length <= max) return { text }; // never more characters than UTF-16 units
+  const length = characters(text);
+  if (length <= max) return { text };
+  // The first `max` characters lie within the first 2 × max units, each whole.
+  return { text: Array.from(text.slice(0, max * 2)).slice(0, max).join(''), cutFrom: length };
+}
 
 /** An email, or a Mongolian phone number with or without country code. */
 function looksContactable(value: string) {
@@ -463,15 +472,27 @@ export async function onRequestPost(context: Context): Promise<Response> {
 
   // A bot filled the field no human can see. Answer as if it worked, and
   // store nothing — telling a spammer it was caught only helps it adapt.
-  if (clean(payload[HONEYPOT], 100) !== '') {
+  if (fit(payload[HONEYPOT], 100).text !== '') {
     return reply(request, 200, true, messages.success);
   }
 
-  const [service, budget, timing] = COLUMNS.map((group) => clean(payload[group], RAW_MAX));
-  const name = clean(payload.name, MAX.name);
-  const contact = clean(payload.contact, MAX.contact);
+  // Every value cut to what its column holds — never refused, since a value
+  // the table refuses loses the whole enquiry. What came longer is kept to
+  // its limit and said: `cut:<field>:<characters it came with>`.
+  const cut: string[] = [];
+  const take = (field: string, value: unknown, max: number) => {
+    const { text, cutFrom } = fit(value, max);
+    if (cutFrom !== undefined) cut.push(`cut:${field}:${cutFrom}`);
+    return text;
+  };
+
+  const [service, budget, timing] = COLUMNS.map((group) => take(group, payload[group], ENQUIRY_MAX.choice));
+  const name = take('name', payload.name, ENQUIRY_MAX.name);
+  const contact = take('contact', payload.contact, ENQUIRY_MAX.contact);
   // An unreadable body's own text, where the message would be: whatever it said is kept.
-  const message = clean(payload.message, MAX.message) || clean(unreadable, MAX.message);
+  const message = take('message', payload.message, ENQUIRY_MAX.message) || take('message', unreadable, ENQUIRY_MAX.message);
+  // A header, not a form field: no hostile body reaches it, and a crawler's runs to thousands.
+  const userAgent = take('user_agent', request.headers.get('User-Agent'), ENQUIRY_MAX.user_agent);
 
   // Checked against the published form, and never refused: what does not
   // match is stored as sent, and named.
@@ -480,13 +501,15 @@ export async function onRequestPost(context: Context): Promise<Response> {
   for (const group of site.contact.form.groups) {
     const value = (COLUMNS as readonly string[]).includes(group.name)
       ? ({ service, budget, timing } as Record<string, string>)[group.name]
-      : (answers[group.name] = clean(payload[group.name], RAW_MAX));
+      : (answers[group.name] = take(group.name, payload[group.name], ENQUIRY_MAX.choice));
     if (!allowed[group.name]?.has(value)) unrecognised.push(group.name);
   }
   // A question the admin removed is simply blank: nothing to check.
   if (unreadable) unrecognised.unshift('body');
   if (!name) unrecognised.push('name');
   if (!contact || !looksContactable(contact)) unrecognised.push('contact');
+  // The form's own maxlength keeps a person inside every limit; past one, it did not come from the form.
+  unrecognised.push(...cut);
 
   const ip = request.headers.get('CF-Connecting-IP') ?? '0.0.0.0';
   const limit = await rateLimit(env, ip);
@@ -507,7 +530,7 @@ export async function onRequestPost(context: Context): Promise<Response> {
     name,
     contact,
     message: message || null,
-    user_agent: clean(request.headers.get('User-Agent'), MAX.userAgent) || null,
+    user_agent: userAgent || null,
     // Only when there is something to say: an ordinary enquiry is the same
     // row it always was, and stores even before migration 0005.
     ...(unrecognised.length ? { unrecognised } : {}),

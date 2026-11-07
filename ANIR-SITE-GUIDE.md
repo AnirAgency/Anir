@@ -747,11 +747,12 @@ versions:
 
 - [ ] **Switch publishing on, in exactly this order.** Each step needs the one
   before it; the developer's version is in the README (The admin › Setting it up).
-  1. **Three database changes.** In Supabase, run
+  1. **Four database changes — done on 7 November.** In Supabase,
      `supabase/migrations/0004_enquiry_status.sql` (enquiries get a status, for the
      inbox), then `0005_keep_every_enquiry_and_build_status.sql` (the database stops
      refusing enquiries, and gets the build status), then `0006_worker_alerts.sql`
-     (where the site notes trouble for the admin to show).
+     (where the site notes trouble for the admin to show), then
+     `0007_any_alert_kind.sql` (so a new kind of trouble is never turned away).
   2. **The build secret.** A developer makes one random secret and stores it in
      Cloudflare as `BUILD_REPORT_SECRET` (Settings → Build → Variables and secrets).
      It lets the build tell the admin how it went, and can do nothing else. No
@@ -810,10 +811,20 @@ versions:
 - [ ] **Should the grain move on phones too?** Today it is still on phones.
 - [ ] **The size of the title on the products page.**
 - [ ] **Bring back Pricing and Team, or keep them hidden?**
-- [ ] **Turn on "leaked password protection"** in Supabase (Authentication →
-  settings), which refuses passwords known to have been stolen elsewhere.
-  Supabase's automatic security check recommends it. (The other thing it
-  flagged, a permission the public did not need, was closed on 6 November.)
+- [x] **Password rules for the admin's accounts — decided.** In Supabase:
+  Authentication → Providers → Email → minimum length **12**, and require **all
+  four kinds of character** (small letters, capital letters, numbers, symbols).
+  The rule is checked when a password is set, so anyone whose password is
+  shorter should change it once.
+
+  Supabase's automatic security check also suggests "leaked password
+  protection", which refuses passwords known to have been stolen elsewhere.
+  **That is accepted as not available:** it needs Supabase's paid Pro plan, and
+  this project is on the free plan, where the switch does not exist. The
+  password rules above are what the free plan offers. (The other thing the
+  check flagged, a permission the public did not need, was closed on
+  6 November. Its notes that three tables have "no policies" are the design —
+  only the site's own server code may read them — and stay.)
 
 ### Later
 

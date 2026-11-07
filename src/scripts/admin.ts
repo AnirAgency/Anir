@@ -32,6 +32,7 @@
  */
 import config from '../lib/supabase.json';
 import { admin as t } from '../content/admin';
+import { ENQUIRY_MAX } from '../lib/enquiry-limits';
 import { overlay } from '../content/live';
 import {
   GROUPS,
@@ -356,21 +357,28 @@ function publishStatus(text: string, tone: Tone = '', detail = '') {
 }
 
 /**
- * What the Worker recorded for a person to know (worker/alerts.ts): today,
+ * What the Worker recorded for a person to know (worker/alerts.ts > ALERT_KINDS):
  * the contact form's rate limiter letting everything through because it
- * could not reach KV. Shown on the status line for a day after it last
- * happened, as a failed publish is.
+ * could not reach KV, or any kind added since. Shown on the status line for
+ * a day after it last happened, as a failed publish is — the latest in
+ * words, every one in «Дэлгэрэнгүй». A kind with no words of its own is
+ * shown by its code, never hidden.
  */
 const ALERT_FOR_MS = 24 * 60 * 60 * 1000;
+type Alert = { kind: string; last_at: string; detail: string | null };
+const alertWords = (alert: Alert) =>
+  (alert.kind === 'limiter-open' ? t.alerts.limiter : t.alerts.other.replace('{kind}', alert.kind)).replace('{when}', when(alert.last_at));
 async function readAlerts() {
   if (!session || root.dataset.state !== 'ready') return;
   try {
     const { response, body } = await worker('/api/alerts');
     if (!response.ok) return;
-    const limiter = ((body.alerts ?? []) as { kind: string; last_at: string; detail: string | null }[]).find(
-      (alert) => alert.kind === 'limiter-open' && Date.now() - Date.parse(alert.last_at) < ALERT_FOR_MS
-    );
-    paint(alertEl, limiter ? t.alerts.limiter.replace('{when}', when(limiter.last_at)) : '', limiter ? 'bad' : '', limiter?.detail ?? '');
+    const recent = ((body.alerts ?? []) as Alert[])
+      .filter((alert) => Date.now() - Date.parse(alert.last_at) < ALERT_FOR_MS)
+      .sort((a, b) => Date.parse(b.last_at) - Date.parse(a.last_at));
+    const latest = recent[0];
+    const detail = recent.map((alert) => [alert === latest ? '' : alertWords(alert), alert.detail ?? ''].filter(Boolean).join('\n')).filter(Boolean).join('\n\n');
+    paint(alertEl, latest ? alertWords(latest) : '', latest ? 'bad' : '', detail);
     showStrip();
   } catch {
     /* no word rather than a wrong one; the next check tries again */
@@ -1163,13 +1171,22 @@ interface Enquiry {
   answers?: Record<string, string>;
 }
 
-/** Why an enquiry is worth a second look, in words: each field it was stored with unmatched. */
+/** Why an enquiry is worth a second look, in words: each field it was stored with unmatched, or cut. */
 function flagsOf(enquiry: Enquiry): string[] {
-  const groups = (((published.contact as Obj)?.form as Obj)?.groups ?? []) as Obj[];
+  const form = ((published.contact as Obj)?.form ?? {}) as Obj;
+  const groups = (form.groups ?? []) as Obj[];
+  const inputs = (form.fields ?? {}) as Record<string, Obj>;
   return (enquiry.unrecognised ?? []).map((field) => {
     if (field === 'name') return t.inbox.flags.name;
     if (field === 'contact') return t.inbox.flags.contact;
     if (field === 'body') return t.inbox.flags.body;
+    // cut:<field>:<characters it came with> — kept to its limit, the rest cut (worker/enquiry.ts).
+    if (field.startsWith('cut:')) {
+      const [, part, length] = field.split(':');
+      const label = part === 'user_agent' ? t.inbox.flags.userAgent : String(inputs[part]?.label ?? groups.find((g) => g.name === part)?.legend ?? part);
+      const max = (ENQUIRY_MAX as Record<string, number>)[part] ?? ENQUIRY_MAX.choice;
+      return t.inbox.flags.cut.replace('{field}', label).replace('{length}', length ?? '?').replace('{max}', String(max));
+    }
     const value = (enquiry as unknown as Record<string, unknown>)[field] ?? enquiry.answers?.[field] ?? '';
     const legend = String(groups.find((g) => g.name === field)?.legend ?? field);
     return t.inbox.flags.choice.replace('{legend}', legend).replace('{value}', String(value));

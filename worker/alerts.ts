@@ -8,8 +8,11 @@
  * only (./auth.ts), and the admin puts a recent one on its status line, as
  * it does a failed publish.
  *
- * Today one kind: 'limiter-open', the contact form's rate limiter letting
- * everything through because it could not reach KV (./enquiry.ts).
+ * The kinds are listed here, not in the table (migration 0007 dropped its
+ * check): a kind the table did not know would have been refused, silently,
+ * in the one place meant to make failures seen. A kind missing from this
+ * list is recorded all the same, and the admin shows a kind it has no words
+ * for rather than hiding it.
  */
 import { answer, callerOf, refusal } from './auth.ts';
 
@@ -18,7 +21,14 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string;
 }
 
-export type AlertKind = 'limiter-open';
+/**
+ * Every kind of trouble the Worker raises. 'limiter-open': the contact
+ * form's rate limiter let everything through because it could not reach KV
+ * (./enquiry.ts). Add a kind here, and its words in src/content/admin.ts >
+ * alerts.
+ */
+export const ALERT_KINDS = ['limiter-open'] as const;
+export type AlertKind = (typeof ALERT_KINDS)[number];
 
 const service = (env: Env) => ({
   apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -28,6 +38,8 @@ const service = (env: Env) => ({
 /** Logs it, then records it for the admin. Never throws: an alert must not cost an enquiry. */
 export async function raiseAlert(env: Env, kind: AlertKind, detail: string, fetcher: typeof fetch = fetch): Promise<void> {
   console.error(`enquiry ALERT ${kind}: ${detail}`);
+  // Checked here, never refused: an unlisted kind is still trouble someone should hear of.
+  if (!(ALERT_KINDS as readonly string[]).includes(kind)) console.error(`enquiry ALERT ${kind}: not in ALERT_KINDS — recorded all the same`);
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return;
   try {
     const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/worker_alerts`, {

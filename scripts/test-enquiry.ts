@@ -9,15 +9,35 @@
  * buffer and its drain, and the notification — and the invariant, over a few
  * hundred hostile submissions: no visitor input causes an enquiry not to be
  * stored. The stand-in for Supabase holds every row to the table's own
- * constraints (supabase/migrations/0001 and 0005) and to what Postgres text
- * can hold, so a row it takes is one the real table would. What it does not
+ * constraints — its length checks read from supabase/migrations itself — and
+ * to what Postgres text can hold, so a row it takes is one the real table
+ * would. Every length is tried at, just past and far past its limit, the
+ * User-Agent header among them. What it does not
  * prove: that the migrations are applied and the keys set.
  *
  *   node scripts/test-enquiry.ts
  */
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 
+import { ENQUIRY_MAX } from '../src/lib/enquiry-limits.ts';
+import { raiseAlert, type AlertKind } from '../worker/alerts.ts';
 import { drain, onHealth, onRequestPost } from '../worker/enquiry.ts';
+
+/**
+ * The table's length checks, read from the migrations as they leave them —
+ * every `char_length(<column>) <= n` or `between … and n`, the last one for
+ * each column winning, as the last migration to set it does. The stand-in
+ * table below holds rows to these, not to numbers copied by hand, so a
+ * migration that tightens a limit fails this suite until the Worker cuts to it.
+ */
+const migrations = new URL('../supabase/migrations/', import.meta.url);
+const TABLE_MAX: Record<string, number> = {};
+for (const file of readdirSync(migrations).filter((name: string) => name.endsWith('.sql')).sort()) {
+  const sql = readFileSync(new URL(file, migrations), 'utf8').replace(/--.*$/gm, '');
+  for (const [, column, n] of sql.matchAll(/char_length\((\w+)\)\s*(?:<=|between\s+\d+\s+and)\s*(\d+)/g)) TABLE_MAX[column] = Number(n);
+}
+const ENQUIRY_COLUMNS = ['name', 'contact', 'message', 'user_agent'] as const;
 
 type Row = Record<string, unknown>;
 
@@ -38,10 +58,11 @@ const unstorable = (text: string) => /\u0000/.test(text) || /[\ud800-\udbff](?![
 function refusedBy(row: Row): string | null {
   for (const key of Object.keys(row)) if (!COLUMNS.has(key)) return `unknown column ${key}`;
   for (const key of ['service', 'budget', 'timing', 'name', 'contact']) if (typeof row[key] !== 'string') return `${key} not null`;
-  if (chars(row.name as string) > 100) return 'name over 100';
-  if (chars(row.contact as string) > 120) return 'contact over 120';
-  if (row.message !== null && (typeof row.message !== 'string' || chars(row.message) > 2000)) return 'message';
-  if (row.user_agent !== null && (typeof row.user_agent !== 'string' || chars(row.user_agent) > 400)) return 'user_agent';
+  for (const column of ENQUIRY_COLUMNS) {
+    const value = row[column];
+    if (value === null && (column === 'message' || column === 'user_agent')) continue;
+    if (typeof value !== 'string' || chars(value) > TABLE_MAX[column]) return `${column} over ${TABLE_MAX[column]}`;
+  }
   if ('unrecognised' in row && !(Array.isArray(row.unrecognised) && row.unrecognised.every((f) => typeof f === 'string'))) return 'unrecognised';
   if ('answers' in row && (typeof row.answers !== 'object' || row.answers === null || Array.isArray(row.answers))) return 'answers';
   const texts: string[] = [];
@@ -234,6 +255,66 @@ await check('a chip value the form does not have is stored, raw, flagged', async
   assert.equal(captured[0].budget, 'free-please', 'the raw value is kept');
   assert.deepEqual(captured[0].unrecognised, ['budget']);
   return '200, stored with budget "free-please", unrecognised: [budget]';
+});
+
+await check('the form, the Worker and the table agree on every length', async () => {
+  for (const column of ENQUIRY_COLUMNS) {
+    assert.ok(TABLE_MAX[column], `no length check found for ${column} in supabase/migrations`);
+    assert.equal(ENQUIRY_MAX[column], TABLE_MAX[column], `${column}: the Worker cuts to ${ENQUIRY_MAX[column]}, the table holds ${TABLE_MAX[column]}`);
+  }
+  const form = readFileSync(new URL('../src/components/Contact.astro', import.meta.url), 'utf8');
+  for (const field of ['name', 'contact', 'message']) assert.match(form, new RegExp(`maxlength=\\{ENQUIRY_MAX\\.${field}\\}`), `the form's ${field} maxlength`);
+  return ENQUIRY_COLUMNS.map((column) => `${column} ${TABLE_MAX[column]}`).join(', ') + ' — read from the migrations';
+});
+
+/*
+  Past a column's length the table refuses the whole row — an enquiry lost,
+  the NUL failure from the other side. So each value is cut to its limit
+  (counted as Postgres counts: characters, an emoji one), the enquiry
+  stored, and the cut named: cut:<field>:<characters it came with>.
+*/
+await check('at, just past and far past every limit: stored, cut to fit, said', async () => {
+  const flags = (row: Row) => ((row.unrecognised ?? []) as string[]).filter((flag) => flag.startsWith('cut:'));
+  const send = async (body: Record<string, unknown>, agent?: string) => {
+    captured = [];
+    const response = await onRequestPost({ request: post(body, { json: true, agent }), env: env() });
+    assert.equal(response.status, 200);
+    assert.equal(captured.length, 1, `not stored: ${JSON.stringify(body).slice(0, 80)}…`);
+    return captured[0];
+  };
+  let tried = 0;
+  for (const field of ['name', 'contact', 'message'] as const) {
+    const max = ENQUIRY_MAX[field];
+    const at = await send({ ...valid, [field]: 'ө'.repeat(max) });
+    assert.equal(chars(at[field] as string), max, `${field} at its limit is kept whole`);
+    assert.deepEqual(flags(at), [], `${field} at its limit is not flagged as cut`);
+    for (const length of [max + 1, max * 50]) {
+      const over = await send({ ...valid, [field]: `${'ү'.repeat(length - 1)}Z` });
+      assert.equal(over[field], 'ү'.repeat(max), `${field} of ${length} keeps its first ${max} characters`);
+      assert.deepEqual(flags(over), [`cut:${field}:${length}`]);
+    }
+    // Characters, not UTF-16 units: an emoji counts one, and one at the limit is never split.
+    const emoji = await send({ ...valid, [field]: '😀'.repeat(max) });
+    assert.equal(emoji[field], '😀'.repeat(max), `${field} of ${max} emoji fits and is kept whole`);
+    assert.deepEqual(flags(emoji), []);
+    const emojiOver = await send({ ...valid, [field]: '😀'.repeat(max + 1) });
+    assert.equal(emojiOver[field], '😀'.repeat(max));
+    assert.deepEqual(flags(emojiOver), [`cut:${field}:${max + 1}`]);
+    tried += 5;
+  }
+  // The header no body-shaped attack reaches.
+  const max = ENQUIRY_MAX.user_agent;
+  const browser = await send(valid, 'M'.repeat(max));
+  assert.equal(browser.user_agent, 'M'.repeat(max));
+  assert.equal(browser.unrecognised, undefined, 'a User-Agent at its limit is an ordinary enquiry');
+  const crawler = await send(valid, `Mozilla/5.0 (compatible; ${'x'.repeat(3974)})`);
+  assert.equal(chars(crawler.user_agent as string), max, 'a 4000-character User-Agent is cut to 400');
+  assert.deepEqual(crawler.unrecognised, ['cut:user_agent:4000']);
+  // And a chip value — no column check, but cut all the same, and said.
+  const chip = await send({ ...valid, budget: 'b'.repeat(ENQUIRY_MAX.choice * 10) });
+  assert.equal(chip.budget, 'b'.repeat(ENQUIRY_MAX.choice));
+  assert.deepEqual(chip.unrecognised, ['budget', `cut:budget:${ENQUIRY_MAX.choice * 10}`]);
+  return `${tried + 3} enquiries: at the limit kept whole; past it cut to fit, stored, flagged cut:<field>:<n> — User-Agent 4000 → 400`;
 });
 
 await check('an ordinary enquiry carries no flags at all', async () => {
@@ -551,6 +632,16 @@ await check('a limiter that cannot reach KV lets the enquiry in — and says so'
   assert.match(String(alerts[1].detail), /RATE_LIMIT is not bound/);
   assert.ok(errors.filter((line) => line.includes('ALERT limiter-open')).length === 2, 'logged');
   return 'KV down, KV unbound: 200, stored, logged, recorded for the admin';
+});
+
+await check('an alert of a kind the Worker does not list is recorded all the same', async () => {
+  alerts = [];
+  const keep = console.error;
+  console.error = () => {};
+  await raiseAlert(env(), 'a-kind-from-next-year' as AlertKind, 'something new went wrong');
+  console.error = keep;
+  assert.deepEqual(alerts.map((x) => x.kind), ['a-kind-from-next-year']);
+  return 'written to worker_alerts, not dropped — the table checks no kind since 0007';
 });
 
 await check('a limiter that works raises nothing', async () => {

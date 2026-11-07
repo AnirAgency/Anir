@@ -72,6 +72,8 @@ export const admin = {
   /** Trouble the Worker recorded (worker/alerts.ts), on the status line under the bar. */
   alerts: {
     limiter: 'Хүсэлтийн хязгаарлагч {when}-д ажиллаагүй тул тэр үед хүсэлтийг хязгааргүй хүлээн авсан. Хүсэлт алдагдаагүй; сайтыг хөгжүүлсэн хүнд хэлнэ үү.',
+    /** A kind of trouble these words do not cover yet (worker/alerts.ts > ALERT_KINDS): shown by its code, never hidden. */
+    other: 'Сайт {when}-д «{kind}» гэсэн анхааруулга бүртгэсэн. «Дэлгэрэнгүй»-г сайтыг хөгжүүлсэн хүнд үзүүлнэ үү.',
   },
 
   /** Someone saved this part after it was opened here: nothing is overwritten, the typing is kept. */
@@ -265,6 +267,10 @@ export const admin = {
       name: 'Нэр бичээгүй',
       contact: 'Холбоо барих мэдээлэл и-мэйл эсвэл утасны дугаар шиг харагдахгүй байна — бичсэнээр нь хадгалсан',
       body: 'Маягтаар бус өөр хэлбэрээр илгээсэн — ирсэн бичвэрийг нь мессеж хэсэгт хадгалсан',
+      /** A value past its column's length (src/lib/enquiry-limits.ts): kept to the limit, the rest cut. */
+      cut: '{field}: {length} тэмдэгт ирсэн нь хязгаараас урт тул эхний {max} тэмдэгтийг хадгалж, үлдсэнийг хассан',
+      /** The browser's own description of itself, sent with every request — {field} in «cut» when it is the one cut. */
+      userAgent: 'Хөтчийн мэдээлэл (User-Agent)',
     },
     changed: '{status} — {who}, {when}',
     refresh: 'Шинэчлэх',

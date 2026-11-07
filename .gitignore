@@ -42,3 +42,8 @@ public/media/live/
 mongolian-copy*.md
 .build-log
 .build-exit
+
+# The placeholder media as it arrived. Its contents are already extracted into
+# public/media/placeholder/ and committed; the archive would store the same
+# ~3 MB twice, in git's history forever.
+anir-placeholder-media-v*.zip

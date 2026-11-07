@@ -1,6 +1,7 @@
 ---
 import Section from './Section.astro';
 import { site } from '../content/site';
+import { ENQUIRY_MAX } from '../lib/enquiry-limits';
 
 /*
   The enquiry form. A real form, not a decoration.
@@ -65,7 +66,7 @@ const { fields, honeypot } = form;
           name={fields.name.name}
           type="text"
           placeholder={fields.name.placeholder}
-          maxlength="100"
+          maxlength={ENQUIRY_MAX.name}
           autocomplete="name"
           required
         />
@@ -79,7 +80,7 @@ const { fields, honeypot } = form;
           name={fields.contact.name}
           type="text"
           placeholder={fields.contact.placeholder}
-          maxlength="120"
+          maxlength={ENQUIRY_MAX.contact}
           autocomplete="email"
           required
         />
@@ -92,7 +93,7 @@ const { fields, honeypot } = form;
           id="f-message"
           name={fields.message.name}
           placeholder={fields.message.placeholder}
-          maxlength="2000"
+          maxlength={ENQUIRY_MAX.message}
           rows="4"></textarea>
       </div>
 

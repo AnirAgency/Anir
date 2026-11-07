@@ -239,7 +239,10 @@ gets missed. Instead the Worker's 15-minute schedule (`worker/watch.ts`) sends:
 - If the limiter ever fails open — KV unreachable, or unbound — the Worker logs
   `ALERT limiter-open`, records it in `worker_alerts`, and the admin shows it on its
   status line for a day. The limiter is never made to fail closed: a dropped
-  enquiry is worse than an unbounded table.
+  enquiry is worse than an unbounded table. The kinds of alert are listed in the
+  Worker (`ALERT_KINDS` in `worker/alerts.ts`), not in the table — migration 0007
+  dropped its check, so a new kind is never refused — and the admin shows a kind it
+  has no words for by its code rather than hiding it.
 
 An immediate notification starts with one of two lines:
 
@@ -490,9 +493,14 @@ else is a static file.
   form does not have, a contact that is neither an email nor a phone number, an
   empty name — each is stored as sent and named in the row's `unrecognised`, and
   the inbox and the notification say what to check. The text is made storable
-  first (no NUL, no broken character), so the table can never refuse what the
-  Worker sends. Even a body that cannot be read is stored, its raw text in the
-  message. Answers to questions added in the admin go in `answers`. Only the
+  first (no NUL, no broken character) and cut to what its column holds
+  ([`src/lib/enquiry-limits.ts`](src/lib/enquiry-limits.ts): name 100, contact
+  120, message 2000, User-Agent 400 characters, counted as Postgres counts them),
+  so the table can never refuse what the Worker sends. A cut is never silent: the
+  enquiry is flagged `cut:<field>:<characters it came with>`, and the inbox says
+  what was cut. The User-Agent is a header, not a form field — a browser's runs
+  100–300 characters, a crawler's to thousands. Even a body that cannot be read is
+  stored, its raw text in the message. Answers to questions added in the admin go in `answers`. Only the
   honeypot and the rate limit keep one out — and the health check, known by its
   credential (`HEALTH_CHECK_SECRET`), never by its shape.
 - **The rate limit is the only bound on the table now.** It stands in front of
@@ -612,6 +620,22 @@ How it fits together (CLAUDE.md > The admin has the rules):
 
    Someone signed in but not in `editors` can read and do nothing else. To take access
    away: `delete from public.editors where email = '…';`
+
+   **Passwords, before the accounts:** Authentication → Providers → Email → minimum
+   length **12**, and require **all four character classes** (lowercase, uppercase,
+   digits, symbols). Supabase checks a password only when it is set, so an account
+   made before this keeps its old password until it is changed — change any that
+   would not pass.
+
+   **The security advisor, read once and accepted.** Four findings stay, on purpose:
+   - *RLS enabled, no policy* on `enquiries`, `build_status` and `worker_alerts` —
+     the design: only the Worker, with service_role, reads or writes them. Adding a
+     policy to clear it would expose them. (See each migration's lockdown note.)
+   - *Signed-in users can execute `is_editor()`* — they must: every save's row level
+     security calls it. Anon cannot (0003).
+   - *Leaked password protection disabled* — **accepted: Pro plan only.** This
+     project is on Free, where the setting does not exist. The password rules above
+     are what Free offers, and they are set.
 4. **Publishing, in this order — each step needs the one before it.**
 
    1. **The migrations.** Paste [`0004_enquiry_status.sql`](supabase/migrations/0004_enquiry_status.sql),
@@ -620,8 +644,11 @@ How it fits together (CLAUDE.md > The admin has the rules):
       order, into the SQL editor and run them. 0004 gives enquiries a status (the
       inbox); 0005 drops the checks that refused an enquiry, adds its flags, and makes
       the one-row `build_status` table; 0006 makes `worker_alerts`, where the Worker
-      records the rate limiter failing open. None adds a policy to `enquiries`, and
-      none should ever be added. The Worker that the merge deploys needs all three.
+      records the rate limiter failing open. Then
+      [`0007_any_alert_kind.sql`](supabase/migrations/0007_any_alert_kind.sql), which
+      lets `worker_alerts` take any kind the Worker raises. None adds a policy to
+      `enquiries`, and none should ever be added. The Worker that the merge deploys
+      needs all four. (On the live project all four were applied on 7 November.)
    2. **The build secret.** Make one random secret —
       `node -e "console.log(crypto.randomBytes(32).toString('hex'))"` — and add it as a
       build secret: Workers & Pages → anir → Settings → Build → Variables and secrets →

@@ -374,9 +374,11 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
   }
   if (!t.notify.digest.includes('{n}') || !t.notify.flood.includes('{n}')) problems.add('the Telegram digest and flood messages need their words, with {n}');
   if (!t.alerts.limiter.includes('{when}')) problems.add('the limiter alert needs its words, with {when}');
-  for (const flag of ['name', 'contact', 'body']) {
+  if (!['{kind}', '{when}'].every((slot) => t.alerts.other.includes(slot))) problems.add('an alert of a kind with no words of its own needs words, with {kind} and {when}');
+  for (const flag of ['name', 'contact', 'body', 'userAgent']) {
     if (!(t.inbox.flags as Record<string, string>)[flag]) problems.add(`no words for the enquiry flag "${flag}"`);
   }
+  if (!['{field}', '{length}', '{max}'].every((slot) => t.inbox.flags.cut.includes(slot))) problems.add('a cut value needs its words, with {field}, {length} and {max}');
   for (const reason of ['content', 'image', 'claim', 'budget', 'contrast', 'labels', 'video', 'other']) {
     if (!t.publish.reasons[reason]) problems.add(`no sentence for a build that failed for "${reason}"`);
   }

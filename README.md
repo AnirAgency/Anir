@@ -674,7 +674,11 @@ How it fits together (CLAUDE.md > The admin has the rules):
       `npm run migration:record -- 0009` prints the SQL to paste (same convention as
       the rows the connector writes; `--at <ISO time>` for one that ran earlier). `npm
       run test:enquiry`, with the service role key in `.dev.vars`, fails naming every
-      file with no history row, and every row with no file. Note that the Supabase
+      file with no history row, and every row with no file. **This check is manual,
+      never automated:** it needs the service role key, and no build has that key or
+      ever should. Without the key the suite does not fail — it prints a boxed
+      `SKIPPED — NOT CHECKED` and counts the check apart from the passes — so a green
+      run without the key says nothing about the history. Note that the Supabase
       CLI keys migrations on the file name's leading digits, which here are `0001`…,
       not the history's timestamps — so `supabase db push` cannot be used on this
       folder as it stands; the parity check matches by name.
@@ -684,7 +688,11 @@ How it fits together (CLAUDE.md > The admin has the rules):
       `BUILD_REPORT_SECRET`, type *Secret*. Keep the value at hand for step 4, never in
       a file or a chat. Nothing reads it yet.
    3. **The merge**, with the build command **unchanged** — it is `npm run budget`
-      today; leave it. This deploys `POST /api/builds`. Switching to `npm run ci` before
+      today; leave it. **Before it, by hand: the migration parity check** — the
+      service role key in `.dev.vars`, `npm run test:enquiry`, and no
+      `SKIPPED — NOT CHECKED` box at the end. The Worker the merge deploys expects
+      every migration in the folder; this is the one check that the live project has
+      them, and nothing runs it for you. This deploys `POST /api/builds`. Switching to `npm run ci` before
       this would make the first report post to a route that does not exist yet, and
       the admin would show a fifteen-minute silence on a build that worked.
    4. **The Worker secret**, the identical value: `npx wrangler secret put

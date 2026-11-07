@@ -400,6 +400,14 @@ site stays static.
   value as a Worker secret, `DEPLOY_HOOK_URL`, `HEALTH_CHECK_SECRET` (required:
   unset, a health check stores junk) — and only then the build command to
   `npm run ci`, or the first report posts to a route not yet deployed.
+- **Migration parity is a manual pre-merge step, never automated.** A
+  migration pasted into the SQL editor leaves no history row; record it
+  straight after (`npm run migration:record -- NNNN`). Before every merge
+  that touches `supabase/migrations/`, run `npm run test:enquiry` with the
+  service role key in `.dev.vars`: it fails naming each file without a row in
+  the live history. No build runs it — the build must never hold the service
+  role key — so its `SKIPPED — NOT CHECKED` box is never a pass, and is not
+  to be counted as one.
 - **Notifications serve people, not the table.** Only an enquiry with
   nothing to check notifies at once; flagged ones are one «Шалгах: N шинэ»
   an hour at most, and a day past 50 stored enquiries sends one flood

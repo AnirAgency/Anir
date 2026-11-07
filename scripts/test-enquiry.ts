@@ -809,8 +809,14 @@ Object.assign(console, quiet);
 const width = Math.max(...results.map(([label]) => label.length));
 console.log('');
 for (const [label, detail] of results) {
-  const bad = detail.startsWith('FAILED');
-  console.log(`  ${bad ? 'x' : '+'} ${label.padEnd(width)}  ${detail}`);
+  const mark = detail.startsWith('FAILED') ? 'x' : detail.startsWith('SKIPPED') ? '!' : '+';
+  console.log(`  ${mark} ${label.padEnd(width)}  ${detail}`);
 }
-console.log(`\n  ${results.length - failures}/${results.length} passed\n`);
+// A skip is not a pass: counted apart, and said where it cannot be missed.
+const skipped = results.filter(([, detail]) => detail.startsWith('SKIPPED'));
+console.log(`\n  ${results.length - failures - skipped.length}/${results.length} passed${skipped.length ? `, ${skipped.length} SKIPPED — NOT CHECKED` : ''}\n`);
+if (skipped.length) {
+  const rule = '  ' + '!'.repeat(76);
+  console.log([rule, ...skipped.map(([label]) => `  !  SKIPPED: ${label}`), '  !  A manual pre-merge step: put SUPABASE_SERVICE_ROLE_KEY in .dev.vars and run', '  !  npm run test:enquiry again. No build runs it, and none ever will: the build', '  !  must never hold the service role key.', rule, ''].join('\n'));
+}
 process.exit(failures ? 1 : 0);

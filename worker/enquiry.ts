@@ -18,11 +18,28 @@
  * (drain, below). Only if both stores fail does the visitor see an error. And
  * every enquiry tells the team it arrived, saying which path it took, so a
  * quiet week is distinguishable from a broken one (notify, below).
+ *
+ * And no visitor input may cause one not to be stored. Nothing a visitor
+ * types, picks or leaves out is refused: a chip that is not one of the
+ * published form's, a contact that is neither an email nor a phone number,
+ * an empty name — each is stored as sent, and named in the row's
+ * `unrecognised` so the team knows to look. The text is made storable first
+ * (no NUL, no broken character), so the table can never refuse what the
+ * Worker sends. Only the honeypot and the rate limit keep an enquiry out,
+ * and both are defences against bots, not readings of a visitor's answers.
+ * Even a body that cannot be read is stored: its raw text in the message,
+ * flagged 'body'. Nothing about a request's shape discards it — a shape
+ * that did would let anyone who had read this code drop an enquiry on
+ * purpose. The one request that is not stored is the health check, and it
+ * is known by a credential (HEALTH_CHECK_SECRET), never by what it looks
+ * like. scripts/test-enquiry.ts holds the line with a few hundred hostile
+ * inputs.
  */
 
 // Explicit .ts extension: esbuild (Wrangler, Astro) and Node's own type
 // stripping both resolve it, so the test harness can import this file directly.
 import { site } from '../src/content/site.ts';
+import { same } from './auth.ts';
 
 interface KVNamespace {
   get(key: string): Promise<string | null>;
@@ -50,6 +67,12 @@ export interface Env {
   /** Chat notification through a Telegram bot. */
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  /**
+   * The health check's credential (scripts/test-headers.mjs). A request that
+   * carries it in X-Health-Check is answered and stored nowhere; a request
+   * without it — whatever its body — is an enquiry. Unset: no health check.
+   */
+  HEALTH_CHECK_SECRET?: string;
 }
 
 interface Context {
@@ -71,11 +94,16 @@ const MAX = {
 
 const messages = site.contact.form.messages;
 
-/** Allowed values for the three chip groups, taken from the same source the
- *  form renders from — so the validator cannot drift from the options. */
+/** The form's chip values, taken from the same published source the form
+ *  renders from — so the check cannot drift from the options. */
 const allowed: Record<string, Set<string>> = Object.fromEntries(
   site.contact.form.groups.map((group) => [group.name, new Set(group.options.map((o) => o.value))])
 );
+
+/** The questions with a column of their own; any other the admin adds goes in `answers`. */
+const COLUMNS = ['service', 'budget', 'timing'] as const;
+/** A chip value is a short code; this keeps a forged one whole enough to read. */
+const RAW_MAX = 200;
 
 const HONEYPOT = site.contact.form.honeypot.name;
 
@@ -126,8 +154,19 @@ const reply = (request: Request, status: number, ok: boolean, message: string) =
 
 /* --------------------------------------------------------------- validation */
 
-const clean = (value: unknown, max: number) =>
-  typeof value === 'string' ? value.trim().slice(0, max) : '';
+/**
+ * Text Postgres will always take: no NUL (text cannot hold one) and no
+ * half of a surrogate pair (not valid UTF-8, so the insert would fail).
+ */
+const storable = (text: string) =>
+  text.replace(/\u0000/g, '').replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '�');
+
+/** Whatever was sent, as text: a JSON number or list is kept, not dropped. */
+const asText = (value: unknown) =>
+  typeof value === 'string' ? value : value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+// Cut, then made storable again: a cut can split an emoji in two.
+const clean = (value: unknown, max: number) => storable(storable(asText(value)).trim().slice(0, max));
 
 /** An email, or a Mongolian phone number with or without country code. */
 function looksContactable(value: string) {
@@ -178,6 +217,10 @@ interface Enquiry {
   contact: string;
   message: string | null;
   user_agent: string | null;
+  /** Fields that did not look as the form sends them; only when there are any. */
+  unrecognised?: string[];
+  /** Answers to questions added in the admin; only when there are any. */
+  answers?: Record<string, string>;
 }
 
 type Path = 'live' | 'buffered';
@@ -275,6 +318,7 @@ export async function drain(env: Env): Promise<{ buffered: number; written: numb
 
 const labelFor = (group: string, value: string) =>
   site.contact.form.groups.find((g) => g.name === group)?.options.find((o) => o.value === value)?.label ?? value;
+const legendFor = (group: string) => site.contact.form.groups.find((g) => g.name === group)?.legend ?? group;
 
 /** The team's copy. Plain text, so a submitted message can never be markup. */
 function describe(row: Enquiry, path: Path) {
@@ -291,6 +335,8 @@ function describe(row: Enquiry, path: Path) {
     `Service: ${labelFor('service', row.service)}`,
     `Budget:  ${labelFor('budget', row.budget)}`,
     `Timing:  ${labelFor('timing', row.timing)}`,
+    ...Object.entries(row.answers ?? {}).map(([group, value]) => `${legendFor(group)}: ${labelFor(group, value)}`),
+    ...(row.unrecognised?.length ? ['', `CHECK: ${row.unrecognised.join(', ')} did not look as the form sends it — stored as sent.`] : []),
     ...(row.message ? ['', row.message] : []),
   ].join('\n');
 }
@@ -347,17 +393,37 @@ export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> 
 export async function onRequestPost(context: Context): Promise<Response> {
   const { request, env } = context;
 
-  // Read the body in whichever shape the caller sent it.
-  let payload: Record<string, unknown>;
+  // The health check, known by its credential and nothing else: answered,
+  // stored nowhere, counted against no one. Without the right secret it is
+  // an enquiry like any other.
+  const probe = request.headers.get('X-Health-Check');
+  if (probe && env.HEALTH_CHECK_SECRET && (await same(probe, env.HEALTH_CHECK_SECRET))) {
+    return json(200, { ok: true, check: 'nothing stored' });
+  }
+
+  // Read the body in whichever shape the caller sent it. One that cannot be
+  // read is kept as it came, to store in the message.
+  const type = request.headers.get('Content-Type') ?? '';
+  let raw = '';
   try {
-    const type = request.headers.get('Content-Type') ?? '';
+    raw = await request.text();
+  } catch {
+    /* a body that broke off: stored empty, flagged */
+  }
+  let payload: Record<string, unknown> = {};
+  let unreadable = '';
+  try {
     if (type.includes('application/json')) {
-      payload = (await request.json()) as Record<string, unknown>;
-    } else {
-      payload = Object.fromEntries(await request.formData()) as Record<string, unknown>;
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>;
+      else unreadable = raw;
+    } else if (type.includes('multipart/form-data') || type.includes('application/x-www-form-urlencoded')) {
+      payload = Object.fromEntries(await new Response(raw, { headers: { 'Content-Type': type } }).formData()) as Record<string, unknown>;
+    } else if (raw) {
+      unreadable = raw;
     }
   } catch {
-    return reply(request, 400, false, messages.invalid);
+    unreadable = raw;
   }
 
   // A bot filled the field no human can see. Answer as if it worked, and
@@ -366,22 +432,26 @@ export async function onRequestPost(context: Context): Promise<Response> {
     return reply(request, 200, true, messages.success);
   }
 
-  const service = clean(payload.service, 40);
-  const budget = clean(payload.budget, 40);
-  const timing = clean(payload.timing, 40);
+  const [service, budget, timing] = COLUMNS.map((group) => clean(payload[group], RAW_MAX));
   const name = clean(payload.name, MAX.name);
   const contact = clean(payload.contact, MAX.contact);
-  const message = clean(payload.message, MAX.message);
+  // An unreadable body's own text, where the message would be: whatever it said is kept.
+  const message = clean(payload.message, MAX.message) || clean(unreadable, MAX.message);
 
-  const valid =
-    allowed.service?.has(service) &&
-    allowed.budget?.has(budget) &&
-    allowed.timing?.has(timing) &&
-    name.length > 0 &&
-    contact.length > 0 &&
-    looksContactable(contact);
-
-  if (!valid) return reply(request, 422, false, messages.invalid);
+  // Checked against the published form, and never refused: what does not
+  // match is stored as sent, and named.
+  const unrecognised: string[] = [];
+  const answers: Record<string, string> = {};
+  for (const group of site.contact.form.groups) {
+    const value = (COLUMNS as readonly string[]).includes(group.name)
+      ? ({ service, budget, timing } as Record<string, string>)[group.name]
+      : (answers[group.name] = clean(payload[group.name], RAW_MAX));
+    if (!allowed[group.name]?.has(value)) unrecognised.push(group.name);
+  }
+  // A question the admin removed is simply blank: nothing to check.
+  if (unreadable) unrecognised.unshift('body');
+  if (!name) unrecognised.push('name');
+  if (!contact || !looksContactable(contact)) unrecognised.push('contact');
 
   const ip = request.headers.get('CF-Connecting-IP') ?? '0.0.0.0';
   if (!(await underRateLimit(env, ip))) {
@@ -396,6 +466,10 @@ export async function onRequestPost(context: Context): Promise<Response> {
     contact,
     message: message || null,
     user_agent: clean(request.headers.get('User-Agent'), MAX.userAgent) || null,
+    // Only when there is something to say: an ordinary enquiry is the same
+    // row it always was, and stores even before migration 0005.
+    ...(unrecognised.length ? { unrecognised } : {}),
+    ...(Object.keys(answers).length ? { answers } : {}),
   };
 
   // Supabase, or failing that the KV buffer. Only when neither kept it is the

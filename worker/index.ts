@@ -1,10 +1,15 @@
 /**
- * The Worker: two routes of code in front of a static site.
+ * The Worker: a few routes of code in front of a static site.
  *
- * POST /api/enquiry runs the contact handler (./enquiry.ts); POST
- * /api/publish, the admin's publish button (./publish.ts). Everything else
- * goes to the static assets in dist/; requests that match a file are served by
- * Workers Static Assets before this code ever runs.
+ * POST /api/enquiry runs the contact handler (./enquiry.ts). The rest are
+ * the admin's, each for editors only (./auth.ts): /api/publish starts a
+ * build (POST) and follows it (GET, ./publish.ts); /api/enquiries lists the
+ * enquiries and /api/enquiries/<id> changes one's status; /api/storage says
+ * how much of Storage is used (./inbox.ts). One is the build's: POST
+ * /api/builds, its report on itself, with a secret of its own (./builds.ts).
+ * Everything else goes to the
+ * static assets in dist/; requests that match a file are served by Workers
+ * Static Assets before this code ever runs.
  *
  * Other methods on either route fall through to the assets too, which answer
  * 404 — the same thing a Pages Function exporting only onRequestPost did.
@@ -13,15 +18,21 @@
  * buffered in KV while Supabase would not take them.
  */
 import { drain, onRequestPost, type Env as EnquiryEnv } from './enquiry.ts';
-import { onPublish, type Env as PublishEnv } from './publish.ts';
+import { onPublish, onPublishStatus, type Env as PublishEnv } from './publish.ts';
+import { onEnquiries, onEnquiryStatus, onStorage } from './inbox.ts';
+import { onBuildReport, type Env as BuildsEnv } from './builds.ts';
 
 // Written by scripts/headers.mjs on every build, from the same list that
 // becomes dist/_headers. Missing means `npm run build` has not run.
-import security from './security-headers.generated.json';
+import security from './security-headers.generated.json' with { type: 'json' };
 
-interface Env extends EnquiryEnv, PublishEnv {
-  ASSETS: { fetch(request: Request): Promise<Response> };
-}
+// An intersection, not `extends`: the routes agree on SUPABASE_URL, but one
+// may run before it is set (a preview) and says so as optional.
+type Env = EnquiryEnv &
+  PublishEnv &
+  BuildsEnv & {
+    ASSETS: { fetch(request: Request): Promise<Response> };
+  };
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -47,6 +58,22 @@ export default {
     }
     if (pathname === '/api/publish' && request.method === 'POST') {
       return withSecurityHeaders(await onPublish(request, env));
+    }
+    if (pathname === '/api/publish' && request.method === 'GET') {
+      return withSecurityHeaders(await onPublishStatus(request, env));
+    }
+    if (pathname === '/api/enquiries' && request.method === 'GET') {
+      return withSecurityHeaders(await onEnquiries(request, env));
+    }
+    const enquiry = /^\/api\/enquiries\/([^/]+)$/.exec(pathname);
+    if (enquiry && request.method === 'POST') {
+      return withSecurityHeaders(await onEnquiryStatus(request, env, decodeURIComponent(enquiry[1])));
+    }
+    if (pathname === '/api/storage' && request.method === 'GET') {
+      return withSecurityHeaders(await onStorage(request, env));
+    }
+    if (pathname === '/api/builds' && request.method === 'POST') {
+      return withSecurityHeaders(await onBuildReport(request, env));
     }
     return env.ASSETS.fetch(request);
   },

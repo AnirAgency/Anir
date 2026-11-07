@@ -21,8 +21,12 @@ import {
   stillCommand,
   stillFilter,
   videoFilter,
+  videoBudget,
   vp9Commands,
 } from './media.mjs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const video = { maxHeight: 720, fps: 24, targetKB: 240, failOverKB: 400, posterMaxKB: 40 };
 const clip = { name: 'hero', source: 'hero.mov', in: '0', out: '4' };
@@ -139,6 +143,33 @@ check('poster quality is a dial the runner can walk', () => {
   assert.match(high, /-q:v 12/);
   assert.match(low, /-frames:v 1/);
   return 'single frame, -q:v walked from 3 until it fits 40 kB';
+});
+
+check('the video budget holds every committed file to its own cap', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'anir-media-'));
+  try {
+    mkdirSync(join(dir, 'placeholder'));
+    const put = (name, bytes) => writeFileSync(join(dir, name), Buffer.alloc(bytes));
+    put('hero.vp9.webm', 450_000); //            a clip: failOverKB, 400 kB
+    put('hero.av1.webm', 300_000);
+    put('hero.jpg', 52_000); //                   its poster: 40 kB
+    put('showreel.mp4', 1_250_000); //            exported by hand: 1.2 MB
+    put('showreel-poster.avif', 20_000);
+    put('placeholder/showreel.mp4', 2_300_000); // a stand-in: held too, looser
+    put('placeholder/heavy.webm', 3_100_000); //   …and over even that
+    put('placeholder/tile-01.avif', 400_000); //   a stand-in still: the tile budget's, not this one's
+    put('portrait-01.jpg', 900_000); //          a still, not a poster: not this budget's
+    const rows = videoBudget({ video, clips: [clip] }, dir);
+    const over = rows.filter((row) => row.bytes > row.cap).map((row) => row.name);
+    assert.deepEqual(over, ['hero.jpg', 'hero.vp9.webm', 'placeholder/heavy.webm', 'showreel.mp4']);
+    assert.ok(!rows.some((row) => row.name.startsWith('portrait') || row.name === 'placeholder/tile-01.avif'));
+    assert.equal(rows.find((row) => row.name === 'showreel.mp4').cap, 1_200_000);
+    assert.equal(rows.find((row) => row.name === 'hero.vp9.webm').cap, 400_000);
+    assert.equal(rows.find((row) => row.name === 'placeholder/showreel.mp4').cap, 3_000_000);
+    return 'clip 400 kB, hand-exported video 1.2 MB, posters 40 kB, placeholders 3 MB; stills left out';
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 const width = Math.max(...results.map(([label]) => label.length));

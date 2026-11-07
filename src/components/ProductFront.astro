@@ -32,6 +32,12 @@ import { site, type Product } from '../content/site';
   their stand-ins on dev and preview builds. With the new one alone, the
   section shows it as a product built new; with neither, before the shoot in
   production, it is not emitted. Plain lazy <img>s in the tile lane.
+
+  A comparison asserts a redesign, so an old picture marked `demo` — a
+  product built new, set up as a redesign for review — never resolves in
+  production (src/lib/media.ts), and the section falls back to built new.
+  The frame says when its old picture is a demo, and a production build
+  that ships one fails (scripts/budget.mjs): the backstop behind that gate.
 */
 
 interface Props {
@@ -65,7 +71,11 @@ const ratio = `${after.media.width} / ${after.media.height}`;
         </p>
       )}
 
-      <div class:list={['view', { compare: mode === 'compare' }]} data-compare={mode === 'compare' ? '' : undefined}>
+      <div
+        class:list={['view', { compare: mode === 'compare' }]}
+        data-compare={mode === 'compare' ? '' : undefined}
+        data-demo={mode === 'compare' && before?.media.demo ? '' : undefined}
+      >
         <div class="frame" style={`aspect-ratio: ${ratio};`}>
           <picture>
             {after.pic!.sources.map((s) => (

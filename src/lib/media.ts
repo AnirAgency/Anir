@@ -6,11 +6,16 @@
  * pipeline writes the variants beside it. Nothing here guesses: if the shoot
  * has not happened, every list comes back empty and the component renders its
  * placeholder instead of a broken <source>.
+ *
+ * A `demo` slot (site.ts > Media) comes back empty in production whatever is
+ * on disk. It is checked here, in the one function every picture and video
+ * passes through, so no component can show one by resolving it some other way.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { Media } from '../content/site';
+import { placeholderMode } from './placeholders.mjs';
 
 /** Best first. A browser takes the first source it understands, so AV1 — the
  *  smaller encode — has to precede VP9, and AVIF has to precede WebP. */
@@ -44,6 +49,7 @@ const onDisk = (publicPath: string) => existsSync(publicFile(publicPath));
 
 function resolve(media: Media, variants: readonly { ext: string; type: string }[]): ResolvedMedia {
   if (!media.name) return { sources: [], fallback: null, present: false };
+  if (media.demo && !placeholderMode({ dev: import.meta.env.DEV })) return { sources: [], fallback: null, present: false };
 
   const sources: MediaSource[] = [];
   for (const variant of variants) {

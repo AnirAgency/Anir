@@ -4,10 +4,14 @@
  * It imports worker/enquiry.ts unchanged and calls onRequestPost with
  * constructed Requests, stubbing global fetch to stand in for Supabase and the
  * notification channels, and Maps to stand in for the KV bindings. What this
- * proves: validation, the honeypot, rate limiting, content negotiation, the
- * exact row the handler would send to Supabase, the KV buffer and its drain,
- * and the notification. What it does not prove: that Supabase accepts that
- * row — for that the migration has to be applied and the keys set.
+ * proves: the checks and their flags, the honeypot, rate limiting, content
+ * negotiation, the exact row the handler would send to Supabase, the KV
+ * buffer and its drain, and the notification — and the invariant, over a few
+ * hundred hostile submissions: no visitor input causes an enquiry not to be
+ * stored. The stand-in for Supabase holds every row to the table's own
+ * constraints (supabase/migrations/0001 and 0005) and to what Postgres text
+ * can hold, so a row it takes is one the real table would. What it does not
+ * prove: that the migrations are applied and the keys set.
  *
  *   node scripts/test-enquiry.ts
  */
@@ -23,12 +27,43 @@ let supabaseStatus = 201;
 let notified: Array<{ channel: string; text: string }> = [];
 let notifyStatus = 200;
 
+/**
+ * What the real table would refuse: an unknown column, a NOT NULL left out,
+ * a length over a check, or text Postgres cannot hold — a NUL, or half a
+ * surrogate pair, which is not valid UTF-8. Null when it would take the row.
+ */
+const COLUMNS = new Set(['id', 'created_at', 'service', 'budget', 'timing', 'name', 'contact', 'message', 'user_agent', 'unrecognised', 'answers']);
+const chars = (text: string) => [...text].length;
+const unstorable = (text: string) => /\u0000/.test(text) || /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
+function refusedBy(row: Row): string | null {
+  for (const key of Object.keys(row)) if (!COLUMNS.has(key)) return `unknown column ${key}`;
+  for (const key of ['service', 'budget', 'timing', 'name', 'contact']) if (typeof row[key] !== 'string') return `${key} not null`;
+  if (chars(row.name as string) > 100) return 'name over 100';
+  if (chars(row.contact as string) > 120) return 'contact over 120';
+  if (row.message !== null && (typeof row.message !== 'string' || chars(row.message) > 2000)) return 'message';
+  if (row.user_agent !== null && (typeof row.user_agent !== 'string' || chars(row.user_agent) > 400)) return 'user_agent';
+  if ('unrecognised' in row && !(Array.isArray(row.unrecognised) && row.unrecognised.every((f) => typeof f === 'string'))) return 'unrecognised';
+  if ('answers' in row && (typeof row.answers !== 'object' || row.answers === null || Array.isArray(row.answers))) return 'answers';
+  const texts: string[] = [];
+  const collect = (v: unknown): void => {
+    if (typeof v === 'string') texts.push(v);
+    else if (v && typeof v === 'object') Object.values(v).forEach(collect);
+  };
+  collect(row);
+  if (texts.some(unstorable)) return 'text Postgres cannot hold';
+  return null;
+}
+
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: any, init: any) => {
   const url = String(input);
   if (url.includes('/rest/v1/enquiries')) {
-    if (supabaseStatus < 300) captured.push(JSON.parse(String(init.body)));
     preferHeaders.push(init.headers?.Prefer ?? '');
+    if (supabaseStatus >= 300) return new Response('', { status: supabaseStatus });
+    const row = JSON.parse(String(init.body)) as Row;
+    const refusal = refusedBy(row);
+    if (refusal) return Response.json({ message: refusal }, { status: 400 });
+    captured.push(row);
     return new Response('', { status: supabaseStatus });
   }
   if (url.startsWith('https://api.telegram.org/')) {
@@ -81,10 +116,10 @@ const valid = {
   message: 'Шинэ сайт хэрэгтэй байна.',
 };
 
-function post(body: Record<string, string>, opts: { json?: boolean; ip?: string } = {}) {
+function post(body: Record<string, unknown>, opts: { json?: boolean; ip?: string; agent?: string } = {}) {
   const headers: Record<string, string> = {
     'CF-Connecting-IP': opts.ip ?? '203.0.113.7',
-    'User-Agent': 'test-harness/1.0',
+    'User-Agent': opts.agent ?? 'test-harness/1.0',
   };
   let payload: string | FormData;
   if (opts.json) {
@@ -93,7 +128,7 @@ function post(body: Record<string, string>, opts: { json?: boolean; ip?: string 
     payload = JSON.stringify(body);
   } else {
     const data = new FormData();
-    for (const [k, v] of Object.entries(body)) data.append(k, v);
+    for (const [k, v] of Object.entries(body)) if (v !== undefined) data.append(k, String(v));
     payload = data;
   }
   return new Request('https://aniragency.mn/api/enquiry', { method: 'POST', headers, body: payload });
@@ -146,28 +181,29 @@ await check('valid submission, no-JS path (HTML)', async () => {
   return `200, HTML page returned, 1 row inserted`;
 });
 
-await check('missing name is rejected', async () => {
+await check('a missing name is stored, flagged', async () => {
   captured = [];
   const response = await onRequestPost({
     request: post({ ...valid, name: '   ' }, { json: true }),
     env: env(),
   });
-  const body = (await response.json()) as { ok: boolean; message: string };
-  assert.equal(response.status, 422);
-  assert.equal(body.ok, false);
-  assert.equal(captured.length, 0, 'nothing may be written on a rejected payload');
-  return `422, nothing written — "${body.message.slice(0, 46)}…"`;
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 1, 'the enquiry must be stored');
+  assert.deepEqual(captured[0].unrecognised, ['name']);
+  return '200, stored, unrecognised: [name]';
 });
 
-await check('unparseable contact is rejected', async () => {
+await check('a contact that is neither email nor phone is stored, flagged, as sent', async () => {
   captured = [];
   const response = await onRequestPost({
-    request: post({ ...valid, contact: 'not-a-contact' }, { json: true }),
+    request: post({ ...valid, contact: 'telegram: @bold_99' }, { json: true }),
     env: env(),
   });
-  assert.equal(response.status, 422);
-  assert.equal(captured.length, 0);
-  return '422, nothing written';
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].contact, 'telegram: @bold_99');
+  assert.deepEqual(captured[0].unrecognised, ['contact']);
+  return '200, stored as sent, unrecognised: [contact]';
 });
 
 await check('a Mongolian phone number is accepted as contact', async () => {
@@ -181,15 +217,24 @@ await check('a Mongolian phone number is accepted as contact', async () => {
   return '200, accepted "9911 2233"';
 });
 
-await check('a forged chip value is rejected', async () => {
+await check('a chip value the form does not have is stored, raw, flagged', async () => {
   captured = [];
   const response = await onRequestPost({
     request: post({ ...valid, budget: 'free-please' }, { json: true }),
     env: env(),
   });
-  assert.equal(response.status, 422);
-  assert.equal(captured.length, 0);
-  return '422, nothing written';
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].budget, 'free-please', 'the raw value is kept');
+  assert.deepEqual(captured[0].unrecognised, ['budget']);
+  return '200, stored with budget "free-please", unrecognised: [budget]';
+});
+
+await check('an ordinary enquiry carries no flags at all', async () => {
+  captured = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.60' }), env: env() });
+  assert.ok(!('unrecognised' in captured[0]) && !('answers' in captured[0]));
+  return 'no unrecognised, no answers: the row it always was';
 });
 
 await check('honeypot: answers success but stores nothing', async () => {
@@ -284,13 +329,131 @@ await check('if Supabase and the buffer both fail, the visitor is told the truth
   return '502, ok:false — nothing was kept, so nothing is claimed';
 });
 
-await check('a rejected payload is never buffered', async () => {
-  supabaseStatus = 500;
-  const environment = env();
-  await onRequestPost({ request: post({ ...valid, budget: 'free-please' }, { json: true }), env: environment });
-  supabaseStatus = 201;
+const rawPost = (body: string, type: string | null, headers: Record<string, string> = {}) =>
+  new Request('https://aniragency.mn/api/enquiry', {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'CF-Connecting-IP': '198.51.100.70', ...(type ? { 'Content-Type': type } : {}), ...headers },
+    body,
+  });
+
+await check('a body that cannot be read is stored, its raw text kept, flagged', async () => {
+  captured = [];
+  const shapes: [string, string | null][] = [['{"name": "Бат", ', 'application/json'], ['[1, 2, 3]', 'application/json'], ['хувьд уулзъя', 'text/plain'], ['name=Бат&contact', null]];
+  for (const [body, type] of shapes) {
+    const response = await onRequestPost({ request: rawPost(body, type), env: { SUPABASE_URL: 'https://stub.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key' } });
+    assert.equal(response.status, 200, `${body} answered ${response.status}`);
+  }
+  assert.equal(captured.length, 4);
+  assert.ok(captured.every((row) => (row.unrecognised as string[])[0] === 'body'));
+  assert.equal(captured[0].message, '{"name": "Бат",');
+  return '4 shapes no form sends — broken JSON, a list, plain text, no type: all 200, all stored, raw text in the message';
+});
+
+// ---------------------------------------------------------- the health check
+
+await check('the health check is known by its secret: answered, nothing stored', async () => {
+  captured = [];
+  const environment = { ...env(), HEALTH_CHECK_SECRET: 'health-secret' };
+  const response = await onRequestPost({ request: rawPost('{"not": "json', 'application/json', { 'X-Health-Check': 'health-secret' }), env: environment });
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 0);
   assert.equal(environment.ENQUIRY_BUFFER.store.size, 0);
-  return '422, KV empty';
+  return '200, nothing stored, nothing buffered';
+});
+
+await check('the same request without the secret — or with a wrong one — is stored', async () => {
+  captured = [];
+  const environment = { ...env(), HEALTH_CHECK_SECRET: 'health-secret' };
+  for (const headers of [{}, { 'X-Health-Check': 'guess' }, { 'X-Health-Check': 'health-secre' }] as Record<string, string>[]) {
+    await onRequestPost({ request: rawPost('{"not": "json', 'application/json', headers), env: environment });
+  }
+  // And with no secret configured at all, the header means nothing.
+  await onRequestPost({ request: rawPost('{"not": "json', 'application/json', { 'X-Health-Check': '' }), env: env() });
+  assert.equal(captured.length, 4);
+  return 'no header, a wrong one, a near one, none configured: 4 stored, flagged body';
+});
+
+// ---------------------------------------------------- the rate limiter holds
+
+await check('the rate limiter stands in front of garbage too', async () => {
+  captured = [];
+  const environment = env();
+  const codes: number[] = [];
+  for (let i = 0; i < 6; i += 1) {
+    const response = await onRequestPost({ request: post({ budget: 'spam', name: '' }, { json: true, ip: '198.51.100.80' }), env: environment });
+    codes.push(response.status);
+  }
+  const broken = await onRequestPost({ request: rawPost('%%%', 'application/json', { 'CF-Connecting-IP': '198.51.100.80' }), env: environment });
+  assert.deepEqual(codes, [200, 200, 200, 200, 200, 429]);
+  assert.equal(broken.status, 429);
+  assert.equal(captured.length, 5, 'the limit is the only bound on what reaches the table');
+  return `flagged junk: ${codes.join(', ')}; an unreadable body after that: 429 — 5 stored`;
+});
+
+// ---------------------------------------------------------- the invariant
+
+/*
+  No visitor input causes an enquiry not to be stored. A few hundred
+  submissions, seeded so a failure can be replayed: every field picked from
+  values a person could type or a script could send — empty, whitespace,
+  forged chips, emoji cut at a boundary, NUL, half a surrogate pair, text
+  ten times too long, numbers and lists in JSON, fields left out — through
+  both the JSON and the plain form path. Each must answer 200 and be stored
+  exactly once: in Supabase while it is up, and in the buffer while it is
+  down. Only the honeypot and the rate limit may keep one out, and neither
+  is reached here.
+*/
+let seed = 0x416e6972;
+const random = () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const pick = <T>(list: T[]): T => list[Math.floor(random() * list.length)];
+const emoji = '😀'.repeat(60);
+const hostile = (json: boolean): unknown[] => [
+  '', '   ', '\n\t', 'web', '1-3m', 'this-month', 'free-please', 'x'.repeat(5000), `${'а'.repeat(99)}😀`, emoji,
+  'a\u0000b', '\u0000', 'half \ud800 pair', '\udc00 tail', 'Бат-Эрдэнэ', 'Өөр ү', '<script>alert(1)</script>',
+  "'); drop table enquiries; --", '‮RTL', 'line\nbreak', '9911 2233', '+976 9911-2233', 'hello@example.com', '@bold',
+  ...(json ? [0, 42, -1.5, true, false, null, [], ['web'], {}, { $gt: '' }] : []),
+  undefined,
+];
+const fields = ['service', 'budget', 'timing', 'name', 'contact', 'message'];
+
+await check('no visitor input causes an enquiry not to be stored', async () => {
+  const environment = { SUPABASE_URL: 'https://stub.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'stub-service-key', ENQUIRY_BUFFER: kv() };
+  let sent = 0;
+  for (const up of [true, false]) {
+    supabaseStatus = up ? 201 : 500;
+    for (let i = 0; i < 200; i += 1) {
+      const json = random() < 0.5;
+      const body: Record<string, unknown> = {};
+      for (const field of fields) {
+        const value = pick(hostile(json));
+        if (value !== undefined) body[field] = value;
+      }
+      captured = [];
+      const before = environment.ENQUIRY_BUFFER.store.size;
+      // Any User-Agent a request can carry (a header cannot hold a NUL) — and
+      // one in eight sends a body no form would: cut off, or not JSON at all.
+      const broken = random() < 0.125;
+      const request = broken
+        ? rawPost(pick(['{"name":', 'null', '"text"', `{${'"a":'.repeat(50)}`, 'a\u0000b', '']), pick(['application/json', 'text/plain', null]))
+        : post(body, { json, agent: pick(['', 'Mozilla/5.0', 'z'.repeat(900)]) });
+      const response = await onRequestPost({ request, env: environment });
+      const stored = up ? captured.length : environment.ENQUIRY_BUFFER.store.size - before;
+      assert.equal(response.status, 200, `#${sent} answered ${response.status}: ${JSON.stringify(body).slice(0, 160)}`);
+      assert.equal(stored, 1, `#${sent} was not stored (${up ? 'live' : 'buffered'}): ${JSON.stringify(body).slice(0, 160)}`);
+      sent += 1;
+    }
+  }
+  supabaseStatus = 201;
+  // And what was buffered, the drain can write: the table takes every one.
+  captured = [];
+  const drained = await drain(environment);
+  assert.equal(drained.kept, 0, `${drained.kept} buffered enquiries the table would refuse`);
+  return `${sent} hostile submissions, JSON and form, Supabase up and down: all 200, all stored; ${drained.written} drained`;
 });
 
 await check('the drain writes buffered enquiries and deletes them', async () => {

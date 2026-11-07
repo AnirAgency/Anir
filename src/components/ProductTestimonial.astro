@@ -13,10 +13,14 @@ import { site, type Product } from '../content/site';
   view; the words come up as they arrive. Without scroll-driven animation,
   under reduced motion and with JS off, all of it is simply there.
 
-  Real words only. A product's testimonial is shown only when site.ts gives
-  it one; dev and preview builds show the stand-in from site.ts, which says
-  what belongs there, so the section can be judged on a preview URL and
-  never mistaken for a real one. Production without one: not emitted.
+  Real words only. A product's testimonial is shown only when it has one —
+  someone's name and what they said; one added in the admin and left empty
+  does not count. Without one, dev and preview builds show the stand-in from
+  site.ts, which says what belongs there, so the section can be judged on a
+  preview URL and never mistaken for a real one, and production emits
+  nothing. The section says when it is the stand-in, and a production build
+  that ships it fails (scripts/budget.mjs): the backstop behind this gate,
+  as /media/placeholder/ is behind the pictures'.
 
   The portrait is round and so is its ring, by the owner's direction
   (CLAUDE.md > Layout).
@@ -28,13 +32,15 @@ interface Props {
 
 const { product } = Astro.props;
 const { testimonial: copy } = site.products.pages;
-const said = product.testimonial ?? (placeholderMode({ dev: import.meta.env.DEV }) ? copy.stand : null);
+const own = product.testimonial;
+const real = !!own && own.name.trim() !== '' && own.quote.some((part) => part.trim() !== '');
+const said = real ? own : placeholderMode({ dev: import.meta.env.DEV }) ? copy.stand : null;
 ---
 
 {
   said && (
     <Section tone="light" id="testimonial" label={copy.label} heading={false}>
-      <div class="said">
+      <div class="said" data-stand-in={real ? undefined : ''}>
         <h2 class="visually-hidden">{copy.label}</h2>
 
         <div class="who" data-reveal>

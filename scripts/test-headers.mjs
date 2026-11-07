@@ -5,11 +5,16 @@
  * the endpoint that takes user input. This asserts it carries exactly the
  * security headers the home page does, and that the cache rules landed.
  *
- * The POST is deliberately invalid: it is answered by the Worker (422) before
- * the rate limiter or Supabase, so running this stores nothing and costs no
- * one their submission allowance.
+ * The POST is the health check, known to the Worker by a credential — the
+ * X-Health-Check header holding HEALTH_CHECK_SECRET — and answered before the
+ * rate limiter or Supabase: it stores nothing, notifies no one and costs no
+ * one their submission allowance. Never by its body: no visitor input may
+ * cause an enquiry not to be stored, so any body without the secret is an
+ * enquiry, and a body that meant "do not store me" would let anyone who had
+ * read the code drop one on purpose. Without the secret this skips its POST
+ * rather than leave an enquiry behind.
  *
- *   node scripts/test-headers.mjs https://anir.<account>.workers.dev
+ *   HEALTH_CHECK_SECRET=… node scripts/test-headers.mjs https://anir.<account>.workers.dev
  */
 import assert from 'node:assert/strict';
 
@@ -37,12 +42,15 @@ async function check(label, run) {
 
 const pick = (response) => Object.fromEntries(SECURITY.map((name) => [name, response.headers.get(name)]));
 
+const secret = process.env.HEALTH_CHECK_SECRET ?? '';
 const home = await fetch(`${base}/`);
-const api = await fetch(`${base}/api/enquiry`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-  body: '{}',
-});
+const api = secret
+  ? await fetch(`${base}/api/enquiry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Health-Check': secret },
+      body: '{}',
+    })
+  : null;
 const missing = await fetch(`${base}/api/enquiry`);
 
 await check('home page carries every security header', () => {
@@ -50,15 +58,20 @@ await check('home page carries every security header', () => {
   return `${SECURITY.length} headers`;
 });
 
-await check('POST /api/enquiry is answered by the Worker', () => {
-  assert.equal(api.status, 422);
-  return `${api.status}, ${api.headers.get('content-type')}`;
-});
+if (api) {
+  await check('POST /api/enquiry is answered by the Worker, and stores nothing', async () => {
+    assert.equal(api.status, 200);
+    assert.equal((await api.clone().json()).check, 'nothing stored', 'the secret was not recognised: an enquiry was stored');
+    return `${api.status}, ${api.headers.get('content-type')}`;
+  });
 
-await check('POST /api/enquiry carries the same security headers as /', () => {
-  assert.deepEqual(pick(api), pick(home));
-  return 'identical';
-});
+  await check('POST /api/enquiry carries the same security headers as /', () => {
+    assert.deepEqual(pick(api), pick(home));
+    return 'identical';
+  });
+} else {
+  results.push(['POST /api/enquiry', 'skipped — set HEALTH_CHECK_SECRET, or this would store an enquiry']);
+}
 
 await check('GET /api/enquiry falls through to the assets with them too', () => {
   assert.equal(missing.status, 404);
@@ -66,9 +79,11 @@ await check('GET /api/enquiry falls through to the assets with them too', () => 
   return '404, identical';
 });
 
-await check('the enquiry reply is never cached', () => {
-  assert.equal(api.headers.get('cache-control'), 'no-store');
-});
+if (api) {
+  await check('the enquiry reply is never cached', () => {
+    assert.equal(api.headers.get('cache-control'), 'no-store');
+  });
+}
 
 await check('HTML revalidates on every visit', () => {
   assert.match(home.headers.get('cache-control') ?? '', /max-age=0/);

@@ -18,6 +18,10 @@
 
   // Public, and in every Supabase client, so it is not a secret. The
   // service_role key IS: `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  // BUILD_REPORT_SECRET is how the build reports on itself to the admin
+  // (worker/builds.ts): `npx wrangler secret put BUILD_REPORT_SECRET`, and the
+  // same value as a build secret (Settings > Build > Variables and secrets).
+  // It can write one status row and nothing else.
   "vars": {
     "SUPABASE_URL": "https://tyrzajpotvtirfjmacfm.supabase.co"
   },

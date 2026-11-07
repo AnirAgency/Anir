@@ -5,6 +5,17 @@ import '../../styles/base.css';
 import { seed, site } from '../../content/site';
 import { admin } from '../../content/admin';
 import { placeholderMode } from '../../lib/placeholders.mjs';
+import { checkAdmin, type Obj } from '../../scripts/admin-schema';
+
+/*
+  No field the admin shows may fall back to its English key: every field,
+  section, list, length and value needs Mongolian words, and the build stops
+  here — `npm run build`, and so every publish — naming each one missing.
+*/
+const missing = checkAdmin(seed as unknown as Obj, admin);
+if (missing.length) {
+  throw new Error(`admin copy: ${missing.length} missing (src/content/admin.ts, src/scripts/admin-schema.ts)\n  ${missing.join('\n  ')}`);
+}
 
 /*
   /admin/ — where the team edits the site (src/scripts/admin.ts). Not linked
@@ -132,6 +143,55 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     color: var(--muted);
   }
 
+  /*
+    The line under the bar: anything with more to say than the bar holds —
+    a failure and its next step, a build under way — at the screen's full
+    width, so a long sentence never wraps the bar. Gone when there is
+    nothing to say.
+  */
+  .admin[data-state='ready'] {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: 100svh;
+  }
+
+  .strip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: var(--hairline) solid var(--line);
+    background: var(--ink-2);
+  }
+
+  .strip[hidden] {
+    display: none;
+  }
+
+  .strip__line:empty {
+    display: none;
+  }
+
+  .strip__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.9rem;
+    color: var(--fg);
+  }
+
+  .strip__line[data-tone='bad'] {
+    color: var(--orange);
+  }
+
+  .strip__line[data-tone='busy'] {
+    color: var(--muted);
+  }
+
+  .said__action {
+    min-height: 2rem;
+  }
+
   /* ------------------------------------------------------------- body */
 
   /*
@@ -142,7 +202,7 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
   .body {
     display: grid;
     grid-template-columns: 16rem minmax(0, 1fr);
-    height: calc(100svh - var(--bar-h));
+    min-height: 0;
   }
 
   .admin[data-preview='on'] .body {
@@ -164,19 +224,44 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     border-right: var(--hairline) solid var(--line);
   }
 
-  .nav__item--unused {
+  /* A section that is switched off: dimmed, and saying so, never hidden. */
+  .nav__item--off {
     color: var(--muted);
   }
 
-  .unused {
-    margin-left: 0.6rem;
-    padding: 0.1rem 0.4rem;
+  .nav__off {
+    margin-left: auto;
+    padding: 0.05rem 0.4rem;
     border: var(--hairline) solid var(--line);
     color: var(--muted);
     font-size: 0.625rem;
     letter-spacing: 0.08em;
-    text-transform: none;
     white-space: nowrap;
+  }
+
+  .nav__count,
+  .summary__count {
+    color: var(--muted);
+  }
+
+  /* Unsaved edits wait here: a live state, so orange. */
+  .nav__dot {
+    flex: none;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--orange);
+  }
+
+  /* New enquiries: text on an orange fill is --ink. */
+  .nav__badge {
+    margin-left: auto;
+    min-width: 1.5rem;
+    padding: 0 0.4rem;
+    background: var(--orange);
+    color: var(--ink);
+    text-align: center;
+    font-size: 0.6875rem;
   }
 
   .nav__title {
@@ -187,16 +272,12 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     text-transform: uppercase;
   }
 
-  .nav__more > summary {
-    cursor: pointer;
-  }
-
-  /* The three steps: choose, edit and save, publish. */
+  /* The three steps: choose, edit and save, publish — under the tree. */
   .steps {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    margin: 0 0 0.5rem;
+    margin: 1.25rem 0 0;
     padding: 0.75rem 0.75rem 0.75rem 2rem;
     background: var(--ink-2);
     color: var(--fg);
@@ -225,6 +306,9 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
 
   .nav__item {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     width: 100%;
     min-height: 2.5rem;
     padding: 0.4rem 0.6rem;
@@ -267,6 +351,46 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     color: var(--muted);
   }
 
+  .main__off {
+    color: var(--fg);
+  }
+
+  .main__keys {
+    margin: 2rem 0 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  /* A draft from another visit, waiting for «сэргээх үү?». */
+  .banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.9rem 1rem;
+    border-left: 2px solid var(--orange);
+    background: var(--ink-2);
+  }
+
+  .banner p {
+    margin: 0;
+  }
+
+  /* The raw detail behind a sentence, for whoever is debugging. */
+  .said > summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .said pre {
+    max-height: 12rem;
+    margin: 0.4rem 0 0;
+    overflow: auto;
+    color: var(--muted);
+    font-size: 0.6875rem;
+    white-space: pre-wrap;
+  }
+
   /* ------------------------------------------------------------ help */
 
   .f__label,
@@ -278,51 +402,25 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     gap: 0.5rem;
   }
 
-  .help {
-    position: relative;
-    display: inline-grid;
-    place-items: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    border: var(--hairline) solid var(--muted);
-    border-radius: 50%;
-    color: var(--fg);
-    font-size: 0.6875rem;
-    letter-spacing: 0;
-    text-transform: none;
-    cursor: help;
-  }
-
-  .help:hover,
-  .help:focus-visible {
-    border-color: var(--orange);
-    color: var(--orange);
-  }
-
-  .help__tip {
-    position: absolute;
-    left: 50%;
-    top: calc(100% + 0.5rem);
-    z-index: 80;
-    display: none;
-    width: max-content;
-    max-width: 22rem;
-    padding: 0.6rem 0.75rem;
-    background: var(--paper);
-    color: var(--ink);
+  /* One line under every field: where it shows, and what happens past its length. */
+  .f__help {
+    margin: 0;
+    color: var(--muted);
     font-size: 0.75rem;
     line-height: 1.5;
-    letter-spacing: 0.01em;
-    text-transform: none;
-    text-align: left;
-    white-space: normal;
-    translate: -30% 0;
-    pointer-events: none;
   }
 
-  .help:hover .help__tip,
-  .help:focus .help__tip {
-    display: block;
+  /* Past the measured length: guidance, never a block. */
+  .f__count {
+    margin: 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+    color: var(--fg);
+    font-size: 0.75rem;
+  }
+
+  .f__count[hidden] {
+    display: none;
   }
 
   /* ---------------------------------------------------------- preview */
@@ -468,8 +566,8 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     gap: 0.35rem;
   }
 
-  .f--check {
-    flex-direction: row;
+  .f__row {
+    display: flex;
     align-items: center;
     gap: 0.6rem;
   }
@@ -516,9 +614,124 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     flex: 1;
   }
 
-  .list__controls {
+  /*
+    A row in a list of things says what it holds: its number small and
+    muted, its first words, a second muted line. ↑ ↓ ✕ wait at the right
+    edge until the row is hovered or has the keyboard; on a touchscreen,
+    with no hover, they are always there.
+  */
+  .row__ord {
+    flex: none;
+    min-width: 2.75rem;
+    color: var(--muted);
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.08em;
+  }
+
+  .enquiry .row__ord {
+    min-width: 8.5rem;
+  }
+
+  .row__text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .row__title,
+  .row__sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row__title--empty,
+  .row__sub {
+    color: var(--muted);
+  }
+
+  .row__sub {
+    font-size: 0.75rem;
+  }
+
+  .row__controls {
+    flex: none;
     display: inline-flex;
     gap: 0.25rem;
+    margin-left: auto;
+    opacity: 0;
+  }
+
+  .group--item:hover > summary .row__controls,
+  .group--item > summary:focus-within .row__controls,
+  .list__row:hover .row__controls,
+  .list__row:focus-within .row__controls {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .row__controls {
+      opacity: 1;
+    }
+  }
+
+  /* ✕ pressed once: it asks before it removes. */
+  .btn--armed {
+    min-width: auto;
+    padding: 0 0.6rem;
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  /* ----------------------------------------------------------- inbox */
+
+  .inbox__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .inbox__filter[aria-pressed='true'] {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .inbox__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .enquiry__body p {
+    margin: 0;
+  }
+
+  .enquiry__message {
+    white-space: pre-wrap;
+  }
+
+  .enquiry__contact {
+    color: var(--orange);
+    text-decoration: underline;
+  }
+
+  /* Stored as sent, but worth a second look. */
+  .enquiry__flags {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  /* A section the page code switches off: read only, and looks it. */
+  [data-readonly] input,
+  [data-readonly] textarea {
+    color: var(--muted);
+    border-color: var(--line);
   }
 
   /* ----------------------------------------------------------- images */
@@ -571,6 +784,27 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
   }
 
   .img__error:empty {
+    display: none;
+  }
+
+  /* What a chosen file will do: allowed, with the reason in a visitor's terms. */
+  .img__warn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .img__warn:empty {
+    display: none;
+  }
+
+  .img__warn p {
+    margin: 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  .img__size[hidden] {
     display: none;
   }
 
@@ -667,6 +901,11 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
   }
 
   @media (max-width: 860px) {
+    .admin[data-state='ready'] {
+      display: block;
+      height: auto;
+    }
+
     .admin[data-preview='on'] .body,
     .body {
       grid-template-columns: minmax(0, 1fr);

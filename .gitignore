@@ -37,3 +37,8 @@ worker/*.generated.json
 # and the images it uploaded, pulled from Supabase. Never committed.
 src/content/live.json
 public/media/live/
+
+# Generated: the proofreading list (npm run copy:export), and the CI wrapper's scratch files (npm run ci).
+mongolian-copy*.md
+.build-log
+.build-exit

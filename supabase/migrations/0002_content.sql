@@ -58,7 +58,11 @@ as $$
   select exists (select 1 from public.editors where user_id = (select auth.uid()));
 $$;
 
-revoke all on function public.is_editor() from public;
+-- anon by name as well: Supabase grants public-schema functions to anon
+-- directly, and a revoke from public leaves that grant standing (0003).
+-- authenticated must keep it — the write policies below call it as the
+-- signed-in user, and without EXECUTE every save fails.
+revoke all on function public.is_editor() from public, anon;
 grant execute on function public.is_editor() to authenticated;
 
 -- ----------------------------------------------------------- site_content --

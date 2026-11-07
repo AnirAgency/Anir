@@ -46,6 +46,15 @@ export interface Media {
    * there the labelled plate shows instead (src/lib/placeholders.mjs).
    */
   placeholder?: string;
+  /**
+   * Review only: a slot that exists so a section can be judged on a preview,
+   * where nothing true could fill it in production — the old site of a
+   * product that was built new. Production never shows it, whatever is
+   * named or uploaded into it (src/lib/media.ts), and a production build
+   * that renders one fails (scripts/budget.mjs). A placeholder looks
+   * unfinished; this would make a claim, so it is held to more.
+   */
+  demo?: boolean;
 }
 
 export interface Link {
@@ -781,10 +790,11 @@ export const seed: Site = {
           ],
         },
         // Built new, not a redesign: the `before` is set, by the owner's
-        // direction, so the comparison can be reviewed. It has no real image,
-        // so production shows the new front page alone.
+        // direction, so the comparison can be reviewed — and marked `demo`,
+        // so production shows the new front page alone even if a picture is
+        // uploaded into it. A comparison asserts a redesign that never was.
         front: {
-          before: still('Ezmath — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-06'),
+          before: { ...still('Ezmath — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-06'), demo: true },
           after: still('Ezmath — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-07'),
         },
         responsive: phonePages('Ezmath', ['tile-01', 'tile-02', 'tile-03', 'tile-02', 'tile-01']),
@@ -885,11 +895,10 @@ export const seed: Site = {
             still('Olymo — гар утсан дээр', 900, 1200, 'Olymo', 'Сэтгэгдэл · 3:4', 'tile-01'),
           ],
         },
-        // Built new, not a redesign: the `before` is set, by the owner's
-        // direction, so the comparison can be reviewed. It has no real image,
-        // so production shows the new front page alone.
+        // Built new, not a redesign: as Ezmath's, the `before` is a `demo`,
+        // for review on previews only.
         front: {
-          before: still('Olymo — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-08'),
+          before: { ...still('Olymo — хуучин нүүр хуудас', 1600, 1000, 'Хуучин', 'Нүүр хуудас · 16:10', 'tile-08'), demo: true },
           after: still('Olymo — шинэ нүүр хуудас', 1600, 1000, 'Шинэ', 'Нүүр хуудас · 16:10', 'tile-06'),
         },
         responsive: phonePages('Olymo', ['tile-03', 'tile-01', 'tile-02', 'tile-01', 'tile-03']),

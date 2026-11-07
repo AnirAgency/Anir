@@ -8,3 +8,9 @@
 # to `enquiries` — and the reason it must never reach the browser. It is read
 # solely by worker/enquiry.ts.
 SUPABASE_SERVICE_ROLE_KEY=
+
+# The health check's credential (scripts/test-headers.mjs sends it as
+# X-Health-Check). With it, a POST to /api/enquiry is answered and stored
+# nowhere; without it, every POST is an enquiry. Any long random string; set
+# the same value in the shell that runs the check: HEALTH_CHECK_SECRET=… .
+HEALTH_CHECK_SECRET=

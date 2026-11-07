@@ -1,65 +1,48 @@
 /**
- * POST /api/publish — the admin's "Нийтлэх": starts a production build, which
- * pulls the content the team saved (scripts/content-pull.mjs) and deploys it.
+ * The admin's "Нийтлэх".
  *
- * Only an editor may. The caller sends their Supabase session token; Supabase
- * says whose it is (so this needs no JWT secret of its own), and the editors
- * table, read with that same token, says whether they may edit. Then it posts
- * to the Workers Builds deploy hook for main.
+ * POST /api/publish starts a production build, which pulls the content the
+ * team saved (scripts/content-pull.mjs) and deploys it. GET
+ * /api/publish?build=<uuid> says how that build is going — queued, building,
+ * done or failed, and why it failed — read from the report the build makes
+ * on itself (./builds.ts), so the editor learns it in the admin, not in the
+ * Cloudflare dashboard. No Cloudflare API token is involved.
+ *
+ * Only an editor may do either (./auth.ts).
  *
  * The hook URL is the credential — whoever holds it can start builds — so it
- * lives only here, as a Worker secret: `npx wrangler secret put DEPLOY_HOOK_URL`.
- * Without it, as on preview versions, publishing answers 503.
+ * lives only here, as a Worker secret: `npx wrangler secret put
+ * DEPLOY_HOOK_URL`. Without it, as on preview versions, publishing answers
+ * 503. Without BUILD_REPORT_SECRET a build still starts; the admin just
+ * cannot follow it, and says so.
  *
  * Workers Builds deduplicates triggers made before a build starts, so a
  * double click starts one build, not two.
  */
-import config from '../src/lib/supabase.json' with { type: 'json' };
+import { answer, callerOf, refusal } from './auth.ts';
+import { readBuild } from './builds.ts';
 
 export interface Env {
   DEPLOY_HOOK_URL?: string;
+  BUILD_REPORT_SECRET?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
-type Result = { ok: true; build: string | null } | { ok: false; error: string };
-
-const answer = (status: number, body: Result) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-  });
-
-/** Whether a Supabase session token is a live one, and an editor's. */
-async function editorBehind(token: string, fetcher: typeof fetch): Promise<'editor' | 'signed-out' | 'not-editor'> {
-  const headers = { apikey: config.publishableKey, Authorization: `Bearer ${token}` };
-
-  const user = await fetcher(`${config.url}/auth/v1/user`, { headers });
-  if (user.status === 401 || user.status === 403) return 'signed-out';
-  if (!user.ok) throw new Error(`auth answered ${user.status}`);
-  const { id } = (await user.json()) as { id?: string };
-  if (!id) return 'signed-out';
-
-  const rows = await fetcher(`${config.url}/rest/v1/editors?select=user_id&user_id=eq.${encodeURIComponent(id)}`, {
-    headers,
-  });
-  if (!rows.ok) throw new Error(`editors answered ${rows.status}`);
-  const found = (await rows.json()) as unknown[];
-  return Array.isArray(found) && found.length > 0 ? 'editor' : 'not-editor';
-}
+/** Whether builds report themselves here, so the admin can follow one. */
+const followable = (env: Env) => !!(env.BUILD_REPORT_SECRET && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 
 export async function onPublish(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
   if (!env.DEPLOY_HOOK_URL) return answer(503, { ok: false, error: 'not-configured' });
 
-  const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('Authorization') ?? '')?.[1];
-  if (!token) return answer(401, { ok: false, error: 'signed-out' });
-
-  let who: Awaited<ReturnType<typeof editorBehind>>;
+  let caller;
   try {
-    who = await editorBehind(token, fetcher);
+    caller = await callerOf(request, fetcher);
   } catch {
     return answer(502, { ok: false, error: 'supabase' });
   }
-  if (who === 'signed-out') return answer(401, { ok: false, error: 'signed-out' });
-  if (who === 'not-editor') return answer(403, { ok: false, error: 'not-editor' });
+  const refused = refusal(caller);
+  if (refused) return refused;
 
   let hook: Response;
   try {
@@ -67,8 +50,36 @@ export async function onPublish(request: Request, env: Env, fetcher: typeof fetc
   } catch {
     return answer(502, { ok: false, error: 'hook' });
   }
-  if (!hook.ok) return answer(502, { ok: false, error: 'hook' });
+  if (!hook.ok) return answer(502, { ok: false, error: 'hook', detail: `deploy hook answered ${hook.status}` });
 
   const body = (await hook.json().catch(() => ({}))) as { result?: { build_uuid?: string } };
-  return answer(202, { ok: true, build: body.result?.build_uuid ?? null });
+  return answer(202, { ok: true, build: body.result?.build_uuid ?? null, following: followable(env) });
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function onPublishStatus(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
+  const build = new URL(request.url).searchParams.get('build') ?? '';
+  if (!UUID.test(build)) return answer(400, { ok: false, error: 'bad-build' });
+
+  let caller;
+  try {
+    caller = await callerOf(request, fetcher);
+  } catch {
+    return answer(502, { ok: false, error: 'supabase' });
+  }
+  const refused = refusal(caller);
+  if (refused) return refused;
+  if (!followable(env)) return answer(503, { ok: false, error: 'no-status' });
+
+  let last;
+  try {
+    last = await readBuild(env as Required<Env>, fetcher);
+  } catch {
+    return answer(502, { ok: false, error: 'supabase' });
+  }
+  // Not reported yet — it has not started — or the row is another build's.
+  if (!last || last.build !== build) return answer(200, { ok: true, state: 'queued' });
+  if (last.state === 'failed') return answer(200, { ok: true, state: 'failed', reason: last.reason ?? 'other', detail: last.detail ?? '' });
+  return answer(200, { ok: true, state: last.state });
 }

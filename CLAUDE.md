@@ -35,7 +35,8 @@ These are not preferences. Breaking one is a bug.
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
-| Output | **Static.** No SSR, no server runtime except two Worker routes: the contact form and the admin's publish button. |
+| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form, the admin's — publishing, and, by the owner's direction, the enquiries inbox — for editors only, and the build's report on itself, with its own secret. |
+| Enquiries | **No visitor input may cause one not to be stored.** What does not match the published form is stored as sent and flagged — even a body that cannot be read — never refused; only the honeypot and the rate limit (5 per IP an hour, the only bound on the table) keep one out. Nothing about a request's *shape* discards it: the health check is known by a credential (`HEALTH_CHECK_SECRET`), never by its body. The table checks only the lengths the Worker cuts to. `scripts/test-enquiry.ts` holds it with hundreds of hostile inputs. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
 | Node | **Pin to 22** via `.nvmrc`. Workers Builds is set to Node 22 (`NODE_VERSION`); building locally on a different major than CI is a needless risk on a static site. |
@@ -85,7 +86,20 @@ never renders it: the build strips the folder from `dist/`, fails if real
 media in `site.ts` points inside it, and fails if `PLACEHOLDER_MEDIA=1` is
 set. A local `npm run build` builds what production ships;
 `PLACEHOLDER_MEDIA=1` adds the placeholders to it. The rule lives in one
-place, `src/lib/placeholders.mjs`.
+place, `src/lib/placeholders.mjs`. It is **checked, not assumed**:
+`scripts/no-placeholders.mjs`, last in `npm run budget`, fails a production
+build if any file in its output — page, script, style, data — names a
+placeholder file. And placeholders are downloaded all the same, by every
+preview and by any public preview copy, so they are held to a size cap
+too (below).
+
+Two stand-ins are held to more, because they would make a **claim** rather
+than look unfinished: the stand-in testimonial, a quote nobody said; and a
+product's old picture marked `demo` — Ezmath and Olymo, built new, set up as
+redesigns for review — a before-and-after for work that never happened.
+Production renders neither: a testimonial needs a name and words, and a
+`demo` picture resolves to nothing in `src/lib/media.ts` whatever is named or
+uploaded into it. `npm run budget` fails if a production page carries either.
 
 `scripts/budget.mjs` checks the three budgets separately and must stay blocking.
 Do not make it advisory. The ceilings are per page — a visitor pays for one
@@ -93,6 +107,15 @@ page at a time — and `npm run budget` holds every built page to them: the home
 page in full, the rest through `scripts/budget-pages.mjs`. A `<picture>` counts
 as the one file a browser fetches from it, its first source (AVIF); the WebP
 and JPEG beside it are never fetched by a browser this site supports.
+
+**Video is held twice: on the page and as a file.** Video is a committed
+build-time asset, so an oversized export is permanent in git and downloaded by
+every visitor. `npm run media` ends every run by holding every video and poster
+in `public/media/` — encoded there or copied in by hand — to its cap (a clip
+400 kB, any other video 1.2 MB, a poster 40 kB, a placeholder 3 MB — looser,
+never exempt; `scripts/limits.mjs`, shared with `budget.mjs`), and fails as
+`npm run budget` does; `npm run budget` runs the same check
+(`media.mjs --check`) on every build. Blocking, never advisory.
 
 ---
 
@@ -298,8 +321,8 @@ Mono/Spec      JB Mono 400  10.5px / 185%
   scrubbing, pinning, sequenced timelines — and none of those is on this site.
 - **Lenis** — smooth scroll. Must no-op under reduced-motion.
 - **Cloudflare Workers** — hosting. Static Assets serves `dist/`; the Worker
-  (`worker/index.ts`) answers the contact endpoint and the admin's publish
-  endpoint. `_headers` is not applied
+  (`worker/index.ts`) answers the contact endpoint and the admin's endpoints
+  (publish, the enquiries inbox, the storage figure). `_headers` is not applied
   to Worker responses, so the Worker attaches the same security headers itself,
   from the list `scripts/headers.mjs` generates — `npm run test:headers` checks it.
 - **Supabase** — stores contact submissions, and the content the team edits in
@@ -326,7 +349,8 @@ here.
   build time. Components read `site` and nothing else. Never hardcode
   Mongolian strings in a component — the team needs one place to proofread:
   `site.ts` and the admin for the site, `src/content/admin.ts` for the admin's
-  own words.
+  own words. Nobody proofreads those files: `npm run copy:export` writes every
+  Mongolian string, site and admin, as one ordered list with where each appears.
 - Prices are data, not markup. They change; they live in `site.ts` and the
   admin.
 - Every image ships with explicit `width`/`height` to prevent layout shift.
@@ -348,8 +372,34 @@ site stays static.
   product; uploads in the `media` bucket. Anyone may read; only a user listed
   in `editors` may write, enforced by row level security — never by the
   admin's own code.
+- **Every save checks it is not overwriting.** A write sends back the
+  `updated_at` the admin read and lands only if the row still has it; if
+  someone saved in between, the editor is told, the table is read afresh, and
+  their typing stays in the draft to lay back over it. A save writes only the
+  row it saves — never every product from one browser's copy.
 - **Publish** (`worker/publish.ts`) checks the caller is an editor and starts a
   production build through the Workers Builds deploy hook, a Worker secret.
+  The build reports on itself — `npm run ci` wraps `npm run budget` and posts
+  its start, exit code, branch and commit to `POST /api/builds`
+  (`worker/builds.ts`) with a secret that can write one status row and nothing
+  else, always `|| true` so a report can never change the build's exit code —
+  and the admin reads that row: queued, building, done or failed, and why;
+  fifteen minutes without a final report says so. Never a status code. **No
+  Cloudflare API token**: the only permission level the Builds API offers
+  could change the build command and deploy anything.
+- **The enquiries inbox** (`worker/inbox.ts`), by the owner's direction, is the
+  only reader of `enquiries`: the Worker checks the caller is an editor, then
+  uses the service_role key, which never leaves it. The table keeps RLS on with
+  no policies. Nothing deletes an enquiry — closing one sets its status — and
+  opening one never marks it read. «Шинэ» lists new enquiries with nothing to
+  check, and the badge counts only those; flagged ones — almost always bots,
+  now that nothing is refused — wait under «Шалгах», counted apart, so the
+  badge keeps counting people.
+- **The order to switch publishing on** (README > The admin): migrations,
+  the build secret, the merge with the build command unchanged, the same
+  value as a Worker secret, `DEPLOY_HOOK_URL` — and only then the build
+  command to `npm run ci`, or the first report posts to a route not yet
+  deployed.
 - **The build** pulls the content first (`scripts/content-pull.mjs`): every
   upload is cut to its slot's `width` × `height` and encoded AVIF, WebP and
   JPEG into `public/media/live/`, so the site serves it itself. The content is
@@ -358,8 +408,19 @@ site stays static.
   and the site stays as it was — nothing reaches a visitor unchecked.
 - The forms are built from `site.ts`'s shape. A value that is code, not copy
   — a form field's name, an option's value the enquiries table checks — is
-  hidden in the admin (`RULES` in `src/scripts/admin.ts`). Add a field to
-  `site.ts` and the admin shows it; hide it there if it is not copy.
+  hidden in the admin (`RULES` in `src/scripts/admin-schema.ts`). Add a field
+  to `site.ts` and the admin shows it; hide it there if it is not copy.
+- **No field shows as its English key.** Every field the admin shows needs a
+  label and a line of help saying where it shows (`src/content/admin.ts`),
+  and every list of things a declared row title (`SUMMARY`). The admin page's
+  build checks them all and fails naming each one missing — so adding a field
+  to `site.ts` means giving it words, or hiding it.
+- **Length guidance, never a limit.** Past a field's length the admin says
+  what happens — a second line, a cut Google title — and the editor decides.
+  Each length (`LIMITS`) is measured on the built page at 1440 and 390, not
+  guessed; re-measure when a section's layout changes.
+- The tree follows the home page's order, top to bottom — never how often a
+  section changes. It is how an editor knows where on the page they are.
 - Video is not uploaded through the admin: it needs the media pipeline
   (`npm run media`).
 

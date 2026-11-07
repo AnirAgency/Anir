@@ -23,6 +23,7 @@ import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { placeholderMode, placeholderReason } from '../src/lib/placeholders.mjs';
+import { POSTER_MAX, VIDEO_MAX } from './limits.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -34,8 +35,7 @@ const LAZY_MAX = 500_000; //   500 kB after first paint, desktop only
 const LAZY_MAX_COUNT = 1; //   CLAUDE.md allows one lazy asset
 const BELOW_MAX = 1_600_000; //  1.6 MB below-the-fold media
 const TILES_MAX = 300_000; //    300 kB of tiles, together
-const VIDEO_MAX = 1_200_000; //  1.2 MB per video
-const POSTER_MAX = 40_000; //    40 kB per poster
+// VIDEO_MAX (1.2 MB per video) and POSTER_MAX (40 kB per poster): scripts/limits.mjs.
 const SAVE_DATA_MAX = 300_000; // no single file over 300 kB on saveData
 
 const placeholderBuild = placeholderMode();
@@ -318,6 +318,17 @@ if (!placeholderBuild) {
   }
   if (existsSync(join(dist, 'media', 'placeholder'))) {
     belowProblems.push('dist/media/placeholder/ exists in a production build.');
+  }
+  // Two stand-ins that would make a claim, not just look unfinished: a
+  // quote nobody said (ProductTestimonial.astro), and a before-and-after for
+  // a product that was never redesigned (ProductFront.astro, Media.demo).
+  // Their render gates keep both off production pages; these fail the build
+  // if a gate ever lets one through.
+  if (/\bdata-stand-in\b/.test(pageHtml)) {
+    belowProblems.push('the page shows the stand-in testimonial in a production build.');
+  }
+  if (/\bdata-demo\b/.test(pageHtml)) {
+    belowProblems.push('the page shows a demo before-and-after in a production build.');
   }
 }
 

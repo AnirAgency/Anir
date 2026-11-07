@@ -5,18 +5,28 @@
  *   npm run media              encode everything the config lists
  *   npm run media -- --dry-run print the exact ffmpeg commands, run nothing
  *   npm run media -- hero      just one clip or still, by name
+ *   npm run media -- --check   hold every committed video to the budget, encode nothing
  *
  * Every clip comes out twice — AV1 for browsers that take it, VP9 for the rest —
  * plus a poster frame. Stills come out as AVIF, WebP and JPG. Audio is stripped
  * outright and all metadata is dropped, so no camera EXIF reaches the web.
+ *
+ * And every run ends by holding every video and poster in public/media/ to
+ * its cap — not only what it just encoded, but anything copied in by hand,
+ * placeholders included — and fails, the way `npm run budget` fails, if one
+ * is over (videoBudget, below). Video is committed: an oversized export stays in git for good and
+ * is downloaded by every visitor, so the check runs before it can be
+ * committed, and again on every build (`npm run budget` runs --check).
  *
  * The command builders below are pure functions, exported so scripts/test-media.mjs
  * can check them without ffmpeg installed.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { PLACEHOLDER_MAX, POSTER_MAX, VIDEO_MAX } from './limits.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rawDir = join(root, 'raw-media');
@@ -25,9 +35,87 @@ const configPath = join(root, 'scripts', 'media.config.json');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const checkOnly = args.includes('--check');
 const only = args.filter((a) => !a.startsWith('--'));
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)} kB`;
+
+/* ------------------------------------------------------------ video budget */
+
+const VIDEO_EXT = new Set(['.webm', '.mp4', '.mov', '.m4v']);
+const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
+
+/**
+ * Every video and poster under `dir`, each with the cap it is held to:
+ *
+ *   a clip this pipeline encodes (its name in media.config.json)
+ *       → the config's failOverKB — clips loop, so they are small
+ *   any other video, such as the showreel's MP4, which is exported by hand
+ *       → VIDEO_MAX, 1.2 MB, as `npm run budget` holds it on a page
+ *   a clip's poster frame, or any image named as a poster
+ *       → POSTER_MAX, 40 kB
+ *   a placeholder video or poster (public/media/placeholder/)
+ *       → PLACEHOLDER_MAX, 3 MB — looser, never exempt: every preview build
+ *         serves them, and a public preview has
+ *
+ * Exported so scripts/test-media.mjs can check it without ffmpeg.
+ */
+export function videoBudget(config, dir = outDir) {
+  const clips = new Set(config.clips.map((clip) => clip.name));
+  const files = [];
+  const walk = (at) => {
+    if (!existsSync(at)) return;
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = join(at, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else files.push(full);
+    }
+  };
+  walk(dir);
+
+  const rows = [];
+  for (const file of files) {
+    const ext = extname(file).toLowerCase();
+    const name = file.slice(dir.length + 1).split(sep).join('/');
+    const base = name.split('/').pop().split('.')[0];
+    let cap = null;
+    let kind = '';
+    if (name.startsWith('placeholder/')) {
+      if (VIDEO_EXT.has(ext) || (IMAGE_EXT.has(ext) && /poster/i.test(name))) {
+        cap = PLACEHOLDER_MAX;
+        kind = 'stand-in';
+      }
+    } else if (VIDEO_EXT.has(ext)) {
+      const encodedHere = clips.has(base) && ext === '.webm';
+      cap = encodedHere ? config.video.failOverKB * 1000 : VIDEO_MAX;
+      kind = encodedHere ? 'clip' : 'video';
+    } else if (IMAGE_EXT.has(ext) && ((clips.has(base) && ext === '.jpg') || /poster/i.test(name))) {
+      cap = Math.min(POSTER_MAX, config.video.posterMaxKB * 1000);
+      kind = 'poster';
+    }
+    if (cap !== null) rows.push({ name, kind, bytes: statSync(file).size, cap });
+  }
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Prints the budget, as `npm run budget` prints its own. Answers how many are over. */
+function reportVideoBudget(config) {
+  const rows = videoBudget(config);
+  const over = rows.filter((row) => row.bytes > row.cap);
+  console.log(`\n  VIDEO BUDGET - every committed video and poster in ${relative(root, outDir).split(sep).join('/')}/\n`);
+  if (!rows.length) console.log('  none yet');
+  const width = Math.max(12, ...rows.map((row) => row.name.length));
+  for (const row of rows) {
+    console.log(`  ${row.name.padEnd(width)}  ${row.kind.padEnd(8)}  ${kb(row.bytes).padStart(10)} of ${kb(row.cap).padStart(10)}  ${row.bytes > row.cap ? 'OVER' : 'ok'}`);
+  }
+  for (const row of over) {
+    const cap = row.kind === 'poster' ? 'poster' : row.kind === 'stand-in' ? 'placeholder' : 'video';
+    console.error(`  FAIL  ${row.name} is ${kb(row.bytes - row.cap).trim()} over the ${kb(row.cap).trim()} ${cap} cap.`);
+  }
+  console.log(over.length ? '' : '\n  PASS\n');
+  if (over.length) console.error('  Re-export shorter or at a lower bitrate before committing: a committed video stays in git for good.\n');
+  return over.length;
+}
 
 /* ------------------------------------------------------------------ ffmpeg */
 
@@ -166,6 +254,9 @@ const isDirectRun =
 if (isDirectRun) {
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
   const { video } = config;
+
+  // The budget alone: no sources and no ffmpeg needed, so a build can run it.
+  if (checkOnly) process.exit(reportVideoBudget(config) ? 1 : 0);
 
   if (!existsSync(rawDir)) {
     console.error(`No raw-media/ directory. Create it and add sources — see raw-media/README.md.`);
@@ -318,11 +409,13 @@ if (isDirectRun) {
 
   if (over > 0) {
     console.error(`  FAIL  ${over} output(s) over the size cap. Trim the clip shorter or lower targetKB.\n`);
-    process.exit(1);
   }
 
   if (rows.length === 0 && missing.length > 0) {
     console.log('  Nothing to do yet. Drop the sources listed above into raw-media/.\n');
   }
 
+  // Every run ends on the whole budget, not only what it just encoded.
+  const overBudget = reportVideoBudget(config);
+  if (over > 0 || overBudget > 0) process.exit(1);
 }

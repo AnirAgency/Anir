@@ -9,7 +9,8 @@
 -- admin shows it on its status line, as it shows a failed publish.
 --
 -- Written and read by the Worker with service_role only (the admin reads it
--- through GET /api/alerts, editors only): RLS on, no policies.
+-- through GET /api/alerts, editors only): RLS on, no policies — see the
+-- lockdown below.
 
 create table if not exists public.worker_alerts (
   kind     text        primary key check (kind in ('limiter-open')),
@@ -20,5 +21,20 @@ create table if not exists public.worker_alerts (
 comment on table public.worker_alerts is
   'What the Worker needs a person to know (worker/alerts.ts), one row per kind. Written and read by the Worker with service_role only.';
 
+-- ---------------------------------------------------------------- lockdown --
+
 alter table public.worker_alerts enable row level security;
+
+-- Belt and braces, as for enquiries (0001): RLS already blocks these roles
+-- because no policy grants them anything, but revoking the table grants
+-- means a policy added later by accident still cannot expose the rows.
 revoke all on public.worker_alerts from anon, authenticated;
+
+-- Deliberately NO policies. THE ADVISOR WARNING IS EXPECTED AND PERMANENT.
+-- Supabase's security advisor reports this table as "RLS enabled, no
+-- policies". That is the design: RLS on with zero policies, plus the revoke
+-- above, is what makes service_role — the Worker — the only reader and
+-- writer. Adding any policy to clear the warning makes these rows readable
+-- over the public REST API: which of the site's own defences is failing,
+-- and since when — a map for whoever wants to lean on it. Leave the warning
+-- where it is.

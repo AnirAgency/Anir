@@ -73,11 +73,12 @@ export async function readBuild(env: Env, fetcher: typeof fetch): Promise<BuildS
 }
 
 export async function onBuildReport(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
-  if (!env.BUILD_REPORT_SECRET || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    return answer(503, { ok: false, error: 'not-configured' });
-  }
-  const token = bearer(request);
-  if (!token || !(await same(token, env.BUILD_REPORT_SECRET))) return answer(401, { ok: false, error: 'refused' });
+  // Who is asking, before anything about this Worker's setup: no secret set,
+  // none sent and a wrong one get the one same refusal, compared either way.
+  const token = bearer(request) ?? '';
+  const holds = await same(token, env.BUILD_REPORT_SECRET ?? '');
+  if (!env.BUILD_REPORT_SECRET || !token || !holds) return answer(401, { ok: false, error: 'refused' });
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return answer(503, { ok: false, error: 'not-configured' });
 
   const body = (await request.json().catch(() => null)) as {
     build?: unknown;

@@ -14,8 +14,9 @@
  * read the code drop one on purpose. Without the secret this skips its POST
  * rather than leave an enquiry behind — and with one, it first asks GET
  * /api/health, which reads no body and stores nothing, whether this Worker
- * holds the same secret. Only on a yes does it post: a check pointed at a
- * Worker with no secret set, or another one, leaves nothing behind.
+ * holds the same secret. Only on a 200 does it post: a check pointed at a
+ * Worker with no secret set, or another one, gets the one same 401 and
+ * leaves nothing behind.
  *
  *   HEALTH_CHECK_SECRET=… node scripts/test-headers.mjs https://anir.<account>.workers.dev
  */

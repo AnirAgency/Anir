@@ -33,8 +33,7 @@ export interface Env {
 const followable = (env: Env) => !!(env.BUILD_REPORT_SECRET && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 
 export async function onPublish(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
-  if (!env.DEPLOY_HOOK_URL) return answer(503, { ok: false, error: 'not-configured' });
-
+  // Who is asking first: whether publishing is set up is for an editor to learn, not anyone.
   let caller;
   try {
     caller = await callerOf(request, fetcher);
@@ -43,6 +42,7 @@ export async function onPublish(request: Request, env: Env, fetcher: typeof fetc
   }
   const refused = refusal(caller);
   if (refused) return refused;
+  if (!env.DEPLOY_HOOK_URL) return answer(503, { ok: false, error: 'not-configured' });
 
   let hook: Response;
   try {

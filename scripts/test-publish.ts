@@ -99,7 +99,15 @@ await check('no hook secret (a preview version)', async () => {
   const response = await onPublish(post('editor-token'), {}, stub);
   assert.equal(response.status, 503);
   assert.equal(hooked, 0);
-  return '503 not-configured, the hook never called';
+  return '503 not-configured to an editor, the hook never called';
+});
+
+await check('no hook secret, asked by anyone else', async () => {
+  const signedOut = await onPublish(post(), {}, stub);
+  const forged = await onPublish(post('made-up'), {}, stub);
+  assert.deepEqual([signedOut.status, forged.status], [401, 401], 'whether publishing is set up is an editor\'s business');
+  assert.equal(hooked, 0);
+  return '401, as with the hook set — nothing about the setup';
 });
 
 await check('no token', async () => {

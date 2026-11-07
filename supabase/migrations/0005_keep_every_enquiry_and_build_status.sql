@@ -40,7 +40,8 @@ alter table public.enquiries
 -- only: `id` can only be true. The build's secret reaches nothing but this
 -- row — the Worker checks it, then writes with the service_role key — and the
 -- admin reads it through the Worker (GET /api/publish?build=…), so nothing
--- here is part of the public API: RLS on, no policies.
+-- here is part of the public API: RLS on, no policies — see the lockdown
+-- below.
 
 create table if not exists public.build_status (
   id           boolean     primary key default true check (id),
@@ -57,5 +58,19 @@ create table if not exists public.build_status (
 comment on table public.build_status is
   'The last production build, as it reported itself (worker/builds.ts). One row. Written and read by the Worker with service_role only.';
 
+-- ---------------------------------------------------------------- lockdown --
+
 alter table public.build_status enable row level security;
+
+-- Belt and braces, as for enquiries (0001): RLS already blocks these roles
+-- because no policy grants them anything, but revoking the table grants
+-- means a policy added later by accident still cannot expose the row.
 revoke all on public.build_status from anon, authenticated;
+
+-- Deliberately NO policies. THE ADVISOR WARNING IS EXPECTED AND PERMANENT.
+-- Supabase's security advisor reports this table as "RLS enabled, no
+-- policies". That is the design: RLS on with zero policies, plus the revoke
+-- above, is what makes service_role — the Worker — the only reader and
+-- writer. Adding any policy to clear the warning makes this row readable
+-- over the public REST API: the production branch, its commit SHAs and the
+-- lines a failing build printed. Leave the warning where it is.

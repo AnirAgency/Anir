@@ -147,7 +147,11 @@ const ADMIN_PARTS: Record<string, string> = {
   list: 'Жагсаалт',
   rows: 'Жагсаалтын мөр',
   newProduct: 'Шинэ бүтээгдэхүүн',
+  notify: 'Telegram мэдэгдэл',
+  alerts: 'Төлөвийн мөрийн анхааруулга',
 };
+/** What the Worker says on its own — to the team's Telegram, or on the admin's status line. Never to a visitor. */
+const OPERATIONAL = new Set(['notify', 'alerts']);
 const adminLines: Line[] = [];
 const walkAdmin = (value: unknown, path: string[]) => {
   if (typeof value === 'string') {
@@ -191,7 +195,12 @@ function document(title: string, intro: string[], parts: { heading: string; sect
 const siteIntro = '- **Сайтын бичвэр** — удирдлагын хэсэгт «Хаана» баганад бичсэн нэрээр нь олж засна (зүүн цэс › талбар).';
 const adminIntro = '- **Удирдлагын бичвэр** — засах шаардлагатай бол доорх түлхүүрийг сайтыг хөгжүүлсэн хүнд хэлнэ.';
 const hiddenNote = 'Дэлгэц уншигч уншдаг, эсвэл одоо ямар ч хуудсанд гардаггүй бичвэрүүд. Засвар хэрэгтэй бол сайтыг хөгжүүлсэн хүнд хэлнэ.';
-const admin: Section = { title: 'Удирдлага', lines: adminLines, visitor: false };
+const operationalNote = 'Зочдод хэзээ ч харагддаггүй. Сайт өөрөө ажлынханд Telegram-аар илгээдэг, эсвэл удирдлагын дээд талын төлөвийн мөрөнд гаргадаг бичвэр. {n}, {when} — програм бөглөнө, хэвээр үлдээнэ.';
+const admin: Section[] = [
+  { title: 'Удирдлагын дэлгэц', lines: adminLines.filter((line) => !OPERATIONAL.has(String(line.path[0]))), visitor: false },
+  { title: 'Ажлын мэдэгдэл, анхааруулга', note: operationalNote, lines: adminLines.filter((line) => OPERATIONAL.has(String(line.path[0]))), visitor: false },
+];
+const operational = admin[1].lines.map((line) => line.text);
 
 const written: string[] = [];
 const write = (file: string, doc: { text: string; count: number }) => {
@@ -204,7 +213,7 @@ if (wantAll) {
     'mongolian-copy.md',
     document('Анир — монгол бичвэрийн жагсаалт', [siteIntro, adminIntro], [
       { heading: '1. Сайтын бичвэр', sections: [...sections, { title: 'Удирдлагад харагддаггүй', note: hiddenNote, lines: hiddenLines, visitor: false }] },
-      { heading: '2. Удирдлагын бичвэр', sections: [admin], keys: true },
+      { heading: '2. Удирдлагын бичвэр', sections: admin, keys: true },
     ])
   );
 }
@@ -212,15 +221,16 @@ if (wantVisitor) {
   // Only what a visitor can read: switched-off sections, the preview's stand-in and the old reel's words left out.
   const visible = sections.filter((s) => s.visitor).map((s) => ({ ...s, lines: s.lines.filter((line) => seenByVisitors(line.path)) }));
   const readers = hiddenLines.filter((line) => seenByVisitors(line.path));
-  write(
-    'mongolian-copy-visitor.md',
-    document('Анир — зочдод харагдах бичвэр', [siteIntro, '- Нүүр хуудас дээрээс доош, «Бүтээгдэхүүн» хуудас ба бүтээгдэхүүн бүрийн хуудас, маягт, цэс, Google, эцэст нь дэлгэц уншигчийн бичвэр. Удирдлагын бичвэр, унтраалттай хэсэг, урьдчилан харахын түр бичвэр орохгүй.'], [
-      { heading: 'Сайтын бичвэр', sections: [...visible, { title: 'Дэлгэц уншигч уншдаг', note: 'Хуудсан дээр харагдахгүй ч дэлгэц уншигч уншдаг бичвэр. Засвар хэрэгтэй бол сайтыг хөгжүүлсэн хүнд хэлнэ.', lines: readers, visitor: true }] },
-    ])
-  );
+  const doc = document('Анир — зочдод харагдах бичвэр', [siteIntro, '- Нүүр хуудас дээрээс доош, «Бүтээгдэхүүн» хуудас ба бүтээгдэхүүн бүрийн хуудас, маягт, цэс, Google, эцэст нь дэлгэц уншигчийн бичвэр. Удирдлагын бичвэр, Telegram мэдэгдэл, унтраалттай хэсэг, урьдчилан харахын түр бичвэр орохгүй.'], [
+    { heading: 'Сайтын бичвэр', sections: [...visible, { title: 'Дэлгэц уншигч уншдаг', note: 'Хуудсан дээр харагдахгүй ч дэлгэц уншигч уншдаг бичвэр. Засвар хэрэгтэй бол сайтыг хөгжүүлсэн хүнд хэлнэ.', lines: readers, visitor: true }] },
+  ]);
+  // The proofreader's document carries nothing the Worker says to the team.
+  const leaked = operational.filter((text) => doc.text.includes(text.split('{')[0].trim()));
+  if (leaked.length) throw new Error(`copy:export --visitor carries operational strings: ${leaked.join(' | ')}`);
+  write('mongolian-copy-visitor.md', doc);
 }
 if (wantAdmin) {
-  write('mongolian-copy-admin.md', document('Анир — удирдлагын бичвэр', [adminIntro], [{ heading: 'Удирдлагын бичвэр', sections: [admin], keys: true }]));
+  write('mongolian-copy-admin.md', document('Анир — удирдлагын бичвэр', [adminIntro], [{ heading: 'Удирдлагын бичвэр', sections: admin, keys: true }]));
 }
 
 console.log(`\n  COPY EXPORT\n${written.join('\n')}\n`);

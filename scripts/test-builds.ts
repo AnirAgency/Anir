@@ -120,9 +120,16 @@ await check('nothing but a well-formed report', async () => {
   return '400 for a bad build id, event or exit code';
 });
 
-await check('not set up', async () => {
-  assert.equal((await onBuildReport(report({ event: 'started' }), { ...env, BUILD_REPORT_SECRET: '' }, stub)).status, 503);
-  return '503 without the secret';
+await check('not set up: says so only to the secret\'s holder', async () => {
+  const said = async (response: Response) => [response.status, await response.text()] as const;
+  const unset = await said(await onBuildReport(report({ event: 'started' }), { ...env, BUILD_REPORT_SECRET: '' }, stub));
+  const wrong = await said(await onBuildReport(report({ event: 'started' }, 'guess'), env, stub));
+  assert.deepEqual(unset, wrong, 'no secret set looks exactly like a wrong one');
+  assert.equal(unset[0], 401);
+  const noDatabase = await onBuildReport(report({ event: 'started' }), { ...env, SUPABASE_URL: '' }, stub);
+  assert.equal(noDatabase.status, 503, 'the holder learns the rest is not set up');
+  assert.equal(writes.length, 0);
+  return 'no secret set: the same 401 as a wrong one; 503 only past the secret';
 });
 
 // ------------------------------------------------------------- the reporter

@@ -404,16 +404,22 @@ export async function tell(env: Env, subject: string, text: string, what: string
 }
 
 /**
- * GET /api/health — whether this Worker holds the caller's health-check
- * secret, and nothing else: no body is read, nothing is stored. The health
- * check asks this first and only posts its enquiry-shaped request if the
- * answer is yes — so a check pointed at a Worker without the secret, or
- * with another one, cannot leave a junk enquiry behind.
+ * GET /api/health — liveness, for the holder of the health-check secret
+ * only, and nothing else: no body is read, nothing is stored, and the
+ * answer says nothing about the Worker beyond "yes". The health check asks
+ * this first and only posts its enquiry-shaped request on a yes — so a check
+ * pointed at a Worker without the secret, or with another one, cannot leave
+ * a junk enquiry behind.
+ *
+ * Every way of not holding the secret — none sent, a wrong one, none set
+ * here — gets the one same refusal, and the comparison runs either way, so
+ * neither the status, the body nor the time taken says whether a secret is
+ * set. No version, no environment, no table state: ever.
  */
 export async function onHealth(request: Request, env: Env): Promise<Response> {
-  const probe = request.headers.get('X-Health-Check');
-  if (!env.HEALTH_CHECK_SECRET) return answer(503, { ok: false, error: 'not-configured' });
-  if (!probe || !(await same(probe, env.HEALTH_CHECK_SECRET))) return answer(401, { ok: false, error: 'refused' });
+  const probe = request.headers.get('X-Health-Check') ?? '';
+  const holds = await same(probe, env.HEALTH_CHECK_SECRET ?? '');
+  if (!env.HEALTH_CHECK_SECRET || !probe || !holds) return answer(401, { ok: false });
   return answer(200, { ok: true });
 }
 

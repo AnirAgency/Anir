@@ -562,20 +562,25 @@ await check('a limiter that works raises nothing', async () => {
 
 // ------------------------------------------------- the health preflight
 
-await check('GET /api/health says whether this Worker holds the secret, and stores nothing', async () => {
+await check('GET /api/health discloses liveness to the secret\'s holder, and nothing else', async () => {
   captured = [];
   const ask = (secret?: string) =>
     new Request('https://aniragency.mn/api/health', { headers: secret === undefined ? {} : { 'X-Health-Check': secret } });
   const holding = { ...env(), HEALTH_CHECK_SECRET: 'health-secret' };
-  const codes = [
-    (await onHealth(ask('health-secret'), holding)).status,
-    (await onHealth(ask('guess'), holding)).status,
-    (await onHealth(ask(), holding)).status,
-    (await onHealth(ask('health-secret'), env())).status,
+  const said = async (response: Response) => [response.status, await response.text()] as const;
+  const yes = await said(await onHealth(ask('health-secret'), holding));
+  const refusals = [
+    await said(await onHealth(ask('guess'), holding)), //        a wrong secret
+    await said(await onHealth(ask(), holding)), //               none sent
+    await said(await onHealth(ask('health-secret'), env())), //  none set here
+    await said(await onHealth(ask(''), env())), //               none sent, none set
   ];
-  assert.deepEqual(codes, [200, 401, 401, 503]);
+  assert.deepEqual(yes, [200, '{"ok":true}'], 'the yes is liveness and nothing more');
+  for (const refusal of refusals) assert.deepEqual(refusal, refusals[0], 'every refusal says the same');
+  assert.equal(refusals[0][0], 401);
+  assert.equal(refusals[0][1], '{"ok":false}', 'not why — not whether a secret is set');
   assert.equal(captured.length, 0);
-  return 'yes 200; wrong or none 401; not set 503 — nothing stored, ever';
+  return 'yes 200 {ok:true}; wrong, none, or not set: one same 401 — nothing stored, ever';
 });
 
 await check('a failed notification never fails the request', async () => {

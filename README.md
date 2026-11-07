@@ -645,7 +645,11 @@ How it fits together (CLAUDE.md > The admin has the rules):
       would leave a junk enquiry behind every time — the bug the secret exists to fix.
       `scripts/test-headers.mjs` asks `GET /api/health` first (it stores nothing) and
       posts only when this Worker holds the same secret, but **do not point the health
-      check at production until this step is done.**
+      check at production until this step is done.** `GET /api/health` says "alive" to
+      the secret's holder and nothing else; anyone else — a wrong secret, none, or a
+      Worker with none set — gets the same 401, so it never tells a stranger whether
+      the secret is set. The admin's routes and the build's report likewise check who
+      is asking before saying whether anything is set up.
    7. **Only then, the build command**: `npm run budget` → `npm run ci`. Do it straight
       after step 6: a publish in between would start a build that does not report, and
       show the fifteen-minute silence.

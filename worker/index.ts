@@ -2,7 +2,8 @@
  * The Worker: a few routes of code in front of a static site.
  *
  * POST /api/enquiry runs the contact handler (./enquiry.ts), and GET
- * /api/health tells the health check whether this Worker holds its secret.
+ * /api/health answers "alive" to the holder of the health-check secret and
+ * one same refusal to everyone else — nothing about how the Worker is set up.
  * The rest are the admin's, each for editors only (./auth.ts): /api/publish
  * starts a build (POST) and follows it (GET, ./publish.ts); /api/enquiries
  * lists the enquiries and /api/enquiries/<id> changes one's status;

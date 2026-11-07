@@ -37,7 +37,10 @@ import { tell, type Drained, type Env } from './enquiry.ts';
 export const DIGEST_EVERY_MS = 60 * 60 * 1000;
 export const FLOOD_AT = 50;
 export const STUCK_AFTER_MS = 60 * 60 * 1000;
+/** Telegram was told of this episode (24 h, so a long one is told again a day on). */
 const STUCK_MARK = 'notify:stuck-at';
+/** A drain-stuck worker_alerts row stands, to clear when the buffer empties. */
+const STUCK_RAISED = 'alert:stuck-raised';
 /** Ulaanbaatar is UTC+8 all year; "the day" is the studio's. */
 const UB_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DIGEST_MARK = 'notify:digest-at';
@@ -92,8 +95,9 @@ export async function digest(env: Env, now: Date, fetcher: typeof fetch = fetch)
   const since = last ?? new Date(now.getTime() - DIGEST_EVERY_MS).toISOString();
   const n = await count(env, `status=eq.new&unrecognised=neq.${EMPTY}&created_at=gt.${encodeURIComponent(since)}`, fetcher);
   if (n === 0) return 'nothing flagged since the last digest';
-  // «Шалгах: N шинэ», and nothing else.
-  await tell(env, t.notify.digest.replace('{n}', String(n)), '', 'enquiry digest');
+  // «Шалгах: N шинэ», and nothing else. Marked only once a channel took it:
+  // with none, the next run tries again, counting from the last one sent.
+  if (!(await tell(env, t.notify.digest.replace('{n}', String(n)), '', 'enquiry digest'))) return `not sent — ${n} flagged, no channel took it; tried again next run`;
   await kv.put(DIGEST_MARK, now.toISOString());
   return `sent — ${n} flagged`;
 }
@@ -105,7 +109,7 @@ export async function flood(env: Env, now: Date, fetcher: typeof fetch = fetch):
   if (await kv.get(floodMark(day))) return `already sent for ${day}`;
   const stored = (await count(env, `created_at=gte.${encodeURIComponent(start.toISOString())}`, fetcher)) + (await bufferedSince(env, start));
   if (stored <= FLOOD_AT) return `${stored} today`;
-  await tell(env, t.notify.flood.replace('{n}', String(stored)), '', 'enquiry flood');
+  if (!(await tell(env, t.notify.flood.replace('{n}', String(stored)), '', 'enquiry flood'))) return `not sent — ${stored} today, no channel took it; tried again next run`;
   await kv.put(floodMark(day), now.toISOString(), { expirationTtl: 2 * 24 * 60 * 60 });
   return `sent — ${stored} today`;
 }
@@ -124,9 +128,13 @@ export async function stuck(env: Env, now: Date, drained?: Drained, fetcher: typ
   const waiting = times.filter((time) => now.getTime() - time > STUCK_AFTER_MS);
   if (waiting.length === 0) {
     // Over: the admin stops saying so, and the next time is told afresh.
-    if (await kv.get(STUCK_MARK)) {
+    // The alert's own mark, not Telegram's: an episode no channel heard still
+    // raised the row, and the row must go.
+    const raised = await kv.get(STUCK_RAISED);
+    if (raised || (await kv.get(STUCK_MARK))) {
       await kv.delete(STUCK_MARK);
-      await clearAlert(env, 'drain-stuck', fetcher);
+      await kv.delete(STUCK_RAISED);
+      if (raised) await clearAlert(env, 'drain-stuck', fetcher);
       return `cleared — ${times.length} buffered, none over an hour`;
     }
     return `${times.length} buffered, none over an hour`;
@@ -134,8 +142,10 @@ export async function stuck(env: Env, now: Date, drained?: Drained, fetcher: typ
   const oldest = new Date(Math.min(...waiting)).toISOString();
   const detail = `${waiting.length} enquiries waiting in the buffer over an hour, the oldest since ${oldest}. ${drained?.why ? `Last refusal: ${drained.why}` : 'The drain gave no reason — is it running?'}`;
   await raiseAlert(env, 'drain-stuck', detail, fetcher);
+  await kv.put(STUCK_RAISED, now.toISOString());
   if (await kv.get(STUCK_MARK)) return `alert refreshed — ${detail}`;
-  await tell(env, t.notify.stuck.replace('{n}', String(waiting.length)), '', 'enquiry stuck');
+  // Marked told only once a channel took it: with none, the next pass tries again.
+  if (!(await tell(env, t.notify.stuck.replace('{n}', String(waiting.length)), '', 'enquiry stuck'))) return `alert raised, not told — no channel took it; tried again next run — ${detail}`;
   await kv.put(STUCK_MARK, now.toISOString(), { expirationTtl: 24 * 60 * 60 });
   return `told — ${detail}`;
 }

@@ -28,6 +28,8 @@ let telegram: string[] = [];
 let supabaseDown = false;
 /** What reached worker_alerts: a POST raises or refreshes a row, a DELETE clears it. */
 let alertCalls: Array<{ method: string; kind: string; detail?: string }> = [];
+/** What Telegram answers: 200 takes the message, anything else does not. */
+let telegramStatus = 200;
 
 const kv = () => {
   const store = new Map<string, string>();
@@ -46,6 +48,7 @@ const kv = () => {
 const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input));
   if (url.hostname === 'api.telegram.org') {
+    if (telegramStatus !== 200) return Response.json({ ok: false }, { status: telegramStatus });
     telegram.push(JSON.parse(String(init?.body)).text);
     return Response.json({ ok: true });
   }
@@ -92,6 +95,7 @@ async function check(label: string, run: () => Promise<string> | string) {
   telegram = [];
   alertCalls = [];
   supabaseDown = false;
+  telegramStatus = 200;
   try {
     results.push([label, await run()]);
   } catch (error) {
@@ -245,6 +249,51 @@ await check('a paused project: the alert cannot be written, Telegram still says 
   assert.match(keysGone.digest, /^skipped/);
   assert.match(keysGone.stuck, /^alert refreshed/, 'the stuck watch runs without a database');
   return 'worker_alerts down, Telegram told; no database at all: digest skipped, stuck still watched';
+});
+
+// ------------------------------------------------- no channel, as production
+
+/*
+  Production ran for weeks with TELEGRAM_BOT_TOKEN unset. tell() then sends
+  nothing and says so; it never throws. What must not happen is a watch
+  remembering "already sent" for a message nobody got — the flood marked
+  sent for the day, the stuck episode marked told — so each is marked only
+  once a channel took it, and a refused send (Telegram answering 500) is the
+  same as none.
+*/
+await check('no Telegram token: nothing throws, nothing is marked sent, and it is told once there is', async () => {
+  const e = env();
+  const { TELEGRAM_BOT_TOKEN: _token, ...noToken } = e;
+  rows = [
+    enquiry('2026-11-07T05:45:00Z', true),
+    ...Array.from({ length: FLOOD_AT + 1 }, () => enquiry('2026-11-07T01:00:00Z', false)),
+  ];
+  await e.ENQUIRY_BUFFER.put(`enquiry:${twoHoursBefore(NOW)}-abcd1234`, '{}');
+  const silent = await watch(noToken, at(NOW), stub, { buffered: 1, written: 0, kept: 1, why: refusal });
+  assert.match(silent.digest, /^not sent/);
+  assert.match(silent.flood, /^not sent/);
+  assert.match(silent.stuck, /^alert raised, not told/);
+  assert.deepEqual([...e.ENQUIRY_BUFFER.store.keys()].filter((key) => key.startsWith('notify:')), [], 'no "already sent" for what was not');
+  assert.equal(telegram.length, 0);
+  // Telegram down, not unset: the same — not marked.
+  telegramStatus = 500;
+  const refused = await watch(e, at('2026-11-07T06:15:00Z'), stub, { buffered: 1, written: 0, kept: 1, why: refusal });
+  assert.match(refused.digest, /^not sent/);
+  assert.deepEqual([...e.ENQUIRY_BUFFER.store.keys()].filter((key) => key.startsWith('notify:')), []);
+  // The channel back: all three told, on the next run.
+  telegramStatus = 200;
+  const told = await watch(e, at('2026-11-07T06:30:00Z'), stub, { buffered: 1, written: 0, kept: 1, why: refusal });
+  assert.deepEqual([told.digest, told.flood, told.stuck].map((said) => said.split(' ')[0]), ['sent', 'sent', 'told']);
+  assert.equal(telegram.length, 3);
+  // An episode no channel heard still raised the row — and the row still clears.
+  const quiet = env();
+  await quiet.ENQUIRY_BUFFER.put(`enquiry:${twoHoursBefore(NOW)}-feed0000`, '{}');
+  const { TELEGRAM_BOT_TOKEN: _t, ...quietNoToken } = quiet;
+  await stuck(quietNoToken, at(NOW), { buffered: 1, written: 0, kept: 1, why: refusal }, stub);
+  await quiet.ENQUIRY_BUFFER.delete(`enquiry:${twoHoursBefore(NOW)}-feed0000`);
+  assert.match(await stuck(quietNoToken, at('2026-11-07T06:15:00Z'), { buffered: 0, written: 0, kept: 0 }, stub), /^cleared/);
+  assert.deepEqual(alertCalls.at(-1), { method: 'DELETE', kind: 'drain-stuck' });
+  return 'unset or refused: "not sent", no mark; then digest, flood and stuck all told; an unheard episode\'s alert still cleared';
 });
 
 // ------------------------------------------------------------------ watch

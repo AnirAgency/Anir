@@ -380,8 +380,14 @@ export async function notify(env: Env, row: Enquiry, path: Path): Promise<void> 
   await tell(env, subject, describe(row, path), `enquiry notification (${path})`);
 }
 
-/** One message on every channel that has its secrets set. Never throws. */
-export async function tell(env: Env, subject: string, text: string, what: string): Promise<void> {
+/**
+ * One message on every channel that has its secrets set. Never throws.
+ * Whether any channel took it: with none configured — TELEGRAM_BOT_TOKEN
+ * unset, as production has run for weeks — it logs "no channel configured"
+ * and answers false, so a caller that remembers "already sent" (./watch.ts)
+ * only remembers what was.
+ */
+export async function tell(env: Env, subject: string, text: string, what: string): Promise<boolean> {
   const sends: Array<[string, Promise<Response>]> = [];
 
   if (env.RESEND_API_KEY && env.NOTIFY_EMAIL) {
@@ -413,13 +419,16 @@ export async function tell(env: Env, subject: string, text: string, what: string
 
   if (sends.length === 0) {
     console.warn(`${what}: no channel configured. Set RESEND_API_KEY + NOTIFY_EMAIL or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.`);
-    return;
+    return false;
   }
   const results = await Promise.allSettled(sends.map(([, send]) => send));
+  let delivered = false;
   results.forEach((result, i) => {
     const sent = result.status === 'fulfilled' && result.value.ok;
+    delivered ||= sent;
     console.log(`${what} via ${sends[i][0]}: ${sent ? 'sent' : 'FAILED'}`);
   });
+  return delivered;
 }
 
 /**

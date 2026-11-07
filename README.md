@@ -663,7 +663,21 @@ How it fits together (CLAUDE.md > The admin has the rules):
       which gives the User-Agent 1000 characters and adds `diagnostics`, the notes
       that route nothing. None adds a policy to `enquiries`, and none should ever be
       added. The Worker that the merge deploys needs all five. (On the live project
-      all five were applied on 7 November.)
+      all five were applied on 7 November.) Then
+      [`0009_applied_migrations.sql`](supabase/migrations/0009_applied_migrations.sql),
+      a service-role-only function that reads Supabase's own migration history, so
+      the test suite can check it.
+
+      **A migration pasted into the SQL editor is not recorded** in
+      `supabase_migrations.schema_migrations` — so whoever rebuilds from that history
+      gets a schema without it. Record it straight after it runs:
+      `npm run migration:record -- 0009` prints the SQL to paste (same convention as
+      the rows the connector writes; `--at <ISO time>` for one that ran earlier). `npm
+      run test:enquiry`, with the service role key in `.dev.vars`, fails naming every
+      file with no history row, and every row with no file. Note that the Supabase
+      CLI keys migrations on the file name's leading digits, which here are `0001`…,
+      not the history's timestamps — so `supabase db push` cannot be used on this
+      folder as it stands; the parity check matches by name.
    2. **The build secret.** Make one random secret —
       `node -e "console.log(crypto.randomBytes(32).toString('hex'))"` — and add it as a
       build secret: Workers & Pages → anir → Settings → Build → Variables and secrets →

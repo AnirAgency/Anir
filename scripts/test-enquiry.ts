@@ -269,6 +269,56 @@ await check('the form, the Worker and the table agree on every length', async ()
 });
 
 /*
+  The files above are only half of it: the live project's own history
+  (supabase_migrations.schema_migrations) must hold a row for each, or
+  anyone rebuilding from history gets a schema without it — the mismatch a
+  migration pasted into the SQL editor leaves, since pasting records
+  nothing. Asked through public.applied_migrations() (0009), service_role
+  only, with the key from .dev.vars; without one, said loudly and skipped.
+*/
+const devVars = (() => {
+  try {
+    return Object.fromEntries(
+      (readFileSync(new URL('../.dev.vars', import.meta.url), 'utf8') as string)
+        .split(/\r?\n/)
+        .map((line) => line.match(/^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/))
+        .filter((match): match is RegExpMatchArray => !!match)
+        .map(([, key, value]) => [key, value.replace(/^(['"])(.*)\1$/, '$2')])
+    ) as Record<string, string>;
+  } catch {
+    return {} as Record<string, string>;
+  }
+})();
+const wranglerUrl = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8').match(/"SUPABASE_URL":\s*"(https:[^"]+)"/)?.[1];
+
+await check('every migration file is recorded in the live project\'s history', async () => {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || devVars.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL || devVars.SUPABASE_URL || wranglerUrl;
+  if (!key || !url) return 'SKIPPED — no SUPABASE_SERVICE_ROLE_KEY in .dev.vars or the environment: history NOT checked';
+  const response = await realFetch(`${url}/rest/v1/rpc/applied_migrations`, {
+    method: 'POST',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (response.status === 404) {
+    throw new Error('public.applied_migrations() is missing — paste supabase/migrations/0009_applied_migrations.sql into the SQL editor, run it, then `npm run migration:record -- 0009`');
+  }
+  assert.ok(response.ok, `applied_migrations answered ${response.status}`);
+  const applied = new Set(((await response.json()) as { name: string }[]).map((row) => row.name));
+  const files = (readdirSync(migrations) as string[]).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
+  const nameOf = (file: string) => file.replace(/^\d{4}_/, '').replace(/\.sql$/, '');
+  const unrecorded = files.filter((file) => !applied.has(nameOf(file)));
+  const strangers = [...applied].filter((name) => !files.some((file) => nameOf(file) === name));
+  assert.deepEqual(
+    unrecorded,
+    [],
+    `no history row for ${unrecorded.join(', ')} — if it has been applied, record it: ${unrecorded.map((file) => `npm run migration:record -- ${file.slice(0, 4)}`).join('; ')} (add --at <ISO time> if it ran earlier)`
+  );
+  assert.deepEqual(strangers, [], `the history records ${strangers.join(', ')}, which has no file in supabase/migrations/`);
+  return `${files.length} files, ${applied.size} rows — every file recorded, every row a file`;
+});
+
+/*
   Past a column's length the table refuses the whole row — an enquiry lost,
   the NUL failure from the other side. So each value is cut to its limit
   (counted as Postgres counts: characters, an emoji one), the enquiry

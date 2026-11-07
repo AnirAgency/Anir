@@ -29,6 +29,7 @@
     "test:inbox": "node scripts/test-inbox.ts",
     "pretest:inbox": "node scripts/content-pull.mjs --ensure",
     "labels": "node scripts/admin-labels.ts",
+    "migration:record": "node scripts/migration-record.mjs",
     "prelabels": "node scripts/content-pull.mjs --ensure",
     "copy:export": "node scripts/copy-export.ts",
     "precopy:export": "node scripts/content-pull.mjs",

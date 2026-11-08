@@ -36,7 +36,7 @@
  * send nothing. Without the secret they are skipped, and nothing else
  * changes (scripts/test-tasks.ts).
  */
-import { admin as t } from '../src/content/admin.ts';
+import { tasks as words } from '../src/content/admin-tasks.ts';
 import { MOVES, TASK_LIMITS, TASK_PROJECTS, isDate, repeatsTitle, ubToday, weekOf, type Move, type TaskState } from '../src/lib/task-codes.ts';
 import { answer, callerOf, refusal } from './auth.ts';
 import { fill, nameOf, people as team, tellTeam, type Person, type TeamEnv } from './team.ts';
@@ -263,7 +263,7 @@ async function create(db: Store, env: Env, me: string, input: Record<string, unk
   if (wrong) return answer(400, { ok: false, error: wrong });
   const item = await db.insert({ ...fields, created_by: me, state: 'new' });
   if (fields.owner_id !== me) {
-    await later(tellTasks(env, fill(t.tasks.notify.assigned, { who: nameOf(people, fields.owner_id), title: fields.title, done: fields.done_means }), fetcher));
+    await later(tellTasks(env, fill(words.notify.assigned, { who: nameOf(people, fields.owner_id), title: fields.title, done: fields.done_means }), fetcher));
   }
   return answer(201, { ok: true, item });
 }
@@ -288,7 +288,7 @@ async function edit(db: Store, env: Env, me: string, id: string, input: Record<s
   const item = await db.update(id, version, fields);
   if (!item) return answer(409, { ok: false, error: 'conflict' });
   if (fields.owner_id !== current.owner_id && fields.owner_id !== me) {
-    await later(tellTasks(env, fill(t.tasks.notify.assigned, { who: nameOf(people, fields.owner_id), title: fields.title, done: fields.done_means }), fetcher));
+    await later(tellTasks(env, fill(words.notify.assigned, { who: nameOf(people, fields.owner_id), title: fields.title, done: fields.done_means }), fetcher));
   }
   return answer(200, { ok: true, item });
 }
@@ -323,11 +323,11 @@ async function move(db: Store, env: Env, me: string, id: string, input: Record<s
 
   if (name === 'submit' && current.approver_id !== me) {
     const people = await db.people();
-    await later(tellTasks(env, fill(t.tasks.notify.submitted, { who: nameOf(people, current.approver_id), by: nameOf(people, me), title: current.title, done: current.done_means }), fetcher));
+    await later(tellTasks(env, fill(words.notify.submitted, { who: nameOf(people, current.approver_id), by: nameOf(people, me), title: current.title, done: current.done_means }), fetcher));
   }
   if (name === 'sendBack' && current.submitted_by && current.submitted_by !== me) {
     const people = await db.people();
-    await later(tellTasks(env, fill(t.tasks.notify.sentBack, { who: nameOf(people, current.submitted_by), title: current.title, reason }), fetcher));
+    await later(tellTasks(env, fill(words.notify.sentBack, { who: nameOf(people, current.submitted_by), title: current.title, reason }), fetcher));
   }
   return answer(200, { ok: true, item });
 }

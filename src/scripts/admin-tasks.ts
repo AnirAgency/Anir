@@ -2,9 +2,12 @@
  * The admin's task list — «Ажил»: «Даалгавар» and «Тайлан» — over the
  * Worker's /api/tasks routes (worker/tasks.ts).
  *
- * Built only from the admin's own parts, handed in by src/scripts/admin.ts —
- * h(), the Worker call, the status line, the words — so it has no look of
- * its own and no dependency of its own. And walled off the same way the
+ * Loaded only when «Даалгавар» or «Тайлан» is opened (src/scripts/admin.ts >
+ * tools), with its own words (src/content/admin-tasks.ts): none of it is in
+ * the admin's first load. The tree's badge and draft dot are the core's, so
+ * they show without loading this. Built only from the admin's own parts,
+ * handed in — h(), the Worker call, the status line, the core's words — so
+ * it has no look of its own and no dependency of its own. And walled off the same way the
  * Worker walls its routes: every entry point here catches, says so on the
  * status line, and the rest of the admin carries on.
  *
@@ -15,6 +18,7 @@
  * list that opens on every task is a list nobody reads.
  */
 import type { admin as Copy } from '../content/admin';
+import { tasks as words } from '../content/admin-tasks';
 import { MOVES, TASK_GUIDE, TASK_PROJECTS, TASK_STATES, repeatsTitle, ubToday, weekOf, type Move, type TaskState } from '../lib/task-codes';
 
 type Child = Node | string | null | false | undefined;
@@ -66,6 +70,10 @@ export interface TaskDeps {
   showPage: () => void;
   when: (iso: string) => string;
   remember: { get(key: string): string | null; set(key: string, value: string | null): void; keys(): string[] };
+  /** Where this tool keeps its drafts — the core shows their dot in the tree without loading the tool. */
+  draftPrefix: () => string;
+  /** The badge's numbers, read afresh by the core after a save or a move. */
+  readCounts: () => Promise<void> | void;
   /** Whether that view is still the one open — an answer for one that was left is dropped. */
   showing: (kind: 'tasks' | 'report') => boolean;
 }
@@ -77,7 +85,6 @@ type Values = Record<Field, string>;
 export function createTasks(d: TaskDeps) {
   const { h, t } = d;
   const ui = { view: 'mine', owner: '', project: '', state: '', overdue: false, open: new Set<string>(), editing: null as string | null, week: '', person: '' };
-  let counts: { mine: number; approve: number } | null = null;
   let people: Person[] = [];
   let today = ubToday();
   let items: Task[] = [];
@@ -86,7 +93,7 @@ export function createTasks(d: TaskDeps) {
 
   /** Never a bare id: someone no longer an editor is «Хасагдсан хэрэглэгч». */
   const nameOf = (id: string | null) => (id ? (people.find((p) => p.id === id)?.name ?? t.removedPerson) : '—');
-  const draftPrefix = () => `anir-admin-task:${d.me()?.id ?? ''}:`;
+  const draftPrefix = () => d.draftPrefix();
   const readDraft = (key: string): { base: string; values: Values } | null => {
     try {
       return JSON.parse(d.remember.get(draftPrefix() + key) ?? 'null');
@@ -104,7 +111,7 @@ export function createTasks(d: TaskDeps) {
         await run(...args);
       } catch (error) {
         if (d.isSignedOut(error)) return d.signedOut();
-        const { text, detail } = d.explain(error, t.tasks.failed);
+        const { text, detail } = d.explain(error, words.failed);
         d.status(text, 'bad', detail);
       }
     };
@@ -114,31 +121,8 @@ export function createTasks(d: TaskDeps) {
     const code = String(body.error ?? '');
     if (code === 'conflict') return t.conflict;
     if (code === 'not-editor') return t.signIn.notEditor;
-    return t.tasks.errors[code] ?? fallback;
+    return words.errors[code] ?? fallback;
   };
-
-  /* ---------------------------------------------------------------- badge */
-
-  const readCounts = guarded(async () => {
-    if (!d.me()) return;
-    const { response, body } = await d.worker('/api/tasks/counts');
-    if (!response.ok) return;
-    counts = { mine: Number(body.mine) || 0, approve: Number(body.approve) || 0 };
-    d.renderNav();
-  });
-
-  /** Two numbers, never one: what is mine to do, and what waits on my approval — the one people forget. */
-  const badges = (): Child[] => {
-    if (!counts) return [];
-    const mine = t.tasks.badgeMine.replace('{n}', String(counts.mine));
-    const approve = t.tasks.badgeApprove.replace('{n}', String(counts.approve));
-    return [
-      counts.mine ? h('span', { class: 'nav__badge', title: mine, 'aria-label': mine, 'data-badge': 'mine' }, String(counts.mine)) : null,
-      counts.approve ? h('span', { class: 'nav__badge nav__badge--approve', title: approve, 'aria-label': approve, 'data-badge': 'approve' }, `✓${counts.approve}`) : null,
-    ];
-  };
-
-  const hasDraft = () => d.remember.keys().some((key) => key.startsWith(draftPrefix()));
 
   /* ----------------------------------------------------------------- form */
 
@@ -171,7 +155,7 @@ export function createTasks(d: TaskDeps) {
     const make: Record<Field, () => HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> = {
       title: () => h('input', { type: 'text', id: `task-${key}-title`, value: values.title }),
       done_means: () => h('textarea', { id: `task-${key}-done_means`, rows: 3, value: values.done_means }),
-      project: () => select('project', TASK_PROJECTS.map((p) => [p, t.tasks.projects[p]])),
+      project: () => select('project', TASK_PROJECTS.map((p) => [p, words.projects[p]])),
       owner_id: () => select('owner_id', personOptions('owner_id')),
       approver_id: () => select('approver_id', personOptions('approver_id')),
       due_date: () => h('input', { type: 'date', id: `task-${key}-due_date`, value: values.due_date }),
@@ -186,20 +170,20 @@ export function createTasks(d: TaskDeps) {
       const recount = () => {
         const over = !!guide && input.value.length > guide;
         count.hidden = !over;
-        count.textContent = over ? t.tasks.guide.replace('{n}', String(input.value.length)).replace('{max}', String(guide)) : '';
+        count.textContent = over ? words.guide.replace('{n}', String(input.value.length)).replace('{max}', String(guide)) : '';
       };
       input.addEventListener('input', () => ((values[field] = input.value), recount(), keepDraft()));
       input.addEventListener('change', () => ((values[field] = input.value), keepDraft()));
       recount();
-      return h('div', { class: 'f', 'data-field': field }, h('label', { class: 'f__label', for: input.id }, t.tasks.fields[field]), input, count, h('p', { class: 'f__help', id: helpId }, t.tasks.fieldHelp[field]));
+      return h('div', { class: 'f', 'data-field': field }, h('label', { class: 'f__label', for: input.id }, words.fields[field]), input, count, h('p', { class: 'f__help', id: helpId }, words.fieldHelp[field]));
     });
 
     const save = guarded(async () => {
       for (const field of FIELDS) values[field] = inputs[field].value.trim();
       // The Worker refuses these too; saying so here saves a round trip.
-      if (!values.done_means) return d.status(t.tasks.errors['done-means'], 'bad');
-      if (repeatsTitle(values.title, values.done_means)) return d.status(t.tasks.errors['done-means-repeats-title'], 'bad');
-      d.status(t.tasks.loading, 'busy');
+      if (!values.done_means) return d.status(words.errors['done-means'], 'bad');
+      if (repeatsTitle(values.title, values.done_means)) return d.status(words.errors['done-means-repeats-title'], 'bad');
+      d.status(words.loading, 'busy');
       const payload = { ...values, ...(task ? { updated_at: stored?.base || task.updated_at } : {}) };
       const { response, body } = await d.worker(task ? `/api/tasks/${task.id}` : '/api/tasks', {
         method: 'POST',
@@ -208,15 +192,15 @@ export function createTasks(d: TaskDeps) {
       });
       if (!response.ok) {
         // A conflict keeps the typing: the list is read afresh, the draft waits to be laid back over it.
-        d.status(trouble(body, t.tasks.failed), 'bad');
+        d.status(trouble(body, words.failed), 'bad');
         if (body.error === 'conflict') await renderTasks();
         return;
       }
       d.remember.set(draftPrefix() + key, null);
       ui.editing = null;
       saveOpen = null;
-      d.status(t.tasks.saved, 'ok');
-      await Promise.all([renderTasks(), readCounts()]);
+      d.status(words.saved, 'ok');
+      await Promise.all([renderTasks(), d.readCounts()]);
     });
     saveOpen = () => void save();
 
@@ -233,27 +217,27 @@ export function createTasks(d: TaskDeps) {
       'div',
       { class: 'task__form', 'data-form': key },
       ...rows,
-      h('div', { class: 'img__buttons' }, h('button', { type: 'button', class: 'btn btn--primary', onclick: () => void save() }, t.tasks.save), h('button', { type: 'button', class: 'btn btn--ghost', onclick: cancel }, t.tasks.cancel))
+      h('div', { class: 'img__buttons' }, h('button', { type: 'button', class: 'btn btn--primary', onclick: () => void save() }, words.save), h('button', { type: 'button', class: 'btn btn--ghost', onclick: cancel }, words.cancel))
     );
   }
 
   /* ---------------------------------------------------------------- moves */
 
   const move = guarded(async (task: Task, name: Move, reason: string = '') => {
-    if (MOVES[name].reason && !reason.trim()) return d.status(t.tasks.reasonRequired[name] ?? t.tasks.errors['reason-required'], 'bad');
-    d.status(t.tasks.loading, 'busy');
+    if (MOVES[name].reason && !reason.trim()) return d.status(words.reasonRequired[name] ?? words.errors['reason-required'], 'bad');
+    d.status(words.loading, 'busy');
     const { response, body } = await d.worker(`/api/tasks/${task.id}/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ move: name, reason, updated_at: task.updated_at }),
     });
     if (!response.ok) {
-      d.status(trouble(body, t.tasks.failed), 'bad');
+      d.status(trouble(body, words.failed), 'bad');
       if (body.error === 'conflict' || body.error === 'bad-transition') await renderTasks();
       return;
     }
     d.status('');
-    await Promise.all([renderTasks(), readCounts()]);
+    await Promise.all([renderTasks(), d.readCounts()]);
   });
 
   function actions(task: Task): HTMLElement {
@@ -270,10 +254,10 @@ export function createTasks(d: TaskDeps) {
         h(
           'div',
           { class: 'f task__reason', hidden: true, 'data-reason': name },
-          h('label', { class: 'f__label', for: id }, t.tasks.reasons[name]),
+          h('label', { class: 'f__label', for: id }, words.reasons[name]),
           reason,
-          h('p', { class: 'f__help', id: `${id}-help` }, t.tasks.reasonHelp[name]),
-          h('button', { type: 'button', class: 'btn btn--primary', 'data-move': `${name}-confirm`, onclick: () => void move(task, name, reason.value) }, t.tasks.moves[name])
+          h('p', { class: 'f__help', id: `${id}-help` }, words.reasonHelp[name]),
+          h('button', { type: 'button', class: 'btn btn--primary', 'data-move': `${name}-confirm`, onclick: () => void move(task, name, reason.value) }, words.moves[name])
         )
       );
     }
@@ -296,10 +280,10 @@ export function createTasks(d: TaskDeps) {
               'data-move': name,
               onclick: () => (MOVES[name].reason ? open(name) : void move(task, name)),
             },
-            t.tasks.moves[name]
+            words.moves[name]
           )
         ),
-        task.state !== 'approved' ? h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((ui.editing = task.id), void renderTasks()) }, t.tasks.edit) : null
+        task.state !== 'approved' ? h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((ui.editing = task.id), void renderTasks()) }, words.edit) : null
       ),
       ...boxes.values()
     );
@@ -320,9 +304,9 @@ export function createTasks(d: TaskDeps) {
           'span',
           { class: 'row__text' },
           h('span', { class: 'row__title' }, task.title),
-          h('span', { class: 'row__sub' }, [t.tasks.states[task.state], t.tasks.projects[task.project] ?? task.project, t.tasks.owner.replace('{who}', nameOf(task.owner_id))].join(' · '))
+          h('span', { class: 'row__sub' }, [words.states[task.state], words.projects[task.project] ?? task.project, words.owner.replace('{who}', nameOf(task.owner_id))].join(' · '))
         ),
-        late ? h('span', { class: 'task__overdue', 'data-marker': 'overdue' }, t.tasks.overdue) : null
+        late ? h('span', { class: 'task__overdue', 'data-marker': 'overdue' }, words.overdue) : null
       ),
       h(
         'div',
@@ -332,10 +316,10 @@ export function createTasks(d: TaskDeps) {
           : h(
               'div',
               {},
-              h('p', { class: 'f__label' }, t.tasks.fields.done_means),
+              h('p', { class: 'f__label' }, words.fields.done_means),
               h('p', { class: 'task__done' }, task.done_means),
-              task.reject_reason && task.state !== 'approved' ? h('p', { class: 'task__sent-back' }, t.tasks.sentBack.replace('{reason}', task.reject_reason)) : null,
-              h('p', { class: 'main__hint' }, [t.tasks.owner.replace('{who}', nameOf(task.owner_id)), t.tasks.approver.replace('{who}', nameOf(task.approver_id)), task.due_date ? t.tasks.due.replace('{date}', task.due_date) : ''].filter(Boolean).join(' · ')),
+              task.reject_reason && task.state !== 'approved' ? h('p', { class: 'task__sent-back' }, words.sentBack.replace('{reason}', task.reject_reason)) : null,
+              h('p', { class: 'main__hint' }, [words.owner.replace('{who}', nameOf(task.owner_id)), words.approver.replace('{who}', nameOf(task.approver_id)), task.due_date ? words.due.replace('{date}', task.due_date) : ''].filter(Boolean).join(' · ')),
               actions(task)
             )
       )
@@ -355,7 +339,7 @@ export function createTasks(d: TaskDeps) {
 
   const renderTasks = guarded(async () => {
     if (!d.showing('tasks')) return;
-    const list = h('div', { class: 'inbox__list', 'data-list': 'tasks' }, h('p', { class: 'main__hint' }, t.tasks.loading));
+    const list = h('div', { class: 'inbox__list', 'data-list': 'tasks' }, h('p', { class: 'main__hint' }, words.loading));
     const top = h('div', { class: 'task__new' });
     const bar = h('div', { class: 'inbox__filters tasks__bar', role: 'group', 'aria-label': t.views.tasks });
     d.main().replaceChildren(
@@ -363,9 +347,9 @@ export function createTasks(d: TaskDeps) {
         'div',
         { class: 'main__head' },
         h('h1', { class: 'main__title' }, t.views.tasks),
-        h('button', { type: 'button', class: 'btn btn--primary', 'data-new-task': '', onclick: () => ((ui.editing = 'new'), void renderTasks()) }, t.tasks.new)
+        h('button', { type: 'button', class: 'btn btn--primary', 'data-new-task': '', onclick: () => ((ui.editing = 'new'), void renderTasks()) }, words.new)
       ),
-      h('div', { class: 'main__about' }, h('p', {}, t.tasks.help)),
+      h('div', { class: 'main__about' }, h('p', {}, words.help)),
       bar,
       top,
       list,
@@ -375,14 +359,14 @@ export function createTasks(d: TaskDeps) {
 
     const { response, body } = await d.worker(`/api/tasks?${query()}`);
     if (!d.showing('tasks')) return;
-    if (!response.ok) return void list.replaceChildren(h('div', { class: 'main__hint' }, ...d.said(trouble(body, t.tasks.failed), `${response.status} ${String(body.error ?? '')}`)));
+    if (!response.ok) return void list.replaceChildren(h('div', { class: 'main__hint' }, ...d.said(trouble(body, words.failed), `${response.status} ${String(body.error ?? '')}`)));
     items = (body.items ?? []) as Task[];
     people = (body.people ?? []) as Person[];
     today = String(body.today ?? ubToday());
 
     const pick = (label: string, current: string, options: [string, string][], set: (value: string) => void) => {
       const id = `tasks-filter-${label}`;
-      const el = h('select', { id, 'aria-label': label }, h('option', { value: '' }, `${label}: ${t.tasks.filters.any}`), ...options.map(([value, text]) => h('option', { value, selected: value === current }, `${label}: ${text}`)));
+      const el = h('select', { id, 'aria-label': label }, h('option', { value: '' }, `${label}: ${words.filters.any}`), ...options.map(([value, text]) => h('option', { value, selected: value === current }, `${label}: ${text}`)));
       el.addEventListener('change', () => (set(el.value), void renderTasks()));
       return el;
     };
@@ -390,16 +374,16 @@ export function createTasks(d: TaskDeps) {
     overdueBox.addEventListener('change', () => ((ui.overdue = overdueBox.checked), void renderTasks()));
     bar.replaceChildren(
       ...(['mine', 'all'] as const).map((view) =>
-        h('button', { type: 'button', class: 'btn btn--ghost inbox__filter', 'data-view': view, 'aria-pressed': ui.view === view ? 'true' : 'false', onclick: () => ((ui.view = view), void renderTasks()) }, t.tasks.views[view])
+        h('button', { type: 'button', class: 'btn btn--ghost inbox__filter', 'data-view': view, 'aria-pressed': ui.view === view ? 'true' : 'false', onclick: () => ((ui.view = view), void renderTasks()) }, words.views[view])
       ),
-      pick(t.tasks.filters.owner, ui.owner, people.map((p) => [p.id, p.name]), (v) => (ui.owner = v)),
-      pick(t.tasks.filters.project, ui.project, TASK_PROJECTS.map((p) => [p, t.tasks.projects[p]]), (v) => (ui.project = v)),
-      pick(t.tasks.filters.state, ui.state, TASK_STATES.map((s) => [s, t.tasks.states[s]]), (v) => (ui.state = v)),
-      h('label', { class: 'f__row tasks__overdue-filter', for: 'tasks-filter-overdue' }, overdueBox, h('span', {}, t.tasks.filters.overdue))
+      pick(words.filters.owner, ui.owner, people.map((p) => [p.id, p.name]), (v) => (ui.owner = v)),
+      pick(words.filters.project, ui.project, TASK_PROJECTS.map((p) => [p, words.projects[p]]), (v) => (ui.project = v)),
+      pick(words.filters.state, ui.state, TASK_STATES.map((s) => [s, words.states[s]]), (v) => (ui.state = v)),
+      h('label', { class: 'f__row tasks__overdue-filter', for: 'tasks-filter-overdue' }, overdueBox, h('span', {}, words.filters.overdue))
     );
 
     if (ui.editing === 'new') top.replaceChildren(form(null));
-    if (!items.length) return void list.replaceChildren(h('p', { class: 'main__hint' }, ui.view === 'mine' && !ui.owner && !ui.project && !ui.state && !ui.overdue ? t.tasks.emptyMine : t.tasks.empty));
+    if (!items.length) return void list.replaceChildren(h('p', { class: 'main__hint' }, ui.view === 'mine' && !ui.owner && !ui.project && !ui.state && !ui.overdue ? words.emptyMine : words.empty));
     list.replaceChildren(...items.map(row));
   });
 
@@ -410,27 +394,27 @@ export function createTasks(d: TaskDeps) {
     const me = d.me()?.id ?? '';
     const week = weekOf(ui.week || ubToday());
     const person = ui.person || me;
-    const body = h('div', { class: 'report', 'data-report': '' }, h('p', { class: 'main__hint' }, t.tasks.loading));
+    const body = h('div', { class: 'report', 'data-report': '' }, h('p', { class: 'main__hint' }, words.loading));
     const shift = (days: number) => {
       const at = Date.parse(`${week.start}T00:00:00Z`) + days * 86_400_000;
       ui.week = new Date(at).toISOString().slice(0, 10);
       void renderReport();
     };
-    const range = t.tasks.report.range.replace('{start}', week.start).replace('{end}', new Date(Date.parse(`${week.end}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10));
-    const whoSelect = h('select', { id: 'report-person', 'aria-label': t.tasks.report.person });
+    const range = words.report.range.replace('{start}', week.start).replace('{end}', new Date(Date.parse(`${week.end}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10));
+    const whoSelect = h('select', { id: 'report-person', 'aria-label': words.report.person });
     whoSelect.addEventListener('change', () => ((ui.person = whoSelect.value), void renderReport()));
     d.main().replaceChildren(
-      h('div', { class: 'main__head' }, h('h1', { class: 'main__title' }, t.tasks.report.title)),
-      h('div', { class: 'main__about' }, h('p', {}, t.tasks.report.help)),
+      h('div', { class: 'main__head' }, h('h1', { class: 'main__title' }, words.report.title)),
+      h('div', { class: 'main__about' }, h('p', {}, words.report.help)),
       h(
         'div',
-        { class: 'inbox__filters report__bar', role: 'group', 'aria-label': t.tasks.report.week },
-        h('label', { class: 'f__label', for: 'report-person' }, t.tasks.report.person),
+        { class: 'inbox__filters report__bar', role: 'group', 'aria-label': words.report.week },
+        h('label', { class: 'f__label', for: 'report-person' }, words.report.person),
         whoSelect,
-        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '-7', onclick: () => shift(-7) }, t.tasks.report.prev),
+        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '-7', onclick: () => shift(-7) }, words.report.prev),
         h('span', { class: 'report__range', 'data-week': week.start }, range),
-        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '7', onclick: () => shift(7) }, t.tasks.report.next),
-        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '0', onclick: () => ((ui.week = ''), void renderReport()) }, t.tasks.report.thisWeek)
+        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '7', onclick: () => shift(7) }, words.report.next),
+        h('button', { type: 'button', class: 'btn btn--ghost', 'data-week-step': '0', onclick: () => ((ui.week = ''), void renderReport()) }, words.report.thisWeek)
       ),
       body
     );
@@ -438,7 +422,7 @@ export function createTasks(d: TaskDeps) {
 
     const { response, body: data } = await d.worker(`/api/tasks/report?week=${week.start}&person=${person}`);
     if (!d.showing('report')) return;
-    if (!response.ok) return void body.replaceChildren(h('div', { class: 'main__hint' }, ...d.said(trouble(data, t.tasks.failed), `${response.status} ${String(data.error ?? '')}`)));
+    if (!response.ok) return void body.replaceChildren(h('div', { class: 'main__hint' }, ...d.said(trouble(data, words.failed), `${response.status} ${String(data.error ?? '')}`)));
     people = (data.people ?? []) as Person[];
     whoSelect.replaceChildren(
       ...(people.some((p) => p.id === person) ? [] : [h('option', { value: person, selected: true }, t.removedPerson)]),
@@ -449,17 +433,17 @@ export function createTasks(d: TaskDeps) {
       h(
         'section',
         { class: 'report__part', 'data-part': key },
-        h('h2', { class: 'f__label' }, `${(t.tasks.report as Record<string, string>)[key]} · ${lines.length}`),
-        lines.length ? h('ul', {}, ...lines.map((line) => h('li', {}, line))) : h('p', { class: 'main__hint' }, t.tasks.report.none)
+        h('h2', { class: 'f__label' }, `${(words.report as Record<string, string>)[key]} · ${lines.length}`),
+        lines.length ? h('ul', {}, ...lines.map((line) => h('li', {}, line))) : h('p', { class: 'main__hint' }, words.report.none)
       );
-    const project = (code: string) => t.tasks.projects[code] ?? code;
+    const project = (code: string) => words.projects[code] ?? code;
     // Each fact on its own line: a task sent back twice is two lines, not one.
     const facts = (key: 'submitted' | 'approved' | 'sentBack' | 'reopened', why: boolean) =>
       ((data[key] ?? []) as Fact[]).map((fact) =>
         [
-          fact.task ? `${fact.task.title} — ${project(fact.task.project)}` : t.tasks.report.none,
-          why && fact.reason ? t.tasks.report.reason.replace('{reason}', fact.reason) : '',
-          t.tasks.report.when.replace('{date}', d.when(fact.at)).replace('{who}', fact.by),
+          fact.task ? `${fact.task.title} — ${project(fact.task.project)}` : words.report.none,
+          why && fact.reason ? words.report.reason.replace('{reason}', fact.reason) : '',
+          words.report.when.replace('{date}', d.when(fact.at)).replace('{who}', fact.by),
         ]
           .filter(Boolean)
           .join(' · ')
@@ -469,14 +453,11 @@ export function createTasks(d: TaskDeps) {
       part('approved', facts('approved', false)),
       part('sentBack', facts('sentBack', true)),
       part('reopened', facts('reopened', true)),
-      part('overdue', ((data.overdue ?? []) as Task[]).map((task) => `${task.title} — ${t.tasks.due.replace('{date}', task.due_date ?? '')}`))
+      part('overdue', ((data.overdue ?? []) as Task[]).map((task) => `${task.title} — ${words.due.replace('{date}', task.due_date ?? '')}`))
     );
   });
 
   return {
-    readCounts,
-    badges,
-    hasDraft,
     renderTasks,
     renderReport,
     /** Ctrl+S on the task list: save the open form, if there is one. */

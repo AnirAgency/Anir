@@ -15,12 +15,16 @@
 export const KINDS = ['loan', 'gift'] as const;
 export type Kind = (typeof KINDS)[number];
 
-/** The fields whose every change is kept in contribution_events (migration 0012). */
-export const TRACKED = ['member_id', 'date_made', 'amount_mnt', 'kind', 'repaid_mnt'] as const;
+/**
+ * The fields whose every change is kept in contribution_events (migrations
+ * 0012, 0013). Repayments are not among them: each is a row of its own,
+ * appended and never changed (contribution_repayments).
+ */
+export const TRACKED = ['member_id', 'date_made', 'amount_mnt', 'kind'] as const;
 export type Tracked = (typeof TRACKED)[number];
 
-/** What the table holds (supabase/migrations/0012). */
-export const CONTRIBUTION_LIMITS = { what_for: 500, note: 2000 } as const;
+/** What the tables hold (supabase/migrations/0012, 0013). */
+export const CONTRIBUTION_LIMITS = { what_for: 500, note: 2000, repayment_note: 1000 } as const;
 /** Guidance in the form, never a limit. */
 export const CONTRIBUTION_GUIDE = { what_for: 120, note: 300 } as const;
 
@@ -51,12 +55,25 @@ export const daysBetween = (from: string, to: string) => (Date.parse(`${to}T00:0
 export const daysToRecord = (dateMade: string, recordedAt: string) => daysBetween(dateMade, ubDateOf(recordedAt));
 
 /**
- * Clause 5.1: recorded more than 30 days after it was made. Thirty days is
- * still within — made on 1 October, recorded on 31 October, is a loan; on
- * 1 November, a gift. A late contribution is a gift and is never repaid; the
- * mark is permanent (worker/contributions.ts refuses an edit that clears it).
+ * Whether clause 5.1's clock runs for money made on this date: only once the
+ * agreement is in force (agreement.in_force_from, migration 0013), and only
+ * for money made on or after that day. Before it is signed — null — there
+ * is no clock, and nothing is ever late.
  */
-export const isLate = (dateMade: string, recordedAt: string) => daysToRecord(dateMade, recordedAt) > RECORD_WITHIN_DAYS;
+export const fiveOneApplies = (dateMade: string, inForceFrom: string | null) => inForceFrom !== null && dateMade >= inForceFrom;
+
+/**
+ * Clause 5.1: recorded more than 30 days after it was made, with the clock
+ * running. Thirty days is still within — made on 1 October, recorded on
+ * 31 October, is in time; on 1 November, late.
+ *
+ * LATE IS A MARK, NOT A RULING. Whether late money is a gift is a legal
+ * conclusion for the Members, not a form validation: nothing here changes a
+ * contribution's kind. The mark is shown, and never hidden — an edit that
+ * would clear it is refused (worker/contributions.ts).
+ */
+export const isLate = (dateMade: string, recordedAt: string, inForceFrom: string | null) =>
+  fiveOneApplies(dateMade, inForceFrom) && daysToRecord(dateMade, recordedAt) > RECORD_WITHIN_DAYS;
 
 /* ------------------------------------------------------------------ money */
 
@@ -107,40 +124,64 @@ export function sumMnt(values: number[]): number {
 /* ---------------------------------------------------------------- summary */
 
 export interface Row {
+  id: string;
   member_id: string;
   date_made: string;
   recorded_at: string;
   amount_mnt: number;
   kind: Kind;
-  repaid_mnt: number;
 }
 
-/** Whether a row is a loan the Company repays: a loan by kind, recorded in time. */
-export const repayable = (row: Row) => row.kind === 'loan' && !isLate(row.date_made, row.recorded_at);
+/** One repayment, its principal and its interest apart (contribution_repayments, migration 0013). */
+export interface Repayment {
+  contribution_id: string;
+  principal_mnt: number;
+  interest_mnt: number;
+}
+
+/** Principal and interest repaid on one contribution: the sums of its rows. */
+export function repaidOn(id: string, repayments: Repayment[]): { principal: number; interest: number } {
+  const own = repayments.filter((r) => r.contribution_id === id);
+  return { principal: sumMnt(own.map((r) => r.principal_mnt)), interest: sumMnt(own.map((r) => r.interest_mnt)) };
+}
 
 export interface Standing {
   member_id: string;
-  /** The principal of repayable loans: gifts, and late entries, are not owed. */
+  /** The principal of loans. Late ones too: whether those are gifts is the Members' to decide, not this sum's. */
   principal: number;
+  /** Principal repaid. */
   repaid: number;
   outstanding: number;
   /** outstanding × 1.5, half up — not yet due (clause 5.2): nothing here knows the bank balance. */
   owed: number;
+  /** The uplift paid so far — taxable income of the Member, withheld by the Company (5.2(e)). */
+  interest: number;
+  /** Of the principal, what was recorded late under clause 5.1 — shown beside it, never quietly left out. */
+  late: number;
 }
 
 /**
- * Per Member: principal, repaid, outstanding, owed. One for every Member
+ * Per Member: principal, repaid, outstanding, owed, the uplift paid, and how
+ * much of the principal carries clause 5.1's mark. One for every Member
  * given, in that order, with nothing yet shown as zeros — and one after them
- * for anyone else with a row (someone no longer an editor), so no money
- * disappears from the strip because its Member did.
+ * for any other id with a row, so no money leaves the strip unseen.
  */
-export function standings(rows: Row[], members: string[]): Standing[] {
+export function standings(rows: Row[], repayments: Repayment[], members: string[], inForceFrom: string | null): Standing[] {
   const ids = [...members, ...[...new Set(rows.map((r) => r.member_id))].filter((id) => !members.includes(id))];
   return ids.map((member_id) => {
-    const loans = rows.filter((r) => r.member_id === member_id && repayable(r));
+    const loans = rows.filter((r) => r.member_id === member_id && r.kind === 'loan');
+    const paid = loans.map((r) => repaidOn(r.id, repayments));
     const principal = sumMnt(loans.map((r) => r.amount_mnt));
-    const repaid = sumMnt(loans.map((r) => r.repaid_mnt));
+    const repaid = sumMnt(paid.map((p) => p.principal));
     const outstanding = principal - repaid;
-    return { member_id, principal, repaid, outstanding, owed: owedMnt(outstanding) };
+    return {
+      member_id,
+      principal,
+      repaid,
+      outstanding,
+      owed: owedMnt(outstanding),
+      interest: sumMnt(paid.map((p) => p.interest)),
+      late: sumMnt(loans.filter((r) => isLate(r.date_made, r.recorded_at, inForceFrom)).map((r) => r.amount_mnt)),
+    };
   });
 }

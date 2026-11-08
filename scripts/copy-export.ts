@@ -24,6 +24,7 @@
 import { writeFileSync } from 'node:fs';
 
 import { admin as t } from '../src/content/admin.ts';
+import { allWords } from '../src/scripts/admin-words.ts';
 import { site } from '../src/content/site.ts';
 import { GROUPS, PRODUCT_ORDER, VIEWS, isHidden, isMedia, pathOf, whereFor, type Json, type Obj, type Path } from '../src/scripts/admin-schema.ts';
 
@@ -166,7 +167,8 @@ const walkAdmin = (value: unknown, path: string[]) => {
   if (Array.isArray(value)) return value.forEach((item, i) => walkAdmin(item, [...path, String(i + 1)]));
   if (value && typeof value === 'object') for (const [key, child] of Object.entries(value)) walkAdmin(child, [...path, key]);
 };
-walkAdmin(t, []);
+// The core's words and each tool's, as one list — in the order the admin shows them.
+walkAdmin(allWords, []);
 
 // ------------------------------------------------------------ the documents
 

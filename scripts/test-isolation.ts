@@ -170,6 +170,17 @@ await check("worker/index.ts never imports the team's tools at start-up", async 
   return `${found.length} reference(s): ${found.map((i) => `${i.target} ${i.dynamic ? 'import() on demand' : 'import type'}`).join(', ')}`;
 });
 
+await check("the admin's own script loads each tool, and its words, only when opened", async () => {
+  const found = imports('src/scripts/admin.ts').filter((i) => TOOL_CODE.test(i.target));
+  const eager = found.filter((i) => !i.type && !i.dynamic);
+  assert.deepEqual(eager, [], 'a static import would put the tool in the first load');
+  for (const tool of ['./admin-tasks', './admin-contributions']) assert.ok(found.some((i) => i.dynamic && i.target === tool), `${tool}: loaded on demand`);
+  // Their words likewise: the core words file names no tool's, and nothing the core imports reaches them.
+  const core = ['src/content/admin.ts', 'src/scripts/admin-schema.ts'];
+  for (const file of core) assert.deepEqual(imports(file).filter((i) => !i.type && TOOL_CODE.test(i.target)).map((i) => i.target), [], `${file} reaches a tool`);
+  return `${found.filter((i) => i.dynamic).map((i) => `${i.target} import()`).join(', ')}; the core's words and schema reach neither tool`;
+});
+
 await check("no public page, layout, component, style or shared library imports the team's tools", async () => {
   const outside = ['src/pages', 'src/components', 'src/layouts', 'src/styles', 'src/content', 'src/lib']
     .flatMap(files)

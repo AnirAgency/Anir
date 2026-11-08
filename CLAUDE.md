@@ -50,6 +50,11 @@ kilobyte is felt.
 Three budgets, checked separately:
 
 - **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
+  A script's static imports are first load too, as surely as its `<script
+  src>`. Code split out with `import()` — the admin's tools, each loaded
+  when opened — is counted where it is paid: **the first load plus the
+  heaviest such view stays under 200 KB of JS**. Splitting moves weight out
+  of the first load, never out of the budget (`scripts/budget.mjs`).
 - **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
   *after* first paint, gated on `(pointer: fine)` and `(min-width: 861px)` —
   the same query, character for character, as the layout it serves — and
@@ -355,7 +360,9 @@ here.
   build time. Components read `site` and nothing else. Never hardcode
   Mongolian strings in a component — the team needs one place to proofread:
   `site.ts` and the admin for the site, `src/content/admin.ts` for the admin's
-  own words. Nobody proofreads those files: `npm run copy:export` writes every
+  own words — and, for each tool under «Ажил», its own
+  `src/content/admin-<tool>.ts`, so its words load only with it. Nobody
+  proofreads those files: `npm run copy:export` writes every
   Mongolian string, site and admin, as one ordered list with where each appears.
 - Prices are data, not markup. They change; they live in `site.ts` and the
   admin.
@@ -442,29 +449,48 @@ site stays static.
   — clause 5.2 makes each a loan repaid at 150% of principal; clause 5.1
   makes one not recorded within 30 days of being made a gift
   (`worker/contributions.ts`, `src/scripts/admin-contributions.ts`,
-  `src/lib/contribution-codes.ts`, migration 0012). The inbox's model again:
-  `contributions` and `contribution_events`, RLS on, no policies, the Worker
-  only — and all four editors read everything (clause 10.2).
+  `src/lib/contribution-codes.ts`, migrations 0012, 0013). The inbox's model
+  again: `contributions`, `contribution_events`, `contribution_repayments`,
+  `members` and `agreement`, RLS on, no policies, the Worker only — and all
+  four editors read everything (clause 10.2).
+  - **Members are not editors.** `members` holds the Company's Members —
+    seeded Batuka, Batenkh, Baysaa, Deegii — each with an optional link to an
+    editor account; the picker reads it. Clause 4.9 allows someone on salary
+    with no Shares, so who signs in and who lends genuinely diverge: never
+    patch one with the other by creating logins. A non-Member's money is not
+    a loan (5.4, 9.2).
   - **Money is whole tugrik, never a float**: bigint in the table, a safe
     integer in JSON, digits on the page; × 1.5 in BigInt, half up, to the
     Member. A value with a decimal mark is refused, never rounded.
-  - **Clause 5.1 is never silently passed.** `recorded_at` is the Worker's
-    clock, never the request's, and never changes (the trigger refuses it).
-    More than 30 Ulaanbaatar days late is stored — never refused — as a
-    gift, marked on its row for good; the form counts the days as the date
-    is typed, before saving.
+  - **No clause 5.1 clock before the agreement exists.** `agreement.in_force_from`,
+    one row, is null until the agreement is signed, and while it is null
+    nothing is ever late. Once set — once, by the owner; the trigger refuses
+    a second value — the 30 days apply only to money made on or after it.
+  - **Late is a mark, never a ruling.** `recorded_at` is the Worker's clock,
+    never the request's, and never changes (the trigger refuses it). Late
+    money is stored — never refused — marked on its row, and the mark is
+    never hidden: an edit that would clear it is refused. But nothing
+    changes its kind: whether it is a gift is a legal conclusion for the
+    Members, not a form validation. The form warns as the date is typed;
+    the strip shows late principal in a column of its own.
   - **One Telegram message per new entry**, to the tasks group — clause
-    5.1's 7-day notice — and nothing on an edit, no digests. `notified_at`
-    is set only on delivery, so a notice that did not go out shows.
+    5.1's 7-day notice — and nothing on an edit or a repayment, no digests.
+    `notified_at` is set only on delivery, so a notice that did not go out
+    shows.
+  - **Each repayment is its own row**, in `contribution_repayments`,
+    principal and interest apart: clause 5.2(e) makes the 50% uplift the
+    Member's taxable income, withheld by the Company, so a single total
+    cannot support the withholding. The rate is the accountant's; this
+    records the split. Appended, never changed or removed (the trigger
+    refuses): a mistake is corrected by a deliberate migration.
   - **Repayment is display-only**: per Member, principal, repaid,
-    outstanding and outstanding × 1.5, labelled not yet due. Nothing here
-    knows the bank balance, so neither the Buffer nor the 20,000,000₮
-    threshold is modelled. A repayment is typed against the row it repays;
-    nothing allocates.
-  - A change to member, date, amount, kind or repayment is appended to
+    outstanding and outstanding × 1.5, labelled not yet due, with the
+    uplift paid and the late principal beside them. Nothing here knows the
+    bank balance, so neither the Buffer nor the 20,000,000₮ threshold is
+    modelled. A repayment is typed against the loan it repays; nothing
+    allocates.
+  - A change to member, date, amount or kind is appended to
     `contribution_events` by trigger, never overwritten.
-  - **Members only**: the picker lists editors; a non-Member's money is not
-    a loan (5.4, 9.2).
   - Walled off like the task list (`/api/contributions*`, its own loader;
     `npm run test:isolation` breaks each tool alone), under the same rule:
     grown beyond this, it moves to its own Worker.
@@ -506,10 +532,18 @@ site stays static.
   hidden in the admin (`RULES` in `src/scripts/admin-schema.ts`). Add a field
   to `site.ts` and the admin shows it; hide it there if it is not copy.
 - **No field shows as its English key.** Every field the admin shows needs a
-  label and a line of help saying where it shows (`src/content/admin.ts`),
+  label and a line of help saying where it shows (`src/content/admin*.ts`),
   and every list of things a declared row title (`SUMMARY`). The admin page's
-  build checks them all and fails naming each one missing — so adding a field
-  to `site.ts` means giving it words, or hiding it.
+  build checks them all (`src/scripts/admin-check.ts`, build-only) and fails
+  naming each one missing — so adding a field to `site.ts` means giving it
+  words, or hiding it.
+- **The admin loads its tools on demand.** Its first load is the core — the
+  content editor, the inbox it opens on, the tree with the task badge and
+  every draft's dot. The task list and Schedule 2 are each a chunk of their
+  own, code and words, fetched when first opened; one that fails to load
+  says so in its place and the rest carries on. The core never imports a
+  tool statically (`npm run test:isolation` holds it), and a new tool comes
+  in the same way.
 - **Length guidance, never a limit.** Past a field's length the admin says
   what happens — a second line, a cut Google title — and the editor decides.
   Each length (`LIMITS`) is measured on the built page at 1440 and 390, not

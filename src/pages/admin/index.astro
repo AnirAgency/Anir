@@ -5,16 +5,19 @@ import '../../styles/base.css';
 import { seed, site } from '../../content/site';
 import { admin } from '../../content/admin';
 import { placeholderMode } from '../../lib/placeholders.mjs';
-import { checkAdmin, type Obj } from '../../scripts/admin-schema';
+import type { Obj } from '../../scripts/admin-schema';
+import { checkAdmin } from '../../scripts/admin-check';
+import { allWords } from '../../scripts/admin-words';
 
 /*
   No field the admin shows may fall back to its English key: every field,
-  section, list, length and value needs Mongolian words, and the build stops
-  here — `npm run build`, and so every publish — naming each one missing.
+  section, list, length and value needs Mongolian words — the core's and
+  each tool's — and the build stops here — `npm run build`, and so every
+  publish — naming each one missing.
 */
-const missing = checkAdmin(seed as unknown as Obj, admin);
+const missing = checkAdmin(seed as unknown as Obj, allWords);
 if (missing.length) {
-  throw new Error(`admin copy: ${missing.length} missing (src/content/admin.ts, src/scripts/admin-schema.ts)\n  ${missing.join('\n  ')}`);
+  throw new Error(`admin copy: ${missing.length} missing (src/content/admin*.ts, src/scripts/admin-check.ts)\n  ${missing.join('\n  ')}`);
 }
 
 /*

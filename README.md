@@ -650,7 +650,8 @@ sees everything.
 - **«Тайлан»**: one person, one week (this one by default) — each submission,
   each send-back with its reason, each approval, each reopening, and what is
   overdue now. It reads `task_events`, so a task sent back twice and then
-  approved is five lines, not one tidy approval. Read only; no charts or export.
+  approved is six lines — three submissions, two send-backs with their
+  reasons, one approval — not one tidy approval. Read only; no charts or export.
 - **Telegram**, to a group of its own — never the enquiries group: assigned to
   you; submitted for your approval; sent back, with the reason. Nothing else —
   starting, approving and reopening send nothing.

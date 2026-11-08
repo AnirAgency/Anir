@@ -3,10 +3,21 @@
   "name": "anir",
   "compatibility_date": "2026-10-26",
 
-  // The Worker answers /api/enquiry and hands everything else to the static
-  // assets in dist/. Requests that match a file are served without waking it.
+  // The Worker answers /api/* and hands everything else to the static assets
+  // in dist/. Requests that match a file are served without waking it; a URL
+  // that matches nothing gets dist/404.html with status 404.
+  //
+  // run_worker_first pins /api/* to the Worker. Without it, a navigation that
+  // matches no file is answered by the asset layer before the Worker runs —
+  // and a no-JS form post to /api/enquiry IS a navigation, so the 404 page
+  // would answer it and the enquiry would be lost.
   "main": "./worker/index.ts",
-  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
 
   // anir.<account>.workers.dev stays on: it is the live address until
   // aniragency.mn is registered, and the base for preview URLs after.

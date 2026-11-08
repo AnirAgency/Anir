@@ -39,7 +39,7 @@ const next = items[(index + 1) % items.length];
 const wall = pictureOf(product.shot, placeholderMode({ dev: import.meta.env.DEV })) !== null;
 ---
 
-<Base title={`${product.name} — Anir`} description={product.description} home={false}>
+<Base title={product.seo.title} description={product.seo.description} home={false}>
   {wall && <ProductWall product={product} />}
   <ProductHero product={product} index={index} count={items.length} shot={!wall} />
   <ProductFeature product={product} />

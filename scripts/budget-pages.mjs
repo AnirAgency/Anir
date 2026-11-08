@@ -19,7 +19,7 @@ function pages(dir) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) found.push(...pages(full));
-    else if (entry === 'index.html' && dir !== dist) found.push(relative(dist, full).split(sep).join(posix.sep));
+    else if ((entry === 'index.html' && dir !== dist) || (entry === '404.html' && dir === dist)) found.push(relative(dist, full).split(sep).join(posix.sep));
   }
   return found;
 }

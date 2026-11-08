@@ -27,6 +27,7 @@ import { watch } from './watch.ts';
 import { onPublish, onPublishStatus, type Env as PublishEnv } from './publish.ts';
 import { onEnquiries, onEnquiryStatus, onStorage } from './inbox.ts';
 import { onBuildReport, type Env as BuildsEnv } from './builds.ts';
+import { indexable } from '../src/lib/site-url.mjs';
 
 // Written by scripts/headers.mjs on every build, from the same list that
 // becomes dist/_headers. Missing means `npm run build` has not run.
@@ -47,45 +48,49 @@ interface ExecutionContext {
 /**
  * _headers is applied to static files only, never to responses this code
  * makes — so the endpoint that takes user input would otherwise go out with
- * no CSP, no nosniff, nothing. Same headers, same values as every page.
+ * no CSP, no nosniff, nothing. Same headers, same values as every page. And
+ * on any host that is not the production domain — workers.dev, a preview —
+ * the same noindex the static files get there (src/lib/site-url.mjs).
  */
-function withSecurityHeaders(response: Response): Response {
+function withSecurityHeaders(response: Response, hostname: string): Response {
   const secured = new Response(response.body, response);
   for (const [name, value] of security as [string, string][]) secured.headers.set(name, value);
+  if (!indexable(hostname)) secured.headers.set('X-Robots-Tag', 'noindex');
   return secured;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const { pathname } = new URL(request.url);
+    const { pathname, hostname } = new URL(request.url);
+    const secure = (response: Response) => withSecurityHeaders(response, hostname);
     if (pathname === '/api/enquiry' && request.method === 'POST') {
       const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
-      return withSecurityHeaders(await onRequestPost({ request, env, waitUntil }));
+      return secure(await onRequestPost({ request, env, waitUntil }));
     }
     if (pathname === '/api/publish' && request.method === 'POST') {
-      return withSecurityHeaders(await onPublish(request, env));
+      return secure(await onPublish(request, env));
     }
     if (pathname === '/api/publish' && request.method === 'GET') {
-      return withSecurityHeaders(await onPublishStatus(request, env));
+      return secure(await onPublishStatus(request, env));
     }
     if (pathname === '/api/enquiries' && request.method === 'GET') {
-      return withSecurityHeaders(await onEnquiries(request, env));
+      return secure(await onEnquiries(request, env));
     }
     const enquiry = /^\/api\/enquiries\/([^/]+)$/.exec(pathname);
     if (enquiry && request.method === 'POST') {
-      return withSecurityHeaders(await onEnquiryStatus(request, env, decodeURIComponent(enquiry[1])));
+      return secure(await onEnquiryStatus(request, env, decodeURIComponent(enquiry[1])));
     }
     if (pathname === '/api/storage' && request.method === 'GET') {
-      return withSecurityHeaders(await onStorage(request, env));
+      return secure(await onStorage(request, env));
     }
     if (pathname === '/api/builds' && request.method === 'POST') {
-      return withSecurityHeaders(await onBuildReport(request, env));
+      return secure(await onBuildReport(request, env));
     }
     if (pathname === '/api/alerts' && request.method === 'GET') {
-      return withSecurityHeaders(await onAlerts(request, env));
+      return secure(await onAlerts(request, env));
     }
     if (pathname === '/api/health' && request.method === 'GET') {
-      return withSecurityHeaders(await onHealth(request, env));
+      return secure(await onHealth(request, env));
     }
     return env.ASSETS.fetch(request);
   },

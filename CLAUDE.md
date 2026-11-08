@@ -360,6 +360,17 @@ here.
 - Prices are data, not markup. They change; they live in `site.ts` and the
   admin.
 - Every image ships with explicit `width`/`height` to prevent layout shift.
+- Every image has an `alt`: Mongolian, describing the picture, from `site.ts`
+  — or `alt="" aria-hidden="true"` when it is decoration. `npm run seo`, inside
+  `npm run budget`, fails the build on a missing, empty or file-name alt, so a
+  photograph uploaded without one stops at publish, named.
+- Every page has its own `<title>` and description, written for it in
+  `site.ts` (`meta` for the home page, `seo` on the products page and each
+  product) — never composed from a template. `npm run seo` also holds one
+  `<h1>` per page, the canonical, Open Graph, the JSON-LD and the sitemap.
+  The sitemap and robots.txt are generated at build (`astro.config.mjs`), and
+  every host but the production domain says `X-Robots-Tag: noindex`
+  (`src/lib/site-url.mjs`).
 - Every video: `muted`, `playsinline`, `loop`, `preload="none"`, a `poster`
   frame, and `loading="lazy"` on anything below the fold. Below the fold the
   poster is a lazy `<img>` under the video, not the `poster` attribute —

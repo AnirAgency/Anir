@@ -52,6 +52,8 @@ const CAUSES: [string, RegExp][] = [
   ['claim', /stand-in testimonial|demo before-and-after|\/media\/placeholder\/|PLACEHOLDER_MEDIA=1 on the production/],
   ['contrast', /Fix the token or the tile/],
   ['labels', /admin copy:/],
+  ['alt', /FAIL\s+alt: /],
+  ['seo', /FAIL\s+seo: /],
   ['video', /over the [\d.]+ [kM]B (video|poster|placeholder) cap/],
   ['budget', /FAIL .*(over|lazy assets|saveData)/],
 ];

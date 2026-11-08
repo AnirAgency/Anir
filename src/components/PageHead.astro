@@ -14,7 +14,7 @@ import { placeholderMode } from '../lib/placeholders.mjs';
   word, over the screens still passing.
 
   The screens are the products' own media, repeated from the list below, so
-  here they are decorative: alt="" and out of the accessibility tree. Each is
+  here they are decorative: alt="" aria-hidden="true" and out of the accessibility tree. Each is
   shown only where there is something to show — the real encode, or its
   stand-in on dev and preview builds — so in production, before the shoot,
   the head is the name and the line alone. Plain lazy <img>s in the tile lane
@@ -72,7 +72,7 @@ const words = pages.headline.split(' ');
               src={pic!.src}
               width={m.width}
               height={m.height}
-              alt=""
+              alt="" aria-hidden="true"
               loading="lazy"
               decoding="async"
               data-lane="tile"

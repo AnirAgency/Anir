@@ -22,7 +22,7 @@ import type { Media, Product } from '../content/site';
 
   The screens cycle through the product's media, so a column never repeats
   one. Only the shot is announced; the rest are repeats of the gallery
-  below, so alt="". The wall is built only from the screens it can show — the real encode,
+  below, so alt="" aria-hidden="true". The wall is built only from the screens it can show — the real encode,
   or its stand-in on dev and preview builds. The page renders it only when
   the shot itself can be shown (products/[id].astro); before the shoot, in
   production, the page opens on the product's name instead. The rest are
@@ -65,7 +65,7 @@ const right = [deal(5), deal(5)];
               {col.map(({ media, pic }) => (
                 <picture>
                   {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
-                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" aria-hidden="true" loading="lazy" decoding="async" data-lane="tile" />
                 </picture>
               ))}
             </div>
@@ -77,7 +77,7 @@ const right = [deal(5), deal(5)];
             above.map(({ media, pic }, i) => (
               <picture>
                 {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
-                <img class={`tile cell cell--above-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                <img class={`tile cell cell--above-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" aria-hidden="true" loading="lazy" decoding="async" data-lane="tile" />
               </picture>
             ))
           }
@@ -89,7 +89,7 @@ const right = [deal(5), deal(5)];
             below.map(({ media, pic }, i) => (
               <picture>
                 {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
-                <img class={`tile cell cell--below-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                <img class={`tile cell cell--below-${i + 1}`} src={pic.src} width={media.width} height={media.height} alt="" aria-hidden="true" loading="lazy" decoding="async" data-lane="tile" />
               </picture>
             ))
           }
@@ -101,7 +101,7 @@ const right = [deal(5), deal(5)];
               {col.map(({ media, pic }) => (
                 <picture>
                   {pic.sources.map((s) => <source srcset={s.src} type={s.type} />)}
-                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" loading="lazy" decoding="async" data-lane="tile" />
+                  <img class="tile" src={pic.src} width={media.width} height={media.height} alt="" aria-hidden="true" loading="lazy" decoding="async" data-lane="tile" />
                 </picture>
               ))}
             </div>

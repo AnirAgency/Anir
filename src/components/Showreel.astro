@@ -90,7 +90,7 @@ const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placehold
                   src={reel.video.poster}
                   width={reel.video.width}
                   height={reel.video.height}
-                  alt=""
+                  alt="" aria-hidden="true"
                   loading="lazy"
                   decoding="async"
                   data-lane="poster"

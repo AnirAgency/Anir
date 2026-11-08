@@ -508,8 +508,9 @@ else is a static file.
   — the form's own maxlength keeps a browser inside those, so a cut means the
   enquiry did not come from the form. A cut User-Agent is **not** a flag: it is a
   header, its length says nothing about whether a visitor is real (the Facebook and
-  Instagram in-app browsers, where much of the traffic opens, append a block that
-  runs to about 400 characters), so it is only noted in `diagnostics` (migration
+  Instagram in-app browsers, where much of the traffic opens, append a block of
+  their own — 165 characters in all for Facebook on Android, captured from a real
+  phone and kept as a test fixture; longer on iOS), so it is only noted in `diagnostics` (migration
   0008) — never «Шалгах», never a held-back notification. 1000 leaves every real
   browser room. Even a body that cannot be read is stored, its raw text in the
   message. Answers to questions added in the admin go in `answers`. Only the

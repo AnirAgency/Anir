@@ -21,9 +21,10 @@ export const ENQUIRY_MAX = {
   message: 2000,
   /**
    * A request header, not a form field, and no sign of whether a visitor is
-   * real. In-app browsers run long — Facebook's appends an FBAN/FBAV/FBDV/…
-   * block, around 400 characters on Android — so this leaves every real
-   * browser room (migration 0008). Past it: cut, noted, never flagged.
+   * real. In-app browsers add their own block — Facebook's on Android was
+   * captured at 165 characters (scripts/test-enquiry.ts keeps it), its iOS
+   * FBAN/FBAV/FBDV/… block runs longer — and 1000 leaves every real browser
+   * room (migration 0008). Past it: cut, noted, never flagged.
    */
   user_agent: 1000,
   /** A chip's value or an answer to a question added in the admin — a short code; no column check, kept whole enough to read when forged. */

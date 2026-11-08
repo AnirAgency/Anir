@@ -674,9 +674,9 @@ await check('every enquiry notifies the team, saying which path it took', async 
 
 /*
   A User-Agent is no evidence about the visitor: the Facebook and Instagram
-  in-app browsers — where much of this site's traffic opens — append a long
-  FBAN/FBAV/FBDV/… block, around 400 characters on Android. Its length must
-  never decide whether a person hears about an enquiry.
+  in-app browsers — where much of this site's traffic opens — append their
+  own block to the browser's, longest on iOS (FBAN/FBAV/FBDV/…). Its length
+  must never decide whether a person hears about an enquiry.
 */
 await check('a long in-app browser\'s User-Agent: stored whole, unflagged, told at once', async () => {
   const base =
@@ -704,6 +704,31 @@ await check('a long in-app browser\'s User-Agent: stored whole, unflagged, told 
   assert.deepEqual(captured[0].diagnostics, ['cut:user_agent:4000']);
   assert.equal(notified.length, 2, 'a note never holds back the message');
   return `420 characters: stored whole, unflagged, 2 notifications; 4000: cut to ${ENQUIRY_MAX.user_agent}, noted, still 2`;
+});
+
+/*
+  The one User-Agent in this suite that neither of us wrote: the Facebook
+  app's in-app browser on Android, captured on 8 November 2026 by
+  `wrangler tail anir --ip self` as a phone opened /api/ua-check. 165
+  characters — Chrome's reduced string ("Android 10; K", no device model)
+  plus Facebook's [FB_IAB/FB4A;…] — so the estimate of "around 400 on
+  Android" was wrong by more than half. Kept exactly as it came.
+*/
+const CAPTURED_FACEBOOK_ANDROID =
+  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/157.0.0.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/586.0.0.52.53;IABMV/1;]';
+
+await check('the captured Facebook-for-Android User-Agent: stored whole, «Шинэ», told at once', async () => {
+  assert.equal(CAPTURED_FACEBOOK_ANDROID.length, 165, 'the fixture is the string as captured');
+  captured = [];
+  notified = [];
+  const response = await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.45', agent: CAPTURED_FACEBOOK_ANDROID }), env: notifying() });
+  assert.equal(response.status, 200);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].user_agent, CAPTURED_FACEBOOK_ANDROID, 'stored whole');
+  assert.equal(captured[0].unrecognised, undefined, 'not flagged');
+  assert.equal(captured[0].diagnostics, undefined, 'not even a note');
+  assert.equal(notified.length, 2, 'told at once, on both channels');
+  return '165 characters, as captured: stored whole, unflagged, no note, 2 notifications';
 });
 
 await check('a flagged enquiry is stored, and does not ring the team\'s phone', async () => {

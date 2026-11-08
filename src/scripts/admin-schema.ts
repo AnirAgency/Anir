@@ -10,6 +10,7 @@
  * start at `product`.
  */
 import type { admin as Copy } from '../content/admin';
+import { MOVES, TASK_PROJECTS, TASK_STATES } from '../lib/task-codes.ts';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Obj = { [key: string]: Json };
@@ -378,6 +379,33 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
   for (const status of ['new', 'read', 'replied', 'closed']) {
     if (!t.inbox.statuses[status]) problems.add(`no name for the enquiry status "${status}"`);
   }
+  // The task list: every code src/lib/task-codes.ts names has its words here.
+  for (const state of TASK_STATES) if (!t.tasks.states[state]) problems.add(`no name for the task state "${state}"`);
+  for (const project of TASK_PROJECTS) if (!t.tasks.projects[project]) problems.add(`no name for the task project "${project}"`);
+  for (const name of Object.keys(MOVES)) if (!t.tasks.moves[name]) problems.add(`no words for the task move "${name}"`);
+  for (const field of ['title', 'done_means', 'project', 'owner_id', 'approver_id', 'due_date']) {
+    if (!t.tasks.fields[field]) problems.add(`no label for the task field "${field}"`);
+    if (!t.tasks.fieldHelp[field]) problems.add(`no help under the task field "${field}"`);
+  }
+  for (const code of ['title', 'done-means', 'done-means-repeats-title', 'project', 'owner', 'approver', 'due', 'reason-required', 'not-approver', 'bad-transition', 'approved']) {
+    if (!t.tasks.errors[code]) problems.add(`no sentence for the task error "${code}"`);
+  }
+  const slots: Record<string, string[]> = { assigned: ['{who}', '{title}', '{done}'], submitted: ['{who}', '{by}', '{title}'], sentBack: ['{who}', '{title}', '{reason}'] };
+  for (const [message, needs] of Object.entries(slots)) {
+    const words = (t.tasks.notify as Record<string, string>)[message] ?? '';
+    if (!needs.every((slot) => words.includes(slot))) problems.add(`the task Telegram message "${message}" needs its words, with ${needs.join(', ')}`);
+  }
+  if (!t.tasks.badgeMine.includes('{n}') || !t.tasks.badgeApprove.includes('{n}')) problems.add('the task badge needs its two sentences, with {n}');
+  for (const [name, rule] of Object.entries(MOVES)) {
+    if (!rule.reason) continue;
+    if (!t.tasks.reasons[name] || !t.tasks.reasonHelp[name] || !t.tasks.reasonRequired[name]) problems.add(`the task move "${name}" needs a reason's label, help and refusal`);
+  }
+  if (!t.removedPerson) problems.add('no words for a person who is no longer an editor');
+  for (const part of ['submitted', 'approved', 'sentBack', 'reopened', 'overdue']) {
+    if (!(t.tasks.report as Record<string, string>)[part]) problems.add(`no heading for the Тайлан's "${part}"`);
+  }
+  if (!['{date}', '{who}'].every((slot) => t.tasks.report.when.includes(slot))) problems.add("the Тайлан's fact line needs {date} and {who}");
+  if (!t.tasks.report.reason?.includes('{reason}')) problems.add("the Тайлан's reason line needs {reason}");
   for (const filter of ['new', 'flagged', 'read', 'replied', 'closed']) {
     if (!t.inbox.filters[filter]) problems.add(`no name for the inbox filter "${filter}"`);
   }

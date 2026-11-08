@@ -615,6 +615,56 @@ How it fits together (CLAUDE.md > The admin has the rules):
 | [`scripts/content-pull.mjs`](scripts/content-pull.mjs) | First step of every build: content into `src/content/live.json`, uploads encoded into `public/media/live/`. |
 | [`src/content/live.ts`](src/content/live.ts) | Lays the content over `site.ts`; a value of the wrong kind stops the build. |
 | [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
+| [`worker/tasks.ts`](worker/tasks.ts) | The task list: `/api/tasks` (list, `counts`, `report`, create, edit, `move`) — editors only, service key, every write conditional on the `updated_at` it read. |
+| [`supabase/migrations/0010_tasks.sql`](supabase/migrations/0010_tasks.sql), [`0011_task_events_and_names.sql`](supabase/migrations/0011_task_events_and_names.sql) | `tasks`; then `task_events` (every move, by trigger) and `editors.display_name`. RLS on, no policies. |
+| [`src/scripts/admin-tasks.ts`](src/scripts/admin-tasks.ts) | «Ажил» in the admin: «Даалгавар» (opens on «Минийх») and the read-only «Тайлан». |
+| [`src/lib/task-codes.ts`](src/lib/task-codes.ts) | The states, projects and moves both of them obey. |
+
+### The task list («Ажил»)
+
+Four people assigning, submitting and approving work — not a project tool.
+Deliberately not in it: attachments, comments, recurring tasks, time tracking,
+sub-tasks, custom fields, labels, per-person permissions. Everyone signed in
+sees everything.
+
+- **A task says what done means.** `done_means` is required and may not be the
+  title again (the table, the Worker and the form all refuse it): approval is
+  checked against it.
+- **Who does what.** Anyone may start or submit a task — someone finishing a
+  colleague's is normal. Only the named approver approves or sends back, and a
+  send-back needs a reason. The approver defaults to whoever created the task.
+  An approval made by mistake is undone by the approver with «Дахин нээх»: back
+  to doing, with a reason, recorded like any other move.
+- **History, not a last word.** Every change of state is a row in `task_events`
+  (migration 0011), written by a trigger in the same transaction as the change —
+  who, when, from what, to what, and why for a send-back or a reopening. The
+  task row only says where it is now.
+- **People by name.** `editors.display_name`, set by the owner in the SQL editor
+  (`update public.editors set display_name = 'Анна' where email = '…';`), is
+  what Telegram, the rows and the «Тайлан» show; empty, the email. Someone no
+  longer an editor reads «Хасагдсан хэрэглэгч», never an id.
+- **«Даалгавар»** opens on «Минийх» — assigned to me and not done, or waiting on
+  my approval — with «Бүгд» and filters (who, project, state, overdue) a click
+  away. Its badge has two numbers: mine to do, and ✓ waiting on my approval.
+  An overdue task says so on its row in words, not colour alone.
+- **«Тайлан»**: one person, one week (this one by default) — each submission,
+  each send-back with its reason, each approval, each reopening, and what is
+  overdue now. It reads `task_events`, so a task sent back twice and then
+  approved is six lines — three submissions, two send-backs with their
+  reasons, one approval — not one tidy approval. Read only; no charts or export.
+- **Telegram**, to a group of its own — never the enquiries group: assigned to
+  you; submitted for your approval; sent back, with the reason. Nothing else —
+  starting, approving and reopening send nothing.
+  Set it up: make a second group, add the bot, send `/start@anir_enquiries_bot`
+  in it, read the group's id (it is negative), and `npx wrangler secret put
+  TELEGRAM_TASKS_CHAT_ID`. Unset, the messages are skipped and nothing else
+  changes.
+- **Walled off.** `worker/index.ts` loads the task code only for `/api/tasks*`,
+  inside its own try/catch; no public page imports it. `npm run test:isolation`
+  proves the site, the enquiry form and the inbox carry on when it fails. If the
+  task list ever grows beyond this, it moves to its own Worker.
+- Tests: `npm run test:tasks` (the routes), `npm run test:isolation`,
+  `npm run build && npm run test:tasks-browser` (the admin in Chrome or Edge).
 
 ### Setting it up (once)
 

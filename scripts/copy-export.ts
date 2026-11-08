@@ -147,6 +147,7 @@ const ADMIN_PARTS: Record<string, string> = {
   list: 'Жагсаалт',
   rows: 'Жагсаалтын мөр',
   newProduct: 'Шинэ бүтээгдэхүүн',
+  tasks: 'Ажил (даалгавар, тайлан)',
   notify: 'Telegram мэдэгдэл',
   alerts: 'Төлөвийн мөрийн анхааруулга',
 };
@@ -225,7 +226,12 @@ if (wantVisitor) {
     { heading: 'Сайтын бичвэр', sections: [...visible, { title: 'Дэлгэц уншигч уншдаг', note: 'Хуудсан дээр харагдахгүй ч дэлгэц уншигч уншдаг бичвэр. Засвар хэрэгтэй бол сайтыг хөгжүүлсэн хүнд хэлнэ.', lines: readers, visitor: true }] },
   ]);
   // The proofreader's document carries nothing the Worker says to the team.
-  const leaked = operational.filter((text) => doc.text.includes(text.split('{')[0].trim()));
+  // Each message is looked for by its longest fixed run of words between
+  // placeholders — not by what comes before the first one, which is nothing
+  // for «{n} хүсэлт…» and one common word for «Сайт {when}…», and matched
+  // the site's own copy.
+  const fixed = (text: string) => text.split(/\{\w+\}/).map((part) => part.trim()).sort((a, b) => b.length - a.length)[0] ?? '';
+  const leaked = operational.filter((text) => fixed(text).length >= 12 && doc.text.includes(fixed(text)));
   if (leaked.length) throw new Error(`copy:export --visitor carries operational strings: ${leaked.join(' | ')}`);
   write('mongolian-copy-visitor.md', doc);
 }

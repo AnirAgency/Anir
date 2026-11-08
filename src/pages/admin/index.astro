@@ -926,4 +926,91 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
       grid-template-columns: minmax(0, 1fr);
     }
   }
+  /* ------------------------------------------------------------ tasks */
+
+  /* The task form's selects and date read as the admin's text fields do. */
+  .f select,
+  .f input[type='date'],
+  .tasks__bar select,
+  .report__bar select {
+    min-height: 2.75rem;
+    padding: 0.55rem 0.75rem;
+    color: var(--fg);
+    background: var(--ink-2);
+    border: var(--hairline) solid var(--muted);
+  }
+
+  .f select,
+  .f input[type='date'] {
+    width: 100%;
+  }
+
+  .f select:focus,
+  .f input[type='date']:focus,
+  .tasks__bar select:focus,
+  .report__bar select:focus {
+    border-color: var(--fg);
+  }
+
+  .task__new:empty {
+    display: none;
+  }
+
+  .task__new,
+  .task__form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .task__new {
+    margin-bottom: 1rem;
+  }
+
+  .task__body p {
+    margin: 0 0 0.5rem;
+  }
+
+  .task__done {
+    white-space: pre-wrap;
+  }
+
+  /* Overdue: a sign and words on the row itself, never colour alone. */
+  .task__overdue {
+    flex: none;
+    margin-left: auto;
+    padding: 0 0.4rem;
+    color: var(--fg);
+    border: var(--hairline) solid var(--orange);
+    font-size: 0.6875rem;
+    white-space: nowrap;
+  }
+
+  /* Sent back, with its reason: worth a second look, as a flagged enquiry is. */
+  .task__sent-back {
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  /* The badge's second number — waiting on my approval — told apart by its sign, not its colour alone. */
+  .nav__badge--approve {
+    margin-left: 0.25rem;
+    color: var(--orange);
+    background: transparent;
+    border: var(--hairline) solid var(--orange);
+  }
+
+  .report__range {
+    align-self: center;
+  }
+
+  .report__part {
+    margin-bottom: 1.25rem;
+  }
+
+  .report__part ul {
+    margin: 0;
+    padding-left: 1.1rem;
+  }
+
 </style>

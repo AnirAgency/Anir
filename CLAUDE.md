@@ -414,11 +414,18 @@ site stays static.
   badge keeps counting people.
 - **The task list** («Ажил»: «Даалгавар», «Тайлан»), by the owner's
   direction: the four of them assign, submit and approve work inside the
-  admin (`worker/tasks.ts`, `src/scripts/admin-tasks.ts`, migration 0010).
-  `tasks` is the inbox's model: RLS on, no policies, read and written only by
-  the Worker for an editor. Every task says what done means
-  (`done_means`, required, never the title again); anyone may submit, only
-  the named approver approves or sends back, and a send-back needs a reason.
+  admin (`worker/tasks.ts`, `src/scripts/admin-tasks.ts`, migrations 0010,
+  0011). `tasks` and `task_events` are the inbox's model: RLS on, no
+  policies, read and written only by the Worker for an editor. Every task
+  says what done means (`done_means`, required, never the title again);
+  anyone may submit, only the named approver approves, sends back or
+  reopens an approval, and a send-back or a reopening needs a reason.
+  **History is appended, never overwritten**: every change of state is a
+  row in `task_events`, written by a trigger in the same transaction, and
+  the «Тайлан» reads those — a task sent back twice is two send-backs, not
+  one tidy approval. People are shown by `editors.display_name`, the email
+  where it is empty, and an id no longer in `editors` as «Хасагдсан
+  хэрэглэгч» — never a bare id, anywhere.
   Its Telegram goes to a group of its own (`TELEGRAM_TASKS_CHAT_ID`), never
   the enquiries one — three messages only: assigned, submitted for your
   approval, sent back — and with the secret unset it is skipped, silently.

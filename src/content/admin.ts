@@ -82,6 +82,8 @@ export const admin = {
 
   /** Someone saved this part after it was opened here: nothing is overwritten, the typing is kept. */
   conflict: 'Өөр хүн энэ хэсгийг хадгалсан байна. Дахин нээж, өөрчлөлтөө оруулна уу.',
+  /** Someone no longer an editor, wherever a person is shown — never a bare id. */
+  removedPerson: 'Хасагдсан хэрэглэгч',
   reopen: 'Дахин нээх',
   detail: 'Дэлгэрэнгүй',
   keys: 'Ctrl+S — хадгалах · Esc — нээлттэй мөрийг хаах',
@@ -310,9 +312,21 @@ export const admin = {
       submit: 'Хийсэн гэж илгээх',
       approve: 'Батлах',
       sendBack: 'Буцаах',
+      reopen: 'Дахин нээх',
     } as Record<string, string>,
-    reason: 'Буцаах шалтгаан',
-    reasonHelp: 'Юу дутуу байгааг бичнэ — шалтгаангүй буцаахгүй.',
+    /** The reason a move needs, by move: its label, the line under it, and what is said when it is missing. */
+    reasons: {
+      sendBack: 'Буцаах шалтгаан',
+      reopen: 'Дахин нээх шалтгаан',
+    } as Record<string, string>,
+    reasonHelp: {
+      sendBack: 'Юу дутуу байгааг бичнэ — шалтгаангүй буцаахгүй.',
+      reopen: 'Яагаад буцааж нээж байгаагаа бичнэ — алдаатай баталсан бол түүнийгээ.',
+    } as Record<string, string>,
+    reasonRequired: {
+      sendBack: 'Буцаах шалтгаанаа бичнэ үү.',
+      reopen: 'Дахин нээх шалтгаанаа бичнэ үү.',
+    } as Record<string, string>,
     /** The overdue marker: a word and a sign, never colour alone. */
     overdue: '⚠ Хугацаа хэтэрсэн',
     due: 'Хугацаа: {date}',
@@ -332,15 +346,15 @@ export const admin = {
       owner: 'Хийх хүнээ сонгоно уу.',
       approver: 'Батлах хүнээ сонгоно уу.',
       due: 'Хугацааны огноо буруу байна.',
-      'reason-required': 'Буцаах шалтгаанаа бичнэ үү.',
+      'reason-required': 'Шалтгаанаа бичнэ үү.',
       'not-approver': 'Зөвхөн нэрлэгдсэн батлах хүн батлах эсвэл буцааж чадна.',
       'bad-transition': 'Энэ даалгаврын төлөв өөрчлөгдсөн байна. Жагсаалтыг шинэчиллээ.',
-      approved: 'Батлагдсан даалгаврыг засахгүй.',
+      approved: 'Батлагдсан даалгаврыг засахгүй — эхлээд «Дахин нээх».',
     } as Record<string, string>,
     /** The Тайлан: one person, one week. Read only. */
     report: {
       title: 'Тайлан',
-      help: 'Нэг хүний нэг долоо хоног: юу илгээсэн, юу батлагдсан, юу буцаагдсан (шалтгаантай нь), юу хугацаа хэтэрсэн. Зөвхөн харах — хэрэгтэй бол сонгоод хуулна.',
+      help: 'Нэг хүний нэг долоо хоног, болсон бүхэн тус бүрдээ: илгээсэн бүр, буцаагдсан бүр шалтгаантай нь, батлагдсан, дахин нээгдсэн, хугацаа хэтэрсэн. Хоёр удаа буцаагдаад батлагдсан ажил гурван мөр болж харагдана. Зөвхөн харах — хэрэгтэй бол сонгоод хуулна.',
       week: 'Долоо хоног',
       person: 'Хүн',
       prev: '← Өмнөх',
@@ -350,8 +364,13 @@ export const admin = {
       submitted: 'Илгээсэн',
       approved: 'Батлагдсан',
       sentBack: 'Буцаагдсан',
+      reopened: 'Дахин нээсэн',
       overdue: 'Хугацаа хэтэрсэн',
       none: 'Алга.',
+      /** One fact: when, and who did it. */
+      when: '{date} · {who}',
+      /** Why — a send-back's or a reopening's reason, in the same words for both. */
+      reason: 'Шалтгаан: {reason}',
     },
     /** The three Telegram messages to the tasks group — nothing else is sent. */
     notify: {

@@ -23,14 +23,18 @@ import { ubToday, weekOf } from '../src/lib/task-codes.ts';
 const A = '0a0a0a0a-0000-4000-8000-00000000000a'; // anna — creates, approves
 const B = '0b0b0b0b-0000-4000-8000-00000000000b'; // bold — does the work
 const C = '0c0c0c0c-0000-4000-8000-00000000000c'; // saraa — finishes a colleague's task
-const tokens: Record<string, { id: string; email: string; editor: boolean }> = {
-  'tok-anna': { id: A, email: 'anna@anir.mn', editor: true },
+const tokens: Record<string, { id: string; email: string; editor: boolean; name?: string }> = {
+  'tok-anna': { id: A, email: 'anna@anir.mn', editor: true, name: 'Анна' },
   'tok-bold': { id: B, email: 'bold@anir.mn', editor: true },
-  'tok-saraa': { id: C, email: 'saraa@anir.mn', editor: true },
+  'tok-saraa': { id: C, email: 'saraa@anir.mn', editor: true, name: 'Сараа' },
   'tok-visitor': { id: '0d0d0d0d-0000-4000-8000-00000000000d', email: 'v@example.com', editor: false },
 };
 
 let rows: Task[] = [];
+/** task_events as the trigger (migration 0011) writes it: one row per change of state. */
+let events: { id: number; task_id: string; at: string; by: string; from_state: string; to_state: string; reason: string | null }[] = [];
+/** Editors taken out of `editors`: their ids stay on tasks and events. */
+const removed = new Set<string>();
 let telegram: { chat: string; text: string }[] = [];
 let tick = 0;
 const stamp = () => new Date(Date.UTC(2026, 10, 9, 2, 0, 0) + ++tick * 1000).toISOString();
@@ -81,7 +85,14 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
       return Response.json(editors.filter((e) => e.id === id).map((e) => ({ user_id: e.id })));
     }
     assert.equal(headers.Authorization, 'Bearer service-key', 'the editors list is read with the service key');
-    return Response.json(editors.map((e) => ({ user_id: e.id, email: e.email })));
+    assert.equal(url.searchParams.get('select'), 'user_id,email,display_name', 'names, not just emails');
+    return Response.json(editors.filter((e) => !removed.has(e.id)).map((e) => ({ user_id: e.id, email: e.email, display_name: e.name ?? null })));
+  }
+  if (url.pathname === '/rest/v1/task_events') {
+    assert.equal(headers.Authorization, 'Bearer service-key');
+    const from = Date.parse(decodeURIComponent((url.searchParams.getAll('at')[0] ?? '').replace('gte.', '')));
+    const until = Date.parse(decodeURIComponent((url.searchParams.getAll('at')[1] ?? '').replace('lt.', '')));
+    return Response.json(events.filter((e) => Date.parse(e.at) >= from && Date.parse(e.at) < until));
   }
   if (url.pathname === '/rest/v1/tasks') {
     assert.equal(headers.Authorization, 'Bearer service-key', 'the table is reached with the service key only');
@@ -98,7 +109,14 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     if (method === 'PATCH') {
       const target = rows.filter(where(url.searchParams));
-      for (const task of target) Object.assign(task, JSON.parse(String(init?.body)), { updated_at: stamp() });
+      for (const task of target) {
+        const before = task.state;
+        Object.assign(task, JSON.parse(String(init?.body)), { updated_at: stamp() });
+        if (task.state !== before) {
+          const moved = task as Task & { moved_by?: string };
+          events.push({ id: events.length + 1, task_id: task.id, at: new Date().toISOString(), by: moved.moved_by ?? task.created_by, from_state: before, to_state: task.state, reason: task.state === 'doing' && ['submitted', 'approved'].includes(before) ? task.reject_reason : null });
+        }
+      }
       return Response.json(target);
     }
   }
@@ -138,6 +156,8 @@ const results: Array<[string, string]> = [];
 let failures = 0;
 async function check(label: string, run: () => Promise<string>) {
   rows = [];
+  events = [];
+  removed.clear();
   telegram = [];
   try {
     results.push([label, await run()]);
@@ -254,6 +274,8 @@ await check('transitions that make no sense are refused', async () => {
     const r = await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move, reason: 'x', updated_at: current.updated_at });
     assert.equal(r.status, 409, `${move} after approval`);
   }
+  assert.equal((await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'reopen', updated_at: current.updated_at })).body.error, 'reason-required', 'reopening needs a reason');
+  assert.equal((await call('tok-bold', 'POST', `/api/tasks/${task.id}/move`, { move: 'reopen', reason: 'x', updated_at: current.updated_at })).body.error, 'not-approver', 'only the approver reopens');
   assert.equal((await call('tok-anna', 'POST', `/api/tasks/${task.id}`, { title: 'Өөр', updated_at: current.updated_at })).body.error, 'approved', 'an approved task is not edited');
   return 'approve/send back from new, an unknown move, submit twice, start when submitted, anything after approval: refused';
 });
@@ -273,28 +295,52 @@ await check('a stale write is a conflict, never an overwrite', async () => {
 
 // ------------------------------------------------------------------ report
 
-await check('the Тайлан reads one person\'s week', async () => {
+await check('the Тайлан reads the history: sent back twice, then approved, is not one tidy approval', async () => {
   const week = weekOf(ubToday());
-  let a = (await call('tok-anna', 'POST', '/api/tasks', newTask({ title: 'Нэгдүгээр ажил' }))).body.item as Task;
-  let b = (await call('tok-anna', 'POST', '/api/tasks', newTask({ title: 'Хоёрдугаар ажил' }))).body.item as Task;
+  const move = async (token: string, task: Task, name: string, reason?: string) =>
+    (await call(token, 'POST', `/api/tasks/${task.id}/move`, { move: name, reason, updated_at: task.updated_at })).body.item as Task;
+  let slow = (await call('tok-anna', 'POST', '/api/tasks', newTask({ title: 'Удаан ажил' }))).body.item as Task;
+  slow = await move('tok-bold', slow, 'submit');
+  slow = await move('tok-anna', slow, 'sendBack', 'Шийдлүүд дутуу');
+  slow = await move('tok-bold', slow, 'submit');
+  slow = await move('tok-anna', slow, 'sendBack', 'Зураг буруу');
+  slow = await move('tok-bold', slow, 'submit');
+  slow = await move('tok-anna', slow, 'approve');
+  let quick = (await call('tok-anna', 'POST', '/api/tasks', newTask({ title: 'Хурдан ажил' }))).body.item as Task;
+  quick = await move('tok-bold', quick, 'submit');
+  quick = await move('tok-anna', quick, 'approve');
+  // Approved by mistake: the approver reopens it, with a reason — a fact of its own.
+  quick = await move('tok-anna', quick, 'reopen', 'Андуурч баталсан');
+  assert.equal(quick.state, 'doing');
   await call('tok-anna', 'POST', '/api/tasks', newTask({ title: 'Хоцорсон ажил', due_date: '2026-01-05' }));
-  a = (await call('tok-bold', 'POST', `/api/tasks/${a.id}/move`, { move: 'submit', updated_at: a.updated_at })).body.item as Task;
-  b = (await call('tok-bold', 'POST', `/api/tasks/${b.id}/move`, { move: 'submit', updated_at: b.updated_at })).body.item as Task;
-  await call('tok-anna', 'POST', `/api/tasks/${a.id}/move`, { move: 'approve', updated_at: a.updated_at });
-  await call('tok-anna', 'POST', `/api/tasks/${b.id}/move`, { move: 'sendBack', reason: 'Зураг дутуу', updated_at: b.updated_at });
-  // Stamps are set in this week; the stub's clock starts on 9 November.
-  for (const task of rows) for (const key of ['submitted_at', 'decided_at'] as const) if (task[key]) task[key] = `${week.start}T03:00:00.000Z`;
+
   const r = (await call('tok-anna', 'GET', `/api/tasks/report?person=${B}`)).body;
-  const titles = (key: string) => (r[key] as Task[]).map((x) => x.title);
+  type Fact = { by: string; reason: string | null; task: { title: string } };
+  const facts = (key: string) => (r[key] as Fact[]).map((x) => x.task.title + (x.reason ? ` (${x.reason})` : ''));
   assert.deepEqual(r.week, { start: week.start, end: week.end });
-  assert.deepEqual(titles('submitted').sort(), ['Нэгдүгээр ажил', 'Хоёрдугаар ажил']);
-  assert.deepEqual(titles('approved'), ['Нэгдүгээр ажил']);
-  assert.deepEqual(titles('sentBack'), ['Хоёрдугаар ажил']);
-  assert.equal((r.sentBack as Task[])[0].reject_reason, 'Зураг дутуу');
-  assert.deepEqual(titles('overdue'), ['Хоцорсон ажил']);
-  const lastWeek = (await call('tok-anna', 'GET', `/api/tasks/report?person=${B}&week=2026-01-01`)).body;
-  assert.deepEqual([(lastWeek.submitted as Task[]).length, (lastWeek.approved as Task[]).length], [0, 0], 'another week: none of it');
-  return `week ${week.start}: submitted 2, approved 1, sent back 1 with its reason, overdue 1; another week empty`;
+  assert.deepEqual(facts('submitted'), ['Удаан ажил', 'Удаан ажил', 'Удаан ажил', 'Хурдан ажил'], 'every submission');
+  assert.deepEqual(facts('sentBack'), ['Удаан ажил (Шийдлүүд дутуу)', 'Удаан ажил (Зураг буруу)'], 'each send-back, with its reason');
+  assert.deepEqual(facts('approved'), ['Удаан ажил', 'Хурдан ажил']);
+  assert.deepEqual(facts('reopened'), ['Хурдан ажил (Андуурч баталсан)'], 'a reopening is its own fact');
+  assert.deepEqual((r.overdue as Task[]).map((x) => x.title), ['Хоцорсон ажил']);
+  assert.equal((r.sentBack as Fact[])[0].by, 'Анна', 'people by display name');
+  assert.equal((r.submitted as Fact[])[0].by, 'bold@anir.mn', 'no display name: the email');
+  const other = (await call('tok-anna', 'GET', `/api/tasks/report?person=${B}&week=2026-01-01`)).body;
+  assert.deepEqual([(other.submitted as Fact[]).length, (other.sentBack as Fact[]).length, (other.approved as Fact[]).length], [0, 0, 0], 'another week: none of it');
+  return 'submitted 4, sent back 2 with their reasons, approved 2, reopened 1, overdue 1 — the slow task is not the quick one';
+});
+
+await check('a person no longer an editor is «Хасагдсан хэрэглэгч», never a bare id', async () => {
+  let task = (await call('tok-anna', 'POST', '/api/tasks', newTask({ owner_id: C }))).body.item as Task;
+  task = (await call('tok-saraa', 'POST', `/api/tasks/${task.id}/move`, { move: 'submit', updated_at: task.updated_at })).body.item as Task;
+  removed.add(C);
+  telegram = [];
+  const r = (await call('tok-anna', 'GET', `/api/tasks/report?person=${C}`)).body;
+  assert.equal((r.submitted as { by: string }[])[0].by, 'Хасагдсан хэрэглэгч');
+  assert.ok(!(r.people as { id: string; name: string }[]).some((p) => p.name === C), 'no id where a name goes');
+  await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'sendBack', reason: 'Дутуу', updated_at: task.updated_at });
+  assert.match(telegram[0]?.text ?? '', /^Хасагдсан хэрэглэгч: «.+» буцаагдлаа/);
+  return 'in the Тайлан and in Telegram: «Хасагдсан хэрэглэгч»';
 });
 
 // ---------------------------------------------------------------- Telegram
@@ -306,13 +352,15 @@ await check('exactly three messages, to the tasks group only', async () => {
   task = (await call('tok-bold', 'POST', `/api/tasks/${task.id}/move`, { move: 'submit', updated_at: task.updated_at })).body.item as Task; // 2 submitted → Anna
   task = (await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'sendBack', reason: 'Шийдлүүд дутуу', updated_at: task.updated_at })).body.item as Task; // 3 sent back → Bold
   task = (await call('tok-bold', 'POST', `/api/tasks/${task.id}/move`, { move: 'submit', updated_at: task.updated_at })).body.item as Task; // 4 submitted again → Anna
-  await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'approve', updated_at: task.updated_at }); // approve: nothing
+  task = (await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'approve', updated_at: task.updated_at })).body.item as Task; // approve: nothing
+  await call('tok-anna', 'POST', `/api/tasks/${task.id}/move`, { move: 'reopen', reason: 'Андуурсан', updated_at: task.updated_at }); // reopen: nothing — three kinds only
   assert.ok(telegram.every((m) => m.chat === '-200-tasks'), 'never the enquiries chat');
   assert.equal(telegram.length, 4);
-  assert.match(telegram[0].text, /^bold@anir\.mn: танд шинэ даалгавар — «Ezmath-ын 7-р ангийн бодлогууд»/);
-  assert.match(telegram[1].text, /^anna@anir\.mn: «.+» хийгдсэн гэж bold@anir\.mn илгээлээ/);
+  assert.match(telegram[0].text, /^bold@anir\.mn: танд шинэ даалгавар — «Ezmath-ын 7-р ангийн бодлогууд»/, 'no display name: the email');
+  assert.match(telegram[1].text, /^Анна: «.+» хийгдсэн гэж bold@anir\.mn илгээлээ/, 'by display name');
+  assert.ok(!telegram.some((m) => m.text.includes('anna@anir.mn')), 'no address where a name exists');
   assert.match(telegram[2].text, /^bold@anir\.mn: «.+» буцаагдлаа\. Шалтгаан: Шийдлүүд дутуу$/);
-  return 'assigned, submitted, sent back (with the reason), submitted again — 4 to -200-tasks; start, approve, self-assign: silent';
+  return 'assigned, submitted, sent back (with the reason), submitted again — 4 to -200-tasks, by name; start, approve, reopen, self-assign: silent';
 });
 
 await check('TELEGRAM_TASKS_CHAT_ID unset: skipped, nothing thrown, everything else the same', async () => {

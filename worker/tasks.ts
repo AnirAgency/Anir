@@ -6,12 +6,24 @@
  *   GET  /api/tasks/report?week=&person=   the Тайлан: one person, one week
  *   POST /api/tasks                   a new task
  *   POST /api/tasks/<id>              edit it (with the updated_at it read)
- *   POST /api/tasks/<id>/move         start, submit, approve, send back
+ *   POST /api/tasks/<id>/move         start, submit, approve, send back, reopen
  *
  * Every route answers editors only, and who is asking comes first: a
- * stranger gets 401 before learning anything is here (./auth.ts). The table
- * (migration 0010) is read and written with the service_role key, which
- * never leaves the Worker — the inbox's model.
+ * stranger gets 401 before learning anything is here (./auth.ts). The tables
+ * (migrations 0010, 0011) are read and written with the service_role key,
+ * which never leaves the Worker — the inbox's model.
+ *
+ * History: `tasks` is where a task is now; `task_events` is everything that
+ * happened to it, one row per change of state, written by a trigger in the
+ * same transaction (0011). Every move sets `moved_by`, which the trigger
+ * records as who did it. The Тайлан reads the events, never the task's last
+ * decision — a task sent back twice and then approved is three facts, not
+ * one tidy approval. An approval made by mistake is reopened by the
+ * approver, with a reason: a fact of its own, not an edit.
+ *
+ * People are shown by `editors.display_name`, or their email where it is
+ * empty; an id no longer in `editors` is «Хасагдсан хэрэглэгч», never a bare
+ * id — in the Тайлан, the rows and Telegram alike.
  *
  * Coupled one way: worker/index.ts loads this file only when a /api/tasks*
  * request arrives, behind its own try/catch, and no public page imports it —
@@ -20,8 +32,9 @@
  *
  * Telegram: the tasks group (TELEGRAM_TASKS_CHAT_ID), never the enquiries
  * one, and exactly three messages — assigned to you; submitted for your
- * approval; sent back, with the reason. Without the secret they are skipped,
- * and nothing else changes (scripts/test-tasks.ts).
+ * approval; sent back, with the reason. Starting, approving and reopening
+ * send nothing. Without the secret they are skipped, and nothing else
+ * changes (scripts/test-tasks.ts).
  */
 import { admin as t } from '../src/content/admin.ts';
 import { MOVES, TASK_LIMITS, TASK_PROJECTS, isDate, repeatsTitle, ubToday, weekOf, type Move, type TaskState } from '../src/lib/task-codes.ts';
@@ -52,11 +65,25 @@ export interface Task {
   decided_at: string | null;
   decided_by: string | null;
   reject_reason: string | null;
+  /** Who moved it last — what the trigger writes into task_events.by. */
+  moved_by?: string | null;
 }
 
+/** Someone on the team, as shown: their display name, else their email (editors, migration 0011). */
 export interface Person {
   id: string;
-  email: string;
+  name: string;
+}
+
+/** One change of a task's state, kept (task_events, migration 0011). */
+export interface TaskEvent {
+  id: number;
+  task_id: string;
+  at: string;
+  by: string;
+  from_state: TaskState;
+  to_state: TaskState;
+  reason: string | null;
 }
 
 interface Context {
@@ -79,9 +106,12 @@ function store(env: Env, fetcher: typeof fetch) {
   };
   return {
     async people(): Promise<Person[]> {
-      const rows = await read<{ user_id: string; email: string }[]>(await fetcher(`${rest}/editors?select=user_id,email&order=email`, { headers }), 'editors');
-      return rows.map((row) => ({ id: row.user_id, email: row.email }));
+      const rows = await read<{ user_id: string; email: string; display_name: string | null }[]>(await fetcher(`${rest}/editors?select=user_id,email,display_name&order=email`, { headers }), 'editors');
+      return rows.map((row) => ({ id: row.user_id, name: row.display_name?.trim() || row.email }));
     },
+    /** The changes of state in a span of time, oldest first. */
+    events: async (from: string, until: string) =>
+      read<TaskEvent[]>(await fetcher(`${rest}/task_events?select=*&at=gte.${encodeURIComponent(from)}&at=lt.${encodeURIComponent(until)}&order=at`, { headers }), 'task_events'),
     select: async (query: string) => read<Task[]>(await fetcher(`${rest}/tasks?select=*&${query}`, { headers }), 'tasks'),
     async one(id: string): Promise<Task | null> {
       return (await read<Task[]>(await fetcher(`${rest}/tasks?select=*&id=eq.${id}`, { headers }), 'tasks'))[0] ?? null;
@@ -139,7 +169,8 @@ export async function tellTasks(env: Env, message: string, fetcher: typeof fetch
 }
 
 const fill = (template: string, values: Record<string, string>) => template.replace(/\{(\w+)\}/g, (all, key) => values[key] ?? all);
-const nameOf = (people: Person[], id: string | null) => people.find((p) => p.id === id)?.email ?? '—';
+/** A person as shown — never a bare id: someone no longer an editor is «Хасагдсан хэрэглэгч». */
+const nameOf = (people: Person[], id: string | null) => (id ? (people.find((p) => p.id === id)?.name ?? t.removedPerson) : '—');
 
 /* -------------------------------------------------------------- the fields */
 
@@ -218,19 +249,41 @@ async function counts(db: Store, me: string): Promise<Response> {
   return answer(200, { ok: true, mine, approve });
 }
 
-/** One person's week: what they submitted, what was approved, what was sent back and why, what is overdue. */
+/**
+ * One person's week, as facts, from task_events (migration 0011): each time
+ * they submitted; each approval, send-back (with its reason) and reopening of
+ * their work; and what of theirs is overdue now. A task sent back twice and
+ * then approved shows three facts, not one tidy approval.
+ */
 async function report(db: Store, me: string, params: URLSearchParams): Promise<Response> {
   const person = UUID.test(params.get('person') ?? '') ? (params.get('person') as string) : me;
   const week = weekOf(isDate(params.get('week')) ? (params.get('week') as string) : ubToday());
-  const within = (column: string) => `${column}=gte.${encodeURIComponent(week.from)}&${column}=lt.${encodeURIComponent(week.until)}`;
-  const [submitted, approved, sentBack, overdue, people] = await Promise.all([
-    db.select(`submitted_by=eq.${person}&${within('submitted_at')}&order=submitted_at`),
-    db.select(`owner_id=eq.${person}&state=eq.approved&${within('decided_at')}&order=decided_at`),
-    db.select(`owner_id=eq.${person}&state=neq.approved&reject_reason=not.is.null&${within('decided_at')}&order=decided_at`),
+  const [events, overdue, people] = await Promise.all([
+    db.events(week.from, week.until),
     db.select(`owner_id=eq.${person}&state=neq.approved&due_date=lt.${ubToday()}&order=due_date`),
     db.people(),
   ]);
-  return answer(200, { ok: true, me, person, week: { start: week.start, end: week.end }, today: ubToday(), people, submitted, approved, sentBack, overdue });
+  const ids = [...new Set(events.map((event) => event.task_id))];
+  const tasks = ids.length ? await db.select(`id=in.(${ids.join(',')})`) : [];
+  const taskOf = (id: string) => tasks.find((task) => task.id === id);
+  const fact = (event: TaskEvent) => {
+    const task = taskOf(event.task_id);
+    return { at: event.at, by: nameOf(people, event.by), reason: event.reason, task: task ? { id: task.id, title: task.title, project: task.project } : null };
+  };
+  const theirs = (event: TaskEvent) => taskOf(event.task_id)?.owner_id === person;
+  return answer(200, {
+    ok: true,
+    me,
+    person,
+    week: { start: week.start, end: week.end },
+    today: ubToday(),
+    people,
+    submitted: events.filter((e) => e.to_state === 'submitted' && e.by === person).map(fact),
+    approved: events.filter((e) => e.to_state === 'approved' && theirs(e)).map(fact),
+    sentBack: events.filter((e) => e.from_state === 'submitted' && e.to_state === 'doing' && theirs(e)).map(fact),
+    reopened: events.filter((e) => e.from_state === 'approved' && e.to_state === 'doing' && theirs(e)).map(fact),
+    overdue,
+  });
 }
 
 async function create(db: Store, env: Env, me: string, input: Record<string, unknown>, later: (p: Promise<unknown>) => Promise<void>, fetcher: typeof fetch): Promise<Response> {
@@ -294,14 +347,15 @@ async function move(db: Store, env: Env, me: string, id: string, input: Record<s
   if (rule.approverOnly && current.approver_id !== me) return answer(403, { ok: false, error: 'not-approver' });
 
   const now = new Date().toISOString();
+  // moved_by is who the trigger records in task_events: every move says who made it.
   const patch: Partial<Task> =
     name === 'start'
-      ? { state: 'doing' }
+      ? { state: 'doing', moved_by: me }
       : name === 'submit'
-        ? { state: 'submitted', submitted_at: now, submitted_by: me }
+        ? { state: 'submitted', submitted_at: now, submitted_by: me, moved_by: me }
         : name === 'approve'
-          ? { state: 'approved', decided_at: now, decided_by: me, reject_reason: null }
-          : { state: 'doing', decided_at: now, decided_by: me, reject_reason: reason };
+          ? { state: 'approved', decided_at: now, decided_by: me, reject_reason: null, moved_by: me }
+          : { state: 'doing', decided_at: now, decided_by: me, reject_reason: reason, moved_by: me }; // sendBack, reopen
   const item = await db.update(id, version, patch);
   if (!item) return answer(409, { ok: false, error: 'conflict' });
 

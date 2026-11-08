@@ -37,9 +37,18 @@ export interface Task {
   decided_by: string | null;
   reject_reason: string | null;
 }
+/** Someone on the team as shown: display name, else email (worker/tasks.ts). */
 interface Person {
   id: string;
-  email: string;
+  name: string;
+}
+
+/** One change of state from task_events, as the Тайлан shows it. */
+interface Fact {
+  at: string;
+  by: string;
+  reason: string | null;
+  task: { id: string; title: string; project: string } | null;
 }
 
 export interface TaskDeps {
@@ -75,7 +84,8 @@ export function createTasks(d: TaskDeps) {
   /** The open form's save, for Ctrl+S. */
   let saveOpen: (() => void) | null = null;
 
-  const nameOf = (id: string | null) => people.find((p) => p.id === id)?.email ?? '—';
+  /** Never a bare id: someone no longer an editor is «Хасагдсан хэрэглэгч». */
+  const nameOf = (id: string | null) => (id ? (people.find((p) => p.id === id)?.name ?? t.removedPerson) : '—');
   const draftPrefix = () => `anir-admin-task:${d.me()?.id ?? ''}:`;
   const readDraft = (key: string): { base: string; values: Values } | null => {
     try {
@@ -154,13 +164,16 @@ export function createTasks(d: TaskDeps) {
 
     const select = (field: Field, options: [string, string][]) =>
       h('select', { id: `task-${key}-${field}` }, ...options.map(([value, label]) => h('option', { value, selected: values[field] === value }, label)));
-    const personOptions = people.map((p) => [p.id, p.email] as [string, string]);
+    const personOptions = (field: Field): [string, string][] => {
+      const options = people.map((p) => [p.id, p.name] as [string, string]);
+      return values[field] && !people.some((p) => p.id === values[field]) ? [[values[field], t.removedPerson], ...options] : options;
+    };
     const make: Record<Field, () => HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> = {
       title: () => h('input', { type: 'text', id: `task-${key}-title`, value: values.title }),
       done_means: () => h('textarea', { id: `task-${key}-done_means`, rows: 3, value: values.done_means }),
       project: () => select('project', TASK_PROJECTS.map((p) => [p, t.tasks.projects[p]])),
-      owner_id: () => select('owner_id', personOptions),
-      approver_id: () => select('approver_id', personOptions),
+      owner_id: () => select('owner_id', personOptions('owner_id')),
+      approver_id: () => select('approver_id', personOptions('approver_id')),
       due_date: () => h('input', { type: 'date', id: `task-${key}-due_date`, value: values.due_date }),
     };
 
@@ -227,7 +240,7 @@ export function createTasks(d: TaskDeps) {
   /* ---------------------------------------------------------------- moves */
 
   const move = guarded(async (task: Task, name: Move, reason: string = '') => {
-    if (MOVES[name].reason && !reason.trim()) return d.status(t.tasks.errors['reason-required'], 'bad');
+    if (MOVES[name].reason && !reason.trim()) return d.status(t.tasks.reasonRequired[name] ?? t.tasks.errors['reason-required'], 'bad');
     d.status(t.tasks.loading, 'busy');
     const { response, body } = await d.worker(`/api/tasks/${task.id}/move`, {
       method: 'POST',
@@ -246,16 +259,28 @@ export function createTasks(d: TaskDeps) {
   function actions(task: Task): HTMLElement {
     const me = d.me()?.id;
     const allowed = (Object.keys(MOVES) as Move[]).filter((name) => MOVES[name].from.includes(task.state) && (!MOVES[name].approverOnly || task.approver_id === me));
-    const reasonId = `task-${task.id}-reason`;
-    const reason = h('textarea', { id: reasonId, rows: 2, 'aria-describedby': `${reasonId}-help` });
-    const sendBack = h(
-      'div',
-      { class: 'f task__reason', hidden: true },
-      h('label', { class: 'f__label', for: reasonId }, t.tasks.reason),
-      reason,
-      h('p', { class: 'f__help', id: `${reasonId}-help` }, t.tasks.reasonHelp),
-      h('button', { type: 'button', class: 'btn btn--primary', 'data-move': 'sendBack-confirm', onclick: () => void move(task, 'sendBack', reason.value) }, t.tasks.moves.sendBack)
-    );
+    // A move that needs a reason opens a box for it first: send back, reopen.
+    const boxes = new Map<Move, HTMLElement>();
+    const reasoned = allowed.filter((name) => MOVES[name].reason);
+    for (const name of reasoned) {
+      const id = `task-${task.id}-${name}-reason`;
+      const reason = h('textarea', { id, rows: 2, 'aria-describedby': `${id}-help` });
+      boxes.set(
+        name,
+        h(
+          'div',
+          { class: 'f task__reason', hidden: true, 'data-reason': name },
+          h('label', { class: 'f__label', for: id }, t.tasks.reasons[name]),
+          reason,
+          h('p', { class: 'f__help', id: `${id}-help` }, t.tasks.reasonHelp[name]),
+          h('button', { type: 'button', class: 'btn btn--primary', 'data-move': `${name}-confirm`, onclick: () => void move(task, name, reason.value) }, t.tasks.moves[name])
+        )
+      );
+    }
+    const open = (name: Move) => {
+      for (const [other, box] of boxes) box.hidden = other !== name;
+      (boxes.get(name)?.querySelector('textarea') as HTMLTextAreaElement | null)?.focus();
+    };
     return h(
       'div',
       { class: 'task__actions' },
@@ -269,14 +294,14 @@ export function createTasks(d: TaskDeps) {
               type: 'button',
               class: name === 'approve' || name === 'submit' ? 'btn btn--primary' : 'btn btn--ghost',
               'data-move': name,
-              onclick: () => (name === 'sendBack' ? ((sendBack.hidden = false), reason.focus()) : void move(task, name)),
+              onclick: () => (MOVES[name].reason ? open(name) : void move(task, name)),
             },
             t.tasks.moves[name]
           )
         ),
         task.state !== 'approved' ? h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((ui.editing = task.id), void renderTasks()) }, t.tasks.edit) : null
       ),
-      sendBack
+      ...boxes.values()
     );
   }
 
@@ -367,7 +392,7 @@ export function createTasks(d: TaskDeps) {
       ...(['mine', 'all'] as const).map((view) =>
         h('button', { type: 'button', class: 'btn btn--ghost inbox__filter', 'data-view': view, 'aria-pressed': ui.view === view ? 'true' : 'false', onclick: () => ((ui.view = view), void renderTasks()) }, t.tasks.views[view])
       ),
-      pick(t.tasks.filters.owner, ui.owner, people.map((p) => [p.id, p.email]), (v) => (ui.owner = v)),
+      pick(t.tasks.filters.owner, ui.owner, people.map((p) => [p.id, p.name]), (v) => (ui.owner = v)),
       pick(t.tasks.filters.project, ui.project, TASK_PROJECTS.map((p) => [p, t.tasks.projects[p]]), (v) => (ui.project = v)),
       pick(t.tasks.filters.state, ui.state, TASK_STATES.map((s) => [s, t.tasks.states[s]]), (v) => (ui.state = v)),
       h('label', { class: 'f__row tasks__overdue-filter', for: 'tasks-filter-overdue' }, overdueBox, h('span', {}, t.tasks.filters.overdue))
@@ -415,23 +440,36 @@ export function createTasks(d: TaskDeps) {
     if (!d.showing('report')) return;
     if (!response.ok) return void body.replaceChildren(h('div', { class: 'main__hint' }, ...d.said(trouble(data, t.tasks.failed), `${response.status} ${String(data.error ?? '')}`)));
     people = (data.people ?? []) as Person[];
-    whoSelect.replaceChildren(...people.map((p) => h('option', { value: p.id, selected: p.id === person }, p.email)));
+    whoSelect.replaceChildren(
+      ...(people.some((p) => p.id === person) ? [] : [h('option', { value: person, selected: true }, t.removedPerson)]),
+      ...people.map((p) => h('option', { value: p.id, selected: p.id === person }, p.name))
+    );
 
-    const block = (key: 'submitted' | 'approved' | 'sentBack' | 'overdue', line: (task: Task) => string) => {
-      const list = (data[key] ?? []) as Task[];
-      return h(
+    const part = (key: string, lines: string[]) =>
+      h(
         'section',
         { class: 'report__part', 'data-part': key },
-        h('h2', { class: 'f__label' }, `${t.tasks.report[key]} · ${list.length}`),
-        list.length ? h('ul', {}, ...list.map((task) => h('li', {}, line(task)))) : h('p', { class: 'main__hint' }, t.tasks.report.none)
+        h('h2', { class: 'f__label' }, `${(t.tasks.report as Record<string, string>)[key]} · ${lines.length}`),
+        lines.length ? h('ul', {}, ...lines.map((line) => h('li', {}, line))) : h('p', { class: 'main__hint' }, t.tasks.report.none)
       );
-    };
-    const project = (task: Task) => t.tasks.projects[task.project] ?? task.project;
+    const project = (code: string) => t.tasks.projects[code] ?? code;
+    // Each fact on its own line: a task sent back twice is two lines, not one.
+    const facts = (key: 'submitted' | 'approved' | 'sentBack' | 'reopened', why: boolean) =>
+      ((data[key] ?? []) as Fact[]).map((fact) =>
+        [
+          fact.task ? `${fact.task.title} — ${project(fact.task.project)}` : t.tasks.report.none,
+          why && fact.reason ? t.tasks.report.reason.replace('{reason}', fact.reason) : '',
+          t.tasks.report.when.replace('{date}', d.when(fact.at)).replace('{who}', fact.by),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      );
     body.replaceChildren(
-      block('submitted', (task) => `${task.title} — ${project(task)}`),
-      block('approved', (task) => `${task.title} — ${project(task)}`),
-      block('sentBack', (task) => `${task.title} — ${t.tasks.sentBack.replace('{reason}', task.reject_reason ?? '')}`),
-      block('overdue', (task) => `${task.title} — ${t.tasks.due.replace('{date}', task.due_date ?? '')}`)
+      part('submitted', facts('submitted', false)),
+      part('approved', facts('approved', false)),
+      part('sentBack', facts('sentBack', true)),
+      part('reopened', facts('reopened', true)),
+      part('overdue', ((data.overdue ?? []) as Task[]).map((task) => `${task.title} — ${t.tasks.due.replace('{date}', task.due_date ?? '')}`))
     );
   });
 

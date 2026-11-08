@@ -40,10 +40,13 @@ if (!existsSync(join(dist, 'admin', 'index.html'))) {
 
 const ME = '0a0a0a0a-0000-4000-8000-00000000000a';
 const BOLD = '0b0b0b0b-0000-4000-8000-00000000000b';
+// As the Worker sends them: a display name, or the email where there is none.
 const people = [
-  { id: ME, email: 'anna@anir.mn' },
-  { id: BOLD, email: 'bold@anir.mn' },
+  { id: ME, name: 'Анна' },
+  { id: BOLD, name: 'bold@anir.mn' },
 ];
+// A person no longer an editor: owns a task, appears in no list of people.
+const GONE = '0c0c0c0c-0000-4000-8000-00000000000c';
 const today = ubToday();
 const task = (id, extra) => ({
   id,
@@ -68,7 +71,17 @@ const tasks = [
   task('t3', { title: 'Болдын илгээсэн ажил', owner_id: BOLD, state: 'submitted', submitted_by: BOLD, submitted_at: '2026-11-08T02:00:00Z' }), // waits on me
   task('t4', { title: 'Болдын өөр ажил', owner_id: BOLD, approver_id: BOLD }), // not mine
   task('t5', { title: 'Батлагдсан ажил', state: 'approved' }), // mine, done
+  task('t6', { title: 'Явсан хүний ажил', owner_id: GONE, approver_id: BOLD }), // its owner left
 ];
+// The Тайлан as events: one task sent back twice, then approved; another reopened.
+const at = (hour) => `${weekOf(ubToday()).start}T0${hour}:00:00.000Z`;
+const fact = (hour, by, task, reason = null) => ({ at: at(hour), by, reason, task: { id: task.id, title: task.title, project: task.project } });
+const report = {
+  submitted: [fact(1, 'Анна', tasks[1]), fact(3, 'Анна', tasks[1]), fact(5, 'Анна', tasks[1])],
+  sentBack: [fact(2, 'bold@anir.mn', tasks[1], 'Шийдлүүд дутуу'), fact(4, 'bold@anir.mn', tasks[1], 'Зураг буруу')],
+  approved: [fact(6, 'bold@anir.mn', tasks[1])],
+  reopened: [fact(7, 'Хасагдсан хэрэглэгч', tasks[4], 'Андуурч баталсан')],
+};
 const asked = [];
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.avif': 'image/avif', '.webp': 'image/webp' };
@@ -88,7 +101,9 @@ const server = createServer((req, res) => {
     }
     if (url.pathname === '/api/tasks/report') {
       const week = weekOf(url.searchParams.get('week') ?? today);
-      return json(res, 200, { ok: true, me: ME, person: ME, week: { start: week.start, end: week.end }, today, people, submitted: [], approved: [tasks[4]], sentBack: [], overdue: [tasks[0]] });
+      const thisWeek = week.start === weekOf(today).start;
+      const facts = thisWeek ? report : { submitted: [], sentBack: [], approved: [], reopened: [] };
+      return json(res, 200, { ok: true, me: ME, person: ME, week: { start: week.start, end: week.end }, today, people, ...facts, overdue: thisWeek ? [tasks[0]] : [] });
     }
     if (url.pathname === '/api/tasks' && req.method === 'GET') {
       const mine = (url.searchParams.get('view') ?? 'mine') === 'mine';
@@ -191,7 +206,7 @@ try {
     if (JSON.stringify([...titles].sort()) !== JSON.stringify([...want].sort())) throw new Error(`rows: ${titles.join(', ')}`);
     if (!asked.some((line) => line.startsWith('GET /api/tasks?view=mine'))) throw new Error('the Worker was not asked for «mine»');
     await click('[data-view="all"]');
-    const all = await until(`(() => { const rows = document.querySelectorAll('[data-list="tasks"] .task'); return rows.length === 5 && rows.length; })()`, 'all five rows');
+    const all = await until(`(() => { const rows = document.querySelectorAll('[data-list="tasks"] .task'); return rows.length === 6 && rows.length; })()`, 'all six rows');
     await click('[data-view="mine"]');
     await until(`document.querySelectorAll('[data-list="tasks"] .task').length === 3`, 'back to mine');
     return `3 rows (mine to do, and Bold's waiting on me); «Бүгд»: ${all}`;
@@ -241,12 +256,46 @@ try {
     return 'status: «Буцаах шалтгаанаа бичнэ үү.»; nothing posted; «Батлах» offered to the approver';
   });
 
+  await check('an approved task can be reopened by its approver — never without a reason', async () => {
+    await click('[data-view="all"]');
+    await until(`document.querySelector('.task[data-task="t5"]')`, 'the approved task');
+    await page.evaluate(`document.querySelector('.task[data-task="t5"]').open = true`);
+    const offered = await page.evaluate(`[...document.querySelectorAll('.task[data-task="t5"] .img__buttons [data-move]')].map((b) => b.dataset.move)`);
+    if (JSON.stringify(offered) !== '["reopen"]') throw new Error(`moves offered on an approved task: ${JSON.stringify(offered)}`);
+    await click('.task[data-task="t5"] [data-move="reopen"]');
+    const label = await until(`document.querySelector('.task[data-task="t5"] [data-reason="reopen"]:not([hidden]) .f__label')?.textContent`, 'the reason box');
+    const posts = asked.filter((line) => line.startsWith('POST')).length;
+    await click('.task[data-task="t5"] [data-move="reopen-confirm"]');
+    const said = await until(`(() => { const s = [...document.querySelectorAll('.bar__status, .strip__line')].map((el) => el.textContent).join(' '); return /Дахин нээх шалтгаанаа/.test(s) && s.trim(); })()`, 'the refusal');
+    if (asked.filter((line) => line.startsWith('POST')).length !== posts) throw new Error('it was sent anyway');
+    return `«Дахин нээх» only; box «${label}»; empty: «${said.match(/Дахин нээх шалтгаанаа[^.]*\./)?.[0]}»; nothing posted`;
+  });
+
+  await check('a person no longer an editor reads «Хасагдсан хэрэглэгч», never an id', async () => {
+    const sub = await until(`document.querySelector('.task[data-task="t6"] .row__sub')?.textContent`, "the departed owner's row");
+    if (!sub.includes('Хийх: Хасагдсан хэрэглэгч')) throw new Error(`row: ${sub}`);
+    const ids = await page.evaluate(`document.querySelector('[data-list="tasks"]').innerText.match(/[0-9a-f]{8}-[0-9a-f]{4}-/g)`);
+    if (ids) throw new Error(`an id is shown: ${ids[0]}`);
+    const named = await page.evaluate(`document.querySelector('.task[data-task="t1"] .row__sub').textContent`);
+    if (!named.includes('Хийх: Анна')) throw new Error(`a named person: ${named}`);
+    await click('[data-view="mine"]');
+    await until(`document.querySelectorAll('[data-list="tasks"] .task').length === 3`, 'back to mine');
+    return `«${sub}»; a display name: «${named.split(' · ').pop()}»; no id anywhere in the list`;
+  });
+
   await check('the Тайлан opens on this week and steps a week at a time', async () => {
     await page.evaluate(`${navButton('Тайлан')}.click()`);
     const thisWeek = weekOf(today).start;
     const first = await until(`document.querySelector('[data-week]')?.dataset.week`, 'the week');
     if (first !== thisWeek) throw new Error(`opened on ${first}, not ${thisWeek}`);
     await until(`document.querySelector('[data-part="overdue"] li')`, 'the report parts');
+    const lines = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('[data-part]')].map((p) => [p.dataset.part, [...p.querySelectorAll('li')].map((li) => li.textContent)]))`);
+    const count = Object.fromEntries(Object.entries(lines).map(([k, v]) => [k, v.length]));
+    if (JSON.stringify(count) !== JSON.stringify({ submitted: 3, approved: 1, sentBack: 2, reopened: 1, overdue: 1 })) throw new Error(`lines per part: ${JSON.stringify(count)}`);
+    if (!lines.sentBack[0].includes('Шалтгаан: Шийдлүүд дутуу') || !lines.sentBack[1].includes('Шалтгаан: Зураг буруу')) throw new Error(`send-backs: ${lines.sentBack.join(' / ')}`);
+    if (!lines.reopened[0].includes('Шалтгаан: Андуурч баталсан') || !lines.reopened[0].includes('Хасагдсан хэрэглэгч')) throw new Error(`reopened: ${lines.reopened[0]}`);
+    if (lines.submitted.some((line) => !line.endsWith('· Анна'))) throw new Error(`submitted, by name: ${lines.submitted.join(' / ')}`);
+    if (Object.values(lines).flat().some((line) => /Буцаасан шалтгаан/.test(line))) throw new Error('a reopening reads as a send-back');
     await click('[data-week-step="-7"]');
     const back = await until(`(() => { const w = document.querySelector('[data-week]')?.dataset.week; return w !== ${JSON.stringify(thisWeek)} && w; })()`, 'the week before');
     const before = new Date(Date.parse(`${thisWeek}T00:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
@@ -256,7 +305,7 @@ try {
     await click('[data-week-step="0"]');
     await until(`document.querySelector('[data-week]')?.dataset.week === ${JSON.stringify(thisWeek)}`, 'back to this week');
     const parts = await until(`[...document.querySelectorAll('[data-part]')].map((p) => p.dataset.part).join(', ')`, 'the parts of this week');
-    return `opened on ${thisWeek}; «← Өмнөх» → ${before}, asked for it; «Энэ долоо хоног» back; parts: ${parts}`;
+    return `opened on ${thisWeek}: submitted 3, sent back 2 (each its reason), approved 1, reopened 1, by name; «← Өмнөх» → ${before}, asked for it; «Энэ долоо хоног» back; parts: ${parts}`;
   });
 } finally {
   await page.close();

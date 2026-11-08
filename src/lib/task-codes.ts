@@ -14,20 +14,23 @@ export type TaskState = (typeof TASK_STATES)[number];
 export const TASK_PROJECTS = ['site', 'ezmath', 'ethos', 'olymo', 'other'] as const;
 export type TaskProject = (typeof TASK_PROJECTS)[number];
 
-export type Move = 'start' | 'submit' | 'approve' | 'sendBack';
+export type Move = 'start' | 'submit' | 'approve' | 'sendBack' | 'reopen';
 
 /**
  * What may happen to a task, from which states, and who may do it. Anyone
  * may start or submit — someone finishing a colleague's task is normal, and
  * refusing it only makes the data lie. Approving and sending back are the
  * named approver's alone; sending back needs a reason, or people stop using
- * the thing. Approved is final.
+ * the thing. An approval made by mistake is undone the same way: the
+ * approver reopens it to doing, with a reason. Every move is a row in
+ * task_events (migration 0011), so none of this rewrites history.
  */
 export const MOVES: Record<Move, { from: readonly TaskState[]; to: TaskState; approverOnly: boolean; reason: boolean }> = {
   start: { from: ['new'], to: 'doing', approverOnly: false, reason: false },
   submit: { from: ['new', 'doing'], to: 'submitted', approverOnly: false, reason: false },
   approve: { from: ['submitted'], to: 'approved', approverOnly: true, reason: false },
   sendBack: { from: ['submitted'], to: 'doing', approverOnly: true, reason: true },
+  reopen: { from: ['approved'], to: 'doing', approverOnly: true, reason: true },
 };
 
 /** What the table holds (supabase/migrations/0010). */

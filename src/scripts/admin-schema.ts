@@ -396,6 +396,16 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
     if (!needs.every((slot) => words.includes(slot))) problems.add(`the task Telegram message "${message}" needs its words, with ${needs.join(', ')}`);
   }
   if (!t.tasks.badgeMine.includes('{n}') || !t.tasks.badgeApprove.includes('{n}')) problems.add('the task badge needs its two sentences, with {n}');
+  for (const [name, rule] of Object.entries(MOVES)) {
+    if (!rule.reason) continue;
+    if (!t.tasks.reasons[name] || !t.tasks.reasonHelp[name] || !t.tasks.reasonRequired[name]) problems.add(`the task move "${name}" needs a reason's label, help and refusal`);
+  }
+  if (!t.removedPerson) problems.add('no words for a person who is no longer an editor');
+  for (const part of ['submitted', 'approved', 'sentBack', 'reopened', 'overdue']) {
+    if (!(t.tasks.report as Record<string, string>)[part]) problems.add(`no heading for the Тайлан's "${part}"`);
+  }
+  if (!['{date}', '{who}'].every((slot) => t.tasks.report.when.includes(slot))) problems.add("the Тайлан's fact line needs {date} and {who}");
+  if (!t.tasks.report.reason?.includes('{reason}')) problems.add("the Тайлан's reason line needs {reason}");
   for (const filter of ['new', 'flagged', 'read', 'replied', 'closed']) {
     if (!t.inbox.filters[filter]) problems.add(`no name for the inbox filter "${filter}"`);
   }

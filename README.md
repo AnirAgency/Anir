@@ -616,6 +616,7 @@ How it fits together (CLAUDE.md > The admin has the rules):
 | [`src/content/live.ts`](src/content/live.ts) | Lays the content over `site.ts`; a value of the wrong kind stops the build. |
 | [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
 | [`worker/tasks.ts`](worker/tasks.ts) | The task list: `/api/tasks` (list, `counts`, `report`, create, edit, `move`) — editors only, service key, every write conditional on the `updated_at` it read. |
+| [`supabase/migrations/0010_tasks.sql`](supabase/migrations/0010_tasks.sql), [`0011_task_events_and_names.sql`](supabase/migrations/0011_task_events_and_names.sql) | `tasks`; then `task_events` (every move, by trigger) and `editors.display_name`. RLS on, no policies. |
 | [`src/scripts/admin-tasks.ts`](src/scripts/admin-tasks.ts) | «Ажил» in the admin: «Даалгавар» (opens on «Минийх») and the read-only «Тайлан». |
 | [`src/lib/task-codes.ts`](src/lib/task-codes.ts) | The states, projects and moves both of them obey. |
 
@@ -632,16 +633,27 @@ sees everything.
 - **Who does what.** Anyone may start or submit a task — someone finishing a
   colleague's is normal. Only the named approver approves or sends back, and a
   send-back needs a reason. The approver defaults to whoever created the task.
+  An approval made by mistake is undone by the approver with «Дахин нээх»: back
+  to doing, with a reason, recorded like any other move.
+- **History, not a last word.** Every change of state is a row in `task_events`
+  (migration 0011), written by a trigger in the same transaction as the change —
+  who, when, from what, to what, and why for a send-back or a reopening. The
+  task row only says where it is now.
+- **People by name.** `editors.display_name`, set by the owner in the SQL editor
+  (`update public.editors set display_name = 'Анна' where email = '…';`), is
+  what Telegram, the rows and the «Тайлан» show; empty, the email. Someone no
+  longer an editor reads «Хасагдсан хэрэглэгч», never an id.
 - **«Даалгавар»** opens on «Минийх» — assigned to me and not done, or waiting on
   my approval — with «Бүгд» and filters (who, project, state, overdue) a click
   away. Its badge has two numbers: mine to do, and ✓ waiting on my approval.
   An overdue task says so on its row in words, not colour alone.
-- **«Тайлан»**: one person, one week (this one by default) — submitted,
-  approved, sent back with the reason, overdue. Read only; no charts or export.
-  It reads the table as it is, so a task sent back and later approved shows
-  its approval, not the earlier send-back.
+- **«Тайлан»**: one person, one week (this one by default) — each submission,
+  each send-back with its reason, each approval, each reopening, and what is
+  overdue now. It reads `task_events`, so a task sent back twice and then
+  approved is five lines, not one tidy approval. Read only; no charts or export.
 - **Telegram**, to a group of its own — never the enquiries group: assigned to
-  you; submitted for your approval; sent back, with the reason. Nothing else.
+  you; submitted for your approval; sent back, with the reason. Nothing else —
+  starting, approving and reopening send nothing.
   Set it up: make a second group, add the bot, send `/start@anir_enquiries_bot`
   in it, read the group's id (it is negative), and `npx wrangler secret put
   TELEGRAM_TASKS_CHAT_ID`. Unset, the messages are skipped and nothing else

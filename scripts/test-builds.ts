@@ -12,7 +12,9 @@
  *   node scripts/test-builds.ts
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { commitOf } from './commit-of.mjs';
 
 import { onBuildReport } from '../worker/builds.ts';
 
@@ -150,6 +152,49 @@ await check('the reporter stays quiet off production, and never fails', () => {
   assert.match(unreachable.stdout, /not sent/);
   assert.ok([local, preview, unset, unreachable].every((r) => r.status === 0), 'the reporter must exit 0');
   return 'local, preview, unset: skipped; unreachable: not sent — every one exits 0';
+});
+
+/*
+  A build the deploy hook starts — the admin's «Нийтлэх» — comes without
+  WORKERS_CI_COMMIT_SHA; its report must still say which commit it built,
+  or a failed publish cannot be explained later. git knows: the repo is
+  checked out on every build.
+*/
+const HEAD = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+
+await check('the commit comes from git when Workers Builds does not say', () => {
+  const given = 'a'.repeat(40);
+  assert.equal(commitOf({ WORKERS_CI_COMMIT_SHA: given }), given, 'Workers Builds\' own word first');
+  assert.equal(commitOf({}), HEAD, 'none given: git\'s HEAD');
+  assert.equal(commitOf({ WORKERS_CI_COMMIT_SHA: '' }), HEAD, 'empty: git\'s HEAD');
+  assert.equal(commitOf({ WORKERS_CI_COMMIT_SHA: 'not-a-sha' }), HEAD, 'not a commit id: git\'s HEAD');
+  assert.equal(commitOf({}, () => { throw new Error('no git'); }), null, 'no git: null, never a throw');
+  assert.equal(commitOf({}, () => 'fatal: not a git repository'), null, 'git saying no: null');
+  return `given → given; missing, empty or junk → ${HEAD.slice(0, 7)} from git; no git → null`;
+});
+
+await check('a deploy-hook build\'s report carries its commit', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  type Incoming = { on(event: string, listener: (chunk?: unknown) => void): Incoming };
+  type Outgoing = { writeHead(status: number, headers: Record<string, string>): { end(body: string): void } };
+  const server = createServer((request: Incoming, response: Outgoing) => {
+    let body = '';
+    request.on('data', (chunk) => (body += String(chunk))).on('end', () => {
+      bodies.push(JSON.parse(body));
+      response.writeHead(200, { 'Content-Type': 'application/json' }).end('{"ok":true}');
+    });
+  });
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  const { port } = server.address() as { port: number };
+  // Exactly what a hook-started production build has: no WORKERS_CI_COMMIT_SHA.
+  const environment = { PATH: process.env.PATH ?? '', WORKERS_CI: '1', WORKERS_CI_BRANCH: 'main', BUILD_REPORT_SECRET: 's', WORKERS_CI_BUILD_UUID: BUILD, BUILD_REPORT_URL: `http://127.0.0.1:${port}/api/builds` };
+  const code = await new Promise<number | null>((done) => spawn(process.execPath, ['scripts/build-report.mjs', 'start'], { env: environment, stdio: 'ignore' }).on('exit', done));
+  server.close();
+  assert.equal(code, 0);
+  assert.equal(bodies.length, 1, 'one report sent');
+  assert.equal(bodies[0].sha, HEAD, 'the commit, from git');
+  assert.equal(bodies[0].build, BUILD);
+  return `sent with sha ${String(bodies[0].sha).slice(0, 7)} — the checked-out HEAD`;
 });
 
 // -------------------------------------------------------------------- report

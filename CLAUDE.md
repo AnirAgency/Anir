@@ -91,7 +91,13 @@ place, `src/lib/placeholders.mjs`. It is **checked, not assumed**:
 build if any file in its output — page, script, style, data — names a
 placeholder file. And placeholders are downloaded all the same, by every
 preview and by any public preview copy, so they are held to a size cap
-too (below).
+too (below). **On a preview build the page budget is a limit, not an
+exemption:** real media is held to the ceilings above exactly, so a
+regression in real weight fails a branch build; placeholders are held to a
+stated allowance on top (`PLACEHOLDER_ALLOWANCE` in `scripts/limits.mjs`,
+sized to the placeholder set). Placeholders are never shrunk to fit the
+production budget — a preview passing on tiny fakes would say nothing about
+the real photographs that replace them.
 
 Two stand-ins are held to more, because they would make a **claim** rather
 than look unfinished: the stand-in testimonial, a quote nobody said; and a

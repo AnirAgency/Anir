@@ -35,7 +35,7 @@ These are not preferences. Breaking one is a bug.
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
-| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form and its health check, the admin's — publishing, and, by the owner's direction, the enquiries inbox and the Worker's alerts — for editors only, and the build's report on itself, with its own secret; and the 15-minute schedule (drain, digest, flood). |
+| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form and its health check, the admin's — publishing, and, by the owner's direction, the enquiries inbox, the Worker's alerts and the team's task list — for editors only, and the build's report on itself, with its own secret; and the 15-minute schedule (drain, digest, flood). |
 | Enquiries | **No visitor input may cause one not to be stored.** What does not match the published form is stored as sent and flagged — even a body that cannot be read — never refused; only the honeypot and the rate limit (5 per IP an hour, the only bound on the table) keep one out. Nothing about a request's *shape* discards it: the health check is known by a credential (`HEALTH_CHECK_SECRET`), never by its body. The table checks only the lengths the Worker cuts to — every field, the User-Agent header too, in characters as Postgres counts them (`src/lib/enquiry-limits.ts`). A cut is never silent: a cut form field is flagged; a cut User-Agent is only noted (`diagnostics`) — its length is no evidence about the visitor, so it never decides «Шалгах» or holds back a notification. `scripts/test-enquiry.ts` holds it with hundreds of hostile inputs, every limit tried at, past and far past, against the lengths it reads from the migrations themselves. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
@@ -412,6 +412,24 @@ site stays static.
   check, and the badge counts only those; flagged ones — almost always bots,
   now that nothing is refused — wait under «Шалгах», counted apart, so the
   badge keeps counting people.
+- **The task list** («Ажил»: «Даалгавар», «Тайлан»), by the owner's
+  direction: the four of them assign, submit and approve work inside the
+  admin (`worker/tasks.ts`, `src/scripts/admin-tasks.ts`, migration 0010).
+  `tasks` is the inbox's model: RLS on, no policies, read and written only by
+  the Worker for an editor. Every task says what done means
+  (`done_means`, required, never the title again); anyone may submit, only
+  the named approver approves or sends back, and a send-back needs a reason.
+  Its Telegram goes to a group of its own (`TELEGRAM_TASKS_CHAT_ID`), never
+  the enquiries one — three messages only: assigned, submitted for your
+  approval, sent back — and with the secret unset it is skipped, silently.
+  Deliberately not in it: attachments, comments, recurring tasks, time
+  tracking, sub-tasks, custom fields, labels, per-person permissions.
+  **The coupling is one-way.** The tasks routes are loaded only when a
+  `/api/tasks*` request arrives, behind their own try/catch, and nothing a
+  public page, layout or component imports touches them — a failure anywhere
+  in the task code answers that route with an error and nothing else
+  (`npm run test:isolation` proves it). **If the task list ever grows beyond
+  this spec, it moves to its own Worker** rather than growing here.
 - **The order to switch publishing on** (README > The admin): migrations,
   the build secret, the merge with the build command unchanged, the same
   value as a Worker secret, `DEPLOY_HOOK_URL`, `HEALTH_CHECK_SECRET` (required:

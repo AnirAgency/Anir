@@ -20,6 +20,9 @@
  * On a schedule (wrangler.jsonc > triggers) it drains enquiries that were
  * buffered in KV while Supabase would not take them, then watches: the
  * hourly digest of flagged enquiries, and a flood (./watch.ts).
+ *
+ * /api/tasks* is the team's task list (./tasks.ts), editors only, loaded only
+ * when asked for and walled off: see makeWorker.
  */
 import { drain, onHealth, onRequestPost, type Env as EnquiryEnv } from './enquiry.ts';
 import { onAlerts } from './alerts.ts';
@@ -27,7 +30,21 @@ import { watch } from './watch.ts';
 import { onPublish, onPublishStatus, type Env as PublishEnv } from './publish.ts';
 import { onEnquiries, onEnquiryStatus, onStorage } from './inbox.ts';
 import { onBuildReport, type Env as BuildsEnv } from './builds.ts';
+import { answer } from './auth.ts';
 import { indexable } from '../src/lib/site-url.mjs';
+// Types only — erased at build. The task list's code is never imported here
+// statically: see loadTasks below.
+import type { Env as TasksEnv } from './tasks.ts';
+
+/**
+ * The task list's code, loaded only when a /api/tasks* request arrives — never
+ * at start-up, never on any other route. Coupled one way (CLAUDE.md > The
+ * admin > The task list): if it fails to load or throws, that request is
+ * answered with an error and nothing else is touched. Replaceable so
+ * scripts/test-isolation.ts can make it fail on purpose.
+ */
+type TasksModule = { onTasks: (request: Request, env: TasksEnv, ctx: { waitUntil?: (p: Promise<unknown>) => void }) => Promise<Response> };
+const loadTasksModule = (): Promise<TasksModule> => import('./tasks.ts');
 
 // Written by scripts/headers.mjs on every build, from the same list that
 // becomes dist/_headers. Missing means `npm run build` has not run.
@@ -37,7 +54,8 @@ import security from './security-headers.generated.json' with { type: 'json' };
 // may run before it is set (a preview) and says so as optional.
 type Env = EnquiryEnv &
   PublishEnv &
-  BuildsEnv & {
+  BuildsEnv &
+  TasksEnv & {
     ASSETS: { fetch(request: Request): Promise<Response> };
   };
 
@@ -59,10 +77,23 @@ function withSecurityHeaders(response: Response, hostname: string): Response {
   return secured;
 }
 
-export default {
+/** The Worker, with the task list's loader passed in — the real one, or in a test, one that fails. */
+export function makeWorker(loadTasks: () => Promise<TasksModule> = loadTasksModule) {
+  return {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname, hostname } = new URL(request.url);
     const secure = (response: Response) => withSecurityHeaders(response, hostname);
+    // The task list, walled off: its own route prefix, loaded on demand, and
+    // whatever goes wrong inside it ends here, as this route's error.
+    if (pathname === '/api/tasks' || pathname.startsWith('/api/tasks/')) {
+      try {
+        const { onTasks } = await loadTasks();
+        return secure(await onTasks(request, env, { waitUntil: (promise) => ctx.waitUntil(promise) }));
+      } catch (error) {
+        console.error(`tasks: FAILED — ${(error as Error)?.message ?? error}`);
+        return secure(answer(500, { ok: false, error: 'tasks' }));
+      }
+    }
     if (pathname === '/api/enquiry' && request.method === 'POST') {
       const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
       return secure(await onRequestPost({ request, env, waitUntil }));
@@ -101,4 +132,7 @@ export default {
   async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(drain(env).then((drained) => watch(env, new Date(), fetch, drained)));
   },
-};
+  };
+}
+
+export default makeWorker();

@@ -193,6 +193,8 @@ export const admin = {
   } as Record<string, string>,
   views: {
     inbox: 'Хүсэлтүүд',
+    tasks: 'Даалгавар',
+    report: 'Тайлан',
     hero: 'Эхний дэлгэц',
     marquee: 'Гүйдэг тууз',
     showreel: 'Бүтээлийн мозайк',
@@ -239,8 +241,125 @@ export const admin = {
     notFound: 'Энэ талбарыг хуудсан дээрээс олсонгүй — харагддаггүй эсвэл одоо нуугдсан байж болно.',
     noField: 'Үүнд тохирох талбар олдсонгүй — энэ бичвэрийг хөгжүүлэгч засна.',
     inbox: 'Хүсэлтүүд хуудсан дээр харагдахгүй.',
+    tasks: 'Даалгавар, тайлан сайтын хуудсан дээр харагдахгүй — зөвхөн энд.',
   },
   productHelp: 'Энэ бүтээгдэхүүний өөрийн хуудас. Нийтэлсний дараа «Бүтээгдэхүүн» хуудсанд картаар гарна.',
+
+  /**
+   * The team's task list (worker/tasks.ts, src/scripts/admin-tasks.ts). Codes
+   * stored, these words shown — src/lib/task-codes.ts names the codes, and
+   * the admin page's build fails if one has no words here (checkAdmin).
+   */
+  tasks: {
+    group: 'Ажил',
+    help: 'Багийн ажил: хэн юуг хийх, хэзээ гэхэд, хэн батлах. Анх нээхэд — танд оноосон ажил, таны баталгааг хүлээж буй ажил. Бусад нь шүүлтүүрээр.',
+    /** The badge's two numbers, read aloud. */
+    badgeMine: 'Танд оноосон, дуусаагүй: {n}',
+    badgeApprove: 'Таны баталгааг хүлээж буй: {n}',
+    states: {
+      new: 'Шинэ',
+      doing: 'Хийж байна',
+      submitted: 'Хийсэн',
+      approved: 'Баталсан',
+    } as Record<string, string>,
+    projects: {
+      site: 'Сайт',
+      ezmath: 'Ezmath',
+      ethos: 'Ethos',
+      olymo: 'Olymo',
+      other: 'Бусад',
+    } as Record<string, string>,
+    views: {
+      mine: 'Минийх',
+      all: 'Бүгд',
+    } as Record<string, string>,
+    filters: {
+      owner: 'Хэн хийх',
+      project: 'Төсөл',
+      state: 'Төлөв',
+      overdue: 'Зөвхөн хугацаа хэтэрсэн',
+      any: 'Бүгд',
+    },
+    /** A task's fields, and the line of help under each. */
+    fields: {
+      title: 'Гарчиг',
+      done_means: 'Дууссан гэдэг нь',
+      project: 'Төсөл',
+      owner_id: 'Хэн хийх',
+      approver_id: 'Хэн батлах',
+      due_date: 'Хугацаа',
+    } as Record<string, string>,
+    fieldHelp: {
+      title: 'Юу хийх вэ — нэг мөрөөр.',
+      done_means:
+        'Юу болсон байхад дууссан гэж үзэх вэ — шалгаж болохуйц зүйл. Гарчгаа давтахгүй: «Ezmath-ын бодлогуудыг дуусгах» биш, «7-р ангийн 40 бодлого шийдлийн хамт Ezmath-д орсон». Батлах хүн үүгээр шалгана.',
+      project: 'Аль ажилд хамаарах вэ.',
+      owner_id: 'Ажлыг хийх хүн.',
+      approver_id: 'Хийсэн гэж илгээхэд батлах эсвэл буцаах хүн. Анх — даалгаврыг үүсгэсэн хүн.',
+      due_date: 'Заавал биш. Өнгөрвөл жагсаалтад «Хугацаа хэтэрсэн» гэж гарна.',
+    } as Record<string, string>,
+    /** Length guidance under a field, never a limit. */
+    guide: '{n} / {max} тэмдэгт — үүнээс урт бол уншихад хэцүү болно.',
+    new: 'Шинэ даалгавар',
+    edit: 'Засах',
+    save: 'Хадгалах',
+    cancel: 'Болих',
+    saved: 'Хадгаллаа.',
+    moves: {
+      start: 'Эхлүүлэх',
+      submit: 'Хийсэн гэж илгээх',
+      approve: 'Батлах',
+      sendBack: 'Буцаах',
+    } as Record<string, string>,
+    reason: 'Буцаах шалтгаан',
+    reasonHelp: 'Юу дутуу байгааг бичнэ — шалтгаангүй буцаахгүй.',
+    /** The overdue marker: a word and a sign, never colour alone. */
+    overdue: '⚠ Хугацаа хэтэрсэн',
+    due: 'Хугацаа: {date}',
+    owner: 'Хийх: {who}',
+    approver: 'Батлах: {who}',
+    sentBack: 'Буцаасан шалтгаан: {reason}',
+    empty: 'Энд одоогоор ажил алга.',
+    emptyMine: 'Танд оноосон, таны баталгааг хүлээж буй ажил алга.',
+    loading: 'Ачаалж байна…',
+    failed: 'Даалгавруудыг ачаалж чадсангүй. Нэг минутын дараа дахин оролдоно уу.',
+    /** Why a write was refused, by the Worker's code. «conflict» is the shared sentence (conflict, above). */
+    errors: {
+      title: 'Гарчиг хоосон эсвэл хэт урт байна.',
+      'done-means': '«Дууссан гэдэг нь» хоосон эсвэл хэт урт байна.',
+      'done-means-repeats-title': '«Дууссан гэдэг нь» гарчгийг давтаж болохгүй — юу болсон байхад дууссан гэж үзэхийг бичнэ үү.',
+      project: 'Төслөө сонгоно уу.',
+      owner: 'Хийх хүнээ сонгоно уу.',
+      approver: 'Батлах хүнээ сонгоно уу.',
+      due: 'Хугацааны огноо буруу байна.',
+      'reason-required': 'Буцаах шалтгаанаа бичнэ үү.',
+      'not-approver': 'Зөвхөн нэрлэгдсэн батлах хүн батлах эсвэл буцааж чадна.',
+      'bad-transition': 'Энэ даалгаврын төлөв өөрчлөгдсөн байна. Жагсаалтыг шинэчиллээ.',
+      approved: 'Батлагдсан даалгаврыг засахгүй.',
+    } as Record<string, string>,
+    /** The Тайлан: one person, one week. Read only. */
+    report: {
+      title: 'Тайлан',
+      help: 'Нэг хүний нэг долоо хоног: юу илгээсэн, юу батлагдсан, юу буцаагдсан (шалтгаантай нь), юу хугацаа хэтэрсэн. Зөвхөн харах — хэрэгтэй бол сонгоод хуулна.',
+      week: 'Долоо хоног',
+      person: 'Хүн',
+      prev: '← Өмнөх',
+      next: 'Дараах →',
+      thisWeek: 'Энэ долоо хоног',
+      range: '{start} — {end}',
+      submitted: 'Илгээсэн',
+      approved: 'Батлагдсан',
+      sentBack: 'Буцаагдсан',
+      overdue: 'Хугацаа хэтэрсэн',
+      none: 'Алга.',
+    },
+    /** The three Telegram messages to the tasks group — nothing else is sent. */
+    notify: {
+      assigned: '{who}: танд шинэ даалгавар — «{title}». Дууссан гэдэг нь: {done}',
+      submitted: '{who}: «{title}» хийгдсэн гэж {by} илгээлээ — таны баталгааг хүлээж байна.',
+      sentBack: '{who}: «{title}» буцаагдлаа. Шалтгаан: {reason}',
+    },
+  },
 
   /** The enquiries inbox (worker/inbox.ts). Opening one never marks it read: that is a click. */
   inbox: {

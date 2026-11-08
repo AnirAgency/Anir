@@ -70,11 +70,15 @@ interface Standing {
 }
 interface Repayment {
   id: string;
+  created_at: string;
   contribution_id: string;
   paid_on: string;
+  /** Negative on a reversal. */
   principal_mnt: number;
   interest_mnt: number;
   note: string | null;
+  reverses?: string | null;
+  reason?: string | null;
   who: string;
 }
 interface Change {
@@ -84,6 +88,15 @@ interface Change {
   field: Tracked;
   from_value: string;
   to_value: string;
+  notified_at?: string | null;
+}
+/** What setting the agreement's date would mean (worker/contributions.ts > consequences). */
+interface Consequences {
+  date: string;
+  year: number;
+  future: boolean;
+  before: { count: number; total: number };
+  from: { count: number; total: number; late: number };
 }
 
 export interface ContributionDeps {
@@ -112,7 +125,7 @@ type Values = Record<Field, string>;
 
 export function createContributions(d: ContributionDeps) {
   const { h, t } = d;
-  const ui = { member: '', open: new Set<string>(), editing: null as string | null, repaying: null as string | null };
+  const ui = { member: '', open: new Set<string>(), editing: null as string | null, repaying: null as string | null, reversing: null as string | null, settingAgreement: false };
   let items: Entry[] = [];
   let members: Member[] = [];
   let people: Person[] = [];
@@ -364,6 +377,121 @@ export function createContributions(d: ContributionDeps) {
     );
   }
 
+  /* ------------------------------------------------------------ reversal */
+
+  /** A wrong repayment, reversed by a row of its own with a reason — the original stays, and is marked. */
+  const reverse = guarded(async (e: Entry, r: Repayment, reason: string) => {
+    if (!reason.trim()) return d.status(c.errors['reversal-reason'], 'bad');
+    d.status(c.loading, 'busy');
+    const { response, body } = await post(`/api/contributions/${e.id}/repayments/${r.id}/reverse`, { reason: reason.trim() });
+    if (!response.ok) return void d.status(trouble(body), 'bad');
+    ui.reversing = null;
+    d.status(c.saved, 'ok');
+    await render();
+  });
+
+  function repaymentLine(e: Entry, r: Repayment, all: Repayment[]): HTMLElement {
+    if (r.reverses) {
+      return h(
+        'li',
+        { 'data-reversal': r.reverses },
+        c.reversal.line
+          .replace('{date}', d.when(r.created_at))
+          .replace('{principal}', formatMnt(-r.principal_mnt))
+          .replace('{interest}', formatMnt(-r.interest_mnt))
+          .replace('{reason}', r.reason ?? '')
+          .replace('{who}', r.who)
+      );
+    }
+    const reversed = all.some((other) => other.reverses === r.id);
+    const id = `contribution-${e.id}-reverse-${r.id}`;
+    const reason = h('textarea', { id, rows: 2, 'aria-describedby': `${id}-help` });
+    return h(
+      'li',
+      { 'data-repayment': r.id, 'data-reversed': reversed ? 'true' : undefined },
+      c.repay.line.replace('{date}', r.paid_on).replace('{principal}', formatMnt(r.principal_mnt)).replace('{interest}', formatMnt(r.interest_mnt)).replace('{who}', r.who),
+      r.note ? ` · ${r.note}` : '',
+      reversed ? h('span', { class: 'task__overdue', 'data-marker': 'reversed' }, c.reversal.reversed) : null,
+      reversed
+        ? null
+        : h('button', { type: 'button', class: 'btn btn--ghost', 'data-reverse-open': r.id, onclick: () => ((ui.reversing = ui.reversing === r.id ? null : r.id), void render()) }, c.reversal.action),
+      !reversed && ui.reversing === r.id
+        ? h(
+            'div',
+            { class: 'f task__reason', 'data-reverse': r.id },
+            h('label', { class: 'f__label', for: id }, c.reversal.label),
+            reason,
+            h('p', { class: 'f__help', id: `${id}-help` }, c.reversal.help),
+            h('button', { type: 'button', class: 'btn btn--primary', 'data-reverse-confirm': r.id, onclick: () => void reverse(e, r, reason.value) }, c.reversal.confirm)
+          )
+        : null
+    );
+  }
+
+  /* ----------------------------------------------------------- agreement */
+
+  /**
+   * Setting the agreement's date: once, and only after seeing what it will
+   * mean. The confirmation is offered only for the date previewed — change
+   * the date and it goes — and carries the counts it was shown, so the
+   * Worker refuses it if they have changed since.
+   */
+  function agreementBox(): HTMLElement {
+    const id = 'contribution-agreement-date';
+    const input = h('input', { type: 'date', id, 'aria-describedby': `${id}-help` });
+    const shown = h('div', { class: 'ledger__preview', 'data-agreement-preview': '', role: 'status', 'aria-live': 'polite' });
+    let previewed: Consequences | null = null;
+    const confirm = h('button', { type: 'button', class: 'btn btn--primary', 'data-agreement-confirm': '', disabled: true }, c.agreement.confirm);
+    const show = (p: Consequences) => {
+      previewed = p;
+      shown.replaceChildren(
+        ...[
+          h('p', { 'data-agreement-year': String(p.year) }, c.agreement.year.replace('{year}', String(p.year)).replace('{date}', p.date)),
+          p.future ? h('p', { class: 'task__sent-back' }, c.agreement.future) : null,
+          h('p', { 'data-agreement-before': String(p.before.count) }, c.agreement.before.replace('{count}', String(p.before.count)).replace('{total}', formatMnt(p.before.total))),
+          h('p', { 'data-agreement-after': String(p.from.count), 'data-agreement-late': String(p.from.late) }, c.agreement.after.replace('{count}', String(p.from.count)).replace('{total}', formatMnt(p.from.total)).replace('{late}', String(p.from.late))),
+          h('p', { class: 'task__sent-back' }, c.agreement.final),
+        ].filter((line): line is HTMLParagraphElement => line !== null)
+      );
+      confirm.disabled = false;
+    };
+    // A different date is a different consequence: the preview, and the confirmation with it, go.
+    input.addEventListener('input', () => ((previewed = null), shown.replaceChildren(), (confirm.disabled = true)));
+    const preview = guarded(async () => {
+      if (!isDate(input.value)) return d.status(c.errors['agreement-date'], 'bad');
+      const { response, body } = await d.worker(`/api/contributions/agreement?date=${input.value}`);
+      if (!response.ok) return void d.status(trouble(body), 'bad');
+      d.status('');
+      show(body.preview as Consequences);
+    });
+    confirm.addEventListener('click', () =>
+      void guarded(async () => {
+        if (!previewed || previewed.date !== input.value) return d.status(c.agreement.previewFirst, 'bad');
+        d.status(c.loading, 'busy');
+        const { response, body } = await post('/api/contributions/agreement', { in_force_from: previewed.date, seen: { before: previewed.before.count, from: previewed.from.count, late: previewed.from.late } });
+        if (!response.ok) {
+          d.status(trouble(body), 'bad');
+          if (body.preview) show(body.preview as Consequences);
+          if (body.error === 'agreement-set') await render();
+          return;
+        }
+        ui.settingAgreement = false;
+        d.status(c.agreement.set, 'ok');
+        await render();
+      })()
+    );
+    return h(
+      'div',
+      { class: 'f task__reason', 'data-agreement-form': '' },
+      h('label', { class: 'f__label', for: id }, c.agreement.label),
+      input,
+      h('p', { class: 'f__help', id: `${id}-help` }, c.agreement.help),
+      h('div', { class: 'img__buttons' }, h('button', { type: 'button', class: 'btn btn--ghost', 'data-agreement-preview-button': '', onclick: () => void preview() }, c.agreement.preview)),
+      shown,
+      h('div', { class: 'img__buttons' }, confirm, h('button', { type: 'button', class: 'btn btn--ghost', onclick: () => ((ui.settingAgreement = false), d.status(''), void render()) }, c.agreement.cancel))
+    );
+  }
+
   /* ----------------------------------------------------------------- list */
 
   const shownValue = (field: Tracked, value: string) =>
@@ -403,22 +531,11 @@ export function createContributions(d: ContributionDeps) {
               h('p', { class: 'main__hint' }, c.recorded.replace('{date}', d.when(e.recorded_at)).replace('{who}', editorName(e.created_by))),
               e.notified_at ? h('p', { class: 'main__hint' }, c.notified.replace('{date}', d.when(e.notified_at))) : h('p', { class: 'task__sent-back', 'data-not-notified': '' }, c.notNotified),
               e.kind === 'loan' ? h('p', { class: 'f__label' }, c.repay.title) : null,
-              e.kind === 'loan'
-                ? paid.length
-                  ? h(
-                      'ul',
-                      { class: 'ledger__history', 'data-repayments': e.id },
-                      ...paid.map((r) =>
-                        h(
-                          'li',
-                          {},
-                          c.repay.line.replace('{date}', r.paid_on).replace('{principal}', formatMnt(r.principal_mnt)).replace('{interest}', formatMnt(r.interest_mnt)).replace('{who}', r.who),
-                          r.note ? ` · ${r.note}` : ''
-                        )
-                      )
-                    )
-                  : h('p', { class: 'main__hint' }, c.repay.none)
-                : null,
+              paid.length
+                ? h('ul', { class: 'ledger__history', 'data-repayments': e.id }, ...paid.map((r) => repaymentLine(e, r, paid)))
+                : e.kind === 'loan'
+                  ? h('p', { class: 'main__hint' }, c.repay.none)
+                  : null,
               h('p', { class: 'f__label' }, c.history.title),
               mine.length
                 ? h(
@@ -433,7 +550,9 @@ export function createContributions(d: ContributionDeps) {
                           .replace('{who}', ch.who)
                           .replace('{field}', c.fields[ch.field] ?? ch.field)
                           .replace('{from}', shownValue(ch.field, ch.from_value))
-                          .replace('{to}', shownValue(ch.field, ch.to_value))
+                          .replace('{to}', shownValue(ch.field, ch.to_value)),
+                        // A change of kind is told to the Member: whether it was, beside it.
+                        ch.field === 'kind' ? h('span', { 'data-told': ch.notified_at ? 'true' : 'false' }, ` · ${ch.notified_at ? c.history.told : c.history.notTold}`) : null
                       )
                     )
                   )
@@ -514,7 +633,13 @@ export function createContributions(d: ContributionDeps) {
 
     // Whether 5.1's clock runs at all — said first, because it decides what «late» can mean.
     const agreement = h('p', { class: 'main__hint', 'data-agreement': inForceFrom ?? '' }, inForceFrom ? c.agreement.from.replace('{date}', inForceFrom) : c.agreement.none);
-    head.replaceChildren(agreement, strip());
+    // Unset, it can be set here — once, after its preview.
+    const setting = inForceFrom
+      ? null
+      : ui.settingAgreement
+        ? agreementBox()
+        : h('div', { class: 'img__buttons' }, h('button', { type: 'button', class: 'btn btn--ghost', 'data-agreement-open': '', onclick: () => ((ui.settingAgreement = true), void render()) }, c.agreement.open));
+    head.replaceChildren(agreement, ...(setting ? [setting] : []), strip());
     const who = h('select', { id: 'contributions-filter-member', 'aria-label': c.filters.member }, h('option', { value: '' }, `${c.filters.member}: ${c.filters.any}`), ...summary.map((m) => h('option', { value: m.member_id, selected: m.member_id === ui.member }, `${c.filters.member}: ${m.name}`)));
     who.addEventListener('change', () => ((ui.member = who.value), void render()));
     bar.replaceChildren(who);

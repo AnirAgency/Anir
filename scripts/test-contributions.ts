@@ -43,19 +43,22 @@ const BATUKA = '1a1a1a1a-0000-4000-8000-000000000001';
 const BATENKH = '1a1a1a1a-0000-4000-8000-000000000002';
 const BAYSAA = '1a1a1a1a-0000-4000-8000-000000000003';
 const DEEGII = '1a1a1a1a-0000-4000-8000-000000000004';
+// Baysaa has started the bot: her notices come privately. The others' go to the group.
 const members = [
-  { id: BATUKA, name: 'Batuka', editor_id: A, ord: 1 },
-  { id: BATENKH, name: 'Batenkh', editor_id: null, ord: 2 },
-  { id: BAYSAA, name: 'Baysaa', editor_id: C, ord: 3 },
-  { id: DEEGII, name: 'Deegii', editor_id: null, ord: 4 },
+  { id: BATUKA, name: 'Batuka', editor_id: A, ord: 1, telegram_chat_id: null },
+  { id: BATENKH, name: 'Batenkh', editor_id: null, ord: 2, telegram_chat_id: null },
+  { id: BAYSAA, name: 'Baysaa', editor_id: C, ord: 3, telegram_chat_id: '777' },
+  { id: DEEGII, name: 'Deegii', editor_id: null, ord: 4, telegram_chat_id: null },
 ];
 
 let rows: Contribution[] = [];
 let repayments: Repayment[] = [];
-let events: { id: number; contribution_id: string; at: string; by: string; field: string; from_value: string; to_value: string }[] = [];
+let events: { id: number; contribution_id: string; at: string; by: string; field: string; from_value: string; to_value: string; notified_at?: string | null }[] = [];
 let inForceFrom: string | null = null;
 let telegram: { chat: string; text: string }[] = [];
 let telegramDown = false;
+/** Chats that refuse — a Member who blocked the bot. */
+const refusing = new Set<string>();
 let tick = 0;
 const stamp = () => new Date(Date.UTC(2026, 10, 9, 2, 0, 0) + ++tick * 1000).toISOString();
 const pg = (code: string, message: string) => Response.json({ code, message }, { status: 400 });
@@ -84,8 +87,8 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const headers = (init?.headers ?? {}) as Record<string, string>;
   const method = init?.method ?? 'GET';
   if (url.hostname === 'api.telegram.org') {
-    if (telegramDown) return new Response('{}', { status: 500 });
     const body = JSON.parse(String(init?.body));
+    if (telegramDown || refusing.has(String(body.chat_id))) return new Response('{}', { status: telegramDown ? 500 : 403 });
     telegram.push({ chat: String(body.chat_id), text: body.text });
     return Response.json({ ok: true });
   }
@@ -103,17 +106,43 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   assert.equal(headers.Authorization, 'Bearer service-key', `${url.pathname} is reached with the service key only`);
   if (url.pathname === '/rest/v1/members') return Response.json(members);
-  if (url.pathname === '/rest/v1/agreement') return Response.json([{ in_force_from: inForceFrom }]);
-  if (url.pathname === '/rest/v1/contribution_events') return Response.json(events);
+  if (url.pathname === '/rest/v1/agreement') {
+    if (method === 'GET') return Response.json([{ in_force_from: inForceFrom }]);
+    // PATCH ?id=eq.true&in_force_from=is.null — and the trigger (0013) refuses a second value.
+    assert.equal(url.searchParams.get('in_force_from'), 'is.null', 'the date is only ever set where none is');
+    if (inForceFrom !== null) return Response.json([]);
+    inForceFrom = JSON.parse(String(init?.body)).in_force_from;
+    return Response.json([{ id: true, in_force_from: inForceFrom }]);
+  }
+  if (url.pathname === '/rest/v1/contribution_events') {
+    const found = events.filter(where(url.searchParams));
+    if (method === 'PATCH') return (Object.assign(found[0] ?? {}, JSON.parse(String(init?.body))), Response.json(found));
+    if (url.searchParams.get('order') === 'id.desc') found.sort((a, b) => b.id - a.id);
+    return Response.json(url.searchParams.get('limit') === '1' ? found.slice(0, 1) : found);
+  }
   if (url.pathname === '/rest/v1/contribution_repayments') {
     if (method === 'GET') return Response.json(repayments.filter(where(url.searchParams)));
     if (method !== 'POST') return pg('P0001', 'contribution_repayments are appended, never changed or removed');
     const sent = JSON.parse(String(init?.body)) as Omit<Repayment, 'id' | 'created_at'>;
-    // The trigger (0013): a loan only, never before it was lent, never past its principal.
     const lent = rows.find((r) => r.id === sent.contribution_id);
     if (!lent) return pg('23503', 'violates foreign key');
-    for (const key of ['principal_mnt', 'interest_mnt'] as const) if (!Number.isInteger(sent[key]) || sent[key] < 0) return pg('23514', `${key} is not whole tugrik`);
-    if (sent.principal_mnt === 0 && sent.interest_mnt === 0) return pg('23514', 'contribution_repayments_pays_something');
+    for (const key of ['principal_mnt', 'interest_mnt'] as const) if (!Number.isInteger(sent[key])) return pg('23514', `${key} is not whole tugrik`);
+    // A reversal (0014): the negation of one repayment of this entry, on its day, with a reason; once.
+    if (sent.reverses) {
+      const original = repayments.find((r) => r.id === sent.reverses);
+      if (!sent.reason?.trim()) return pg('23514', 'contribution_repayments_payment_or_reversal');
+      if (!original || original.contribution_id !== sent.contribution_id) return pg('P0001', 'a reversal reverses a repayment of the same contribution');
+      if (original.reverses) return pg('P0001', 'a reversal is never itself reversed');
+      if (repayments.some((r) => r.reverses === original.id)) return pg('23505', 'contribution_repayments_reversed_once');
+      if (sent.principal_mnt !== -original.principal_mnt || sent.interest_mnt !== -original.interest_mnt || sent.paid_on !== original.paid_on) return pg('P0001', 'a reversal undoes the whole repayment');
+      const made: Repayment = { id: crypto.randomUUID(), created_at: stamp(), ...sent, note: sent.note ?? null };
+      repayments.push(made);
+      return Response.json([made], { status: 201 });
+    }
+    // A payment (0013): whole, not negative, pays something, a loan only, never before it was lent, never past its principal.
+    if (sent.reason) return pg('23514', 'contribution_repayments_payment_or_reversal');
+    for (const key of ['principal_mnt', 'interest_mnt'] as const) if (sent[key] < 0) return pg('23514', `${key} below zero`);
+    if (sent.principal_mnt === 0 && sent.interest_mnt === 0) return pg('23514', 'contribution_repayments_payment_or_reversal');
     if (lent.kind !== 'loan') return pg('P0001', 'a gift is never repaid');
     if (sent.paid_on < lent.date_made) return pg('P0001', 'a repayment cannot be paid before the money was lent');
     const repaid = repayments.filter((r) => r.contribution_id === lent.id).reduce((s, r) => s + r.principal_mnt, 0);
@@ -145,9 +174,12 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
         // loan and never falls below what was repaid; tracked fields leave an event.
         if (next.recorded_at !== r.recorded_at) return pg('P0001', 'contributions.recorded_at never changes');
         if (next.created_by !== r.created_by) return pg('P0001', 'contributions.created_by never changes');
+        // Net of reversals (0014).
         const repaid = repayments.filter((p) => p.contribution_id === r.id);
-        if (next.kind !== 'loan' && repaid.length) return pg('P0001', 'a contribution with repayments stays a loan');
-        if (next.amount_mnt < repaid.reduce((s, p) => s + p.principal_mnt, 0)) return pg('P0001', 'the amount cannot fall below the principal already repaid');
+        const principal = repaid.reduce((s, p) => s + p.principal_mnt, 0);
+        const uplift = repaid.reduce((s, p) => s + p.interest_mnt, 0);
+        if (next.kind !== 'loan' && (principal !== 0 || uplift !== 0)) return pg('P0001', 'a contribution with repayments standing stays a loan');
+        if (next.amount_mnt < principal) return pg('P0001', 'the amount cannot fall below the principal already repaid');
         const wrong = violates(next);
         if (wrong) return pg('23514', `violates check constraint ${wrong}`);
         for (const field of ['member_id', 'date_made', 'amount_mnt', 'kind'] as const) {
@@ -195,7 +227,7 @@ const make = async (extra: Record<string, unknown> = {}, token = 'tok-anna') => 
 const repay = (id: string, principal: unknown, interest: unknown = 0, extra: Record<string, unknown> = {}) =>
   call('tok-anna', 'POST', `/api/contributions/${id}/repay`, { paid_on: ubToday(), principal_mnt: principal, interest_mnt: interest, ...extra });
 const list = async (query = '') => (await call('tok-bold', 'GET', `/api/contributions${query}`)).body;
-const reset = () => ((rows = []), (repayments = []), (events = []), (telegram = []), (telegramDown = false), (inForceFrom = null));
+const reset = () => ((rows = []), (repayments = []), (events = []), (telegram = []), (telegramDown = false), (inForceFrom = null), refusing.clear());
 
 const results: Array<[string, string, string]> = [];
 const quiet = { log: console.log, error: console.error };
@@ -222,6 +254,9 @@ await check('strangers get 401 on every route, and learn nothing', async () => {
     ['POST', '/api/contributions', entry()],
     ['POST', `/api/contributions/${id}`, { amount_mnt: 1 }],
     ['POST', `/api/contributions/${id}/repay`, { principal_mnt: 1, paid_on: ubToday() }],
+    ['POST', `/api/contributions/${id}/repayments/${id}/reverse`, { reason: 'x' }],
+    ['GET', `/api/contributions/agreement?date=${ubToday()}`],
+    ['POST', '/api/contributions/agreement', { in_force_from: ubToday(), seen: { before: 0, from: 1, late: 0 } }],
   ];
   for (const [method, path, body] of routes) {
     for (const token of [null, 'forged']) {
@@ -231,12 +266,18 @@ await check('strangers get 401 on every route, and learn nothing', async () => {
     }
     assert.equal((await call('tok-visitor', method, path, body)).status, 403, 'signed in, not an editor');
   }
-  assert.deepEqual([rows.length, rows[0].amount_mnt, repayments.length, telegram.length], [1, 1_500_000, 0, 0], 'nothing written or sent');
+  assert.deepEqual([rows.length, rows[0].amount_mnt, repayments.length, telegram.length, inForceFrom], [1, 1_500_000, 0, 0, null], 'nothing written, set or sent');
   return `${routes.length} routes × no token, forged: 401 signed-out; a non-editor: 403; nothing written or sent`;
 });
 
 await check('the migrations grant anon and authenticated nothing, and hold money as bigint', async () => {
-  const sql = ['0012_contributions.sql', '0013_members_agreement_repayments.sql'].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8').replace(/--.*$/gm, '')).join('\n');
+  const sql = ['0012_contributions.sql', '0013_members_agreement_repayments.sql', '0014_reversals_and_notices.sql'].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8').replace(/--.*$/gm, '')).join('\n');
+  // 0014: a reversal names its repayment, once, with a reason; a Member's chat; a notice's arrival.
+  assert.match(sql, /add column if not exists reverses uuid references public\.contribution_repayments \(id\)/);
+  assert.match(sql, /create unique index if not exists contribution_repayments_reversed_once\s+on public\.contribution_repayments \(reverses\) where reverses is not null/);
+  assert.match(sql, /reverses is not null and principal_mnt <= 0 and interest_mnt <= 0 and char_length\(btrim\(reason\)\) between 1 and 1000/, 'a reversal needs a reason');
+  assert.match(sql, /add column if not exists telegram_chat_id text/);
+  assert.match(sql, /contribution_events\s+add column if not exists notified_at timestamptz/);
   for (const table of ['contributions', 'contribution_events', 'members', 'agreement', 'contribution_repayments']) {
     assert.match(sql, new RegExp(`alter table public\\.${table} enable row level security`), `${table}: RLS on`);
     assert.match(sql, new RegExp(`revoke all on public\\.${table} from anon, authenticated`), `${table}: grants revoked`);
@@ -479,6 +520,105 @@ await check('the list is newest money first; the member filter narrows the list,
   assert.deepEqual((batuka.items as { what_for: string }[]).map((x) => x.what_for), ['Дунд', 'Хуучин']);
   assert.equal((batuka.summary as unknown[]).length, 4, 'the strip still shows all four');
   return 'by date made, newest first; ?member= narrows the rows; the strip keeps Batuka, Batenkh, Baysaa, Deegii';
+});
+
+await check('the agreement date is previewed before it is set: what falls before it, what gets the clock, what is late at once', async () => {
+  await make({ date_made: daysAgo(90), amount_mnt: 900_000 });
+  await make({ date_made: daysAgo(40), amount_mnt: 400_000 });
+  await make({ date_made: daysAgo(10), amount_mnt: 100_000 });
+  const preview = async (date: string) => (await call('tok-anna', 'GET', `/api/contributions/agreement?date=${date}`)).body;
+  for (const bad of ['', '2026-13-01', '26-12-01']) assert.equal((await preview(bad)).error, 'agreement-date', `date ${JSON.stringify(bad)}`);
+  const p = (await preview(daysAgo(50))).preview as { date: string; year: number; future: boolean; before: { count: number; total: number }; from: { count: number; total: number; late: number } };
+  assert.deepEqual([p.before.count, p.before.total, p.from.count, p.from.total, p.from.late], [1, 900_000, 2, 500_000, 1], 'before: 90 days; from: 40 (late at once) and 10');
+  assert.deepEqual([p.year, p.future], [Number(daysAgo(50).slice(0, 4)), false]);
+  // A typo in the year shows: everything before it, nothing with a clock — and in the future.
+  const typo = (await preview(`${Number(ubToday().slice(0, 4)) + 10}${ubToday().slice(4)}`)).preview as typeof p;
+  assert.deepEqual([typo.before.count, typo.from.count, typo.future], [3, 0, true]);
+  assert.equal(inForceFrom, null, 'a preview sets nothing');
+
+  const set = (body: unknown) => call('tok-anna', 'POST', '/api/contributions/agreement', body);
+  const unseen = await set({ in_force_from: daysAgo(50) });
+  assert.deepEqual([unseen.status, unseen.body.error], [409, 'agreement-preview-first']);
+  assert.ok(unseen.body.preview, 'and the preview comes with the refusal');
+  const seen = { before: p.before.count, from: p.from.count, late: p.from.late };
+  await make({ date_made: daysAgo(45), amount_mnt: 45_000 });
+  const stale = await set({ in_force_from: daysAgo(50), seen });
+  assert.deepEqual([stale.status, stale.body.error, (stale.body.preview as typeof p).from.count], [409, 'agreement-preview-stale', 3], 'an entry came since the preview: shown afresh');
+  assert.equal(inForceFrom, null);
+  const fresh = (stale.body.preview as typeof p);
+  const ok = await set({ in_force_from: daysAgo(50), seen: { before: fresh.before.count, from: fresh.from.count, late: fresh.from.late } });
+  assert.deepEqual([ok.status, inForceFrom], [200, daysAgo(50)]);
+  assert.equal(((await list()).agreement as { in_force_from: string }).in_force_from, daysAgo(50));
+  const again = await set({ in_force_from: daysAgo(10), seen: { before: 0, from: 0, late: 0 } });
+  assert.deepEqual([again.status, again.body.error, inForceFrom], [409, 'agreement-set', daysAgo(50)], 'set once');
+  assert.equal((await preview(daysAgo(10))).error, 'agreement-set', 'and nothing to preview after');
+  return 'before 1 (900 000₮), from 2 (500 000₮), 1 late at once; a year typo: 3 before, future; unpreviewed and stale: 409 with the preview; then set, once';
+});
+
+await check('a wrong repayment is reversed by a row of its own — with a reason, once — and the ledger nets it out', async () => {
+  const loan = await make({ amount_mnt: 1_000_000, member_id: BAYSAA, date_made: daysAgo(10) });
+  const other = await make({ amount_mnt: 500_000, date_made: daysAgo(5) });
+  const wrong = (await repay(loan.id, 300_000, 150_000, { paid_on: daysAgo(3) })).body.repayment!;
+  const reverse = (rid: string, body: unknown, id = loan.id) => call('tok-saraa', 'POST', `/api/contributions/${id}/repayments/${rid}/reverse`, body);
+  for (const reason of [undefined, '', '   ']) assert.equal((await reverse(wrong.id, { reason })).body.error, 'reversal-reason', `reason ${JSON.stringify(reason)}`);
+  assert.equal((await reverse(wrong.id, { reason: 'x' }, other.id)).status, 404, 'not through another entry');
+  assert.equal((await reverse(crypto.randomUUID(), { reason: 'x' })).status, 404);
+  const r = await reverse(wrong.id, { reason: 'Тэг илүү бичсэн: 30 000 байх ёстой' });
+  assert.equal(r.status, 201);
+  const reversal = r.body.repayment!;
+  assert.deepEqual(
+    [reversal.reverses, reversal.principal_mnt, reversal.interest_mnt, reversal.paid_on, reversal.reason, reversal.created_by],
+    [wrong.id, -300_000, -150_000, daysAgo(3), 'Тэг илүү бичсэн: 30 000 байх ёстой', C],
+    'names the original, negates it on its day, says why and who'
+  );
+  assert.deepEqual([r.body.item?.repaid_principal, r.body.item?.repaid_interest], [0, 0], 'netted out');
+  assert.equal(repayments.find((x) => x.id === wrong.id)?.principal_mnt, 300_000, 'the original is untouched');
+  assert.equal((await reverse(wrong.id, { reason: 'дахин' })).body.error, 'already-reversed');
+  assert.equal((await reverse(reversal.id, { reason: 'буцаах' })).body.error, 'reversal-of-reversal');
+  assert.equal((await repay(loan.id, 30_000, 15_000)).status, 201, 'then the right one');
+  const strip = ((await list()).summary as { member_id: string; repaid: number; interest: number }[]).find((s) => s.member_id === BAYSAA)!;
+  assert.deepEqual([strip.repaid, strip.interest], [30_000, 15_000]);
+  // Fully repaid, reversed, repaid again: the cap is on what stands.
+  assert.equal((await repay(loan.id, 970_000)).status, 201);
+  assert.equal((await repay(loan.id, 1)).body.error, 'repaid-over');
+  // Everything reversed: nothing holds it a loan any more.
+  const once = await make({ amount_mnt: 10_000 });
+  const paidOnce = (await repay(once.id, 10_000)).body.repayment!;
+  assert.equal((await call('tok-anna', 'POST', `/api/contributions/${once.id}`, { kind: 'gift', updated_at: rows.find((x) => x.id === once.id)!.updated_at })).body.error, 'gift-has-repayments');
+  await reverse(paidOnce.id, { reason: 'буруу мөр' }, once.id);
+  assert.equal((await call('tok-anna', 'POST', `/api/contributions/${once.id}`, { kind: 'gift', updated_at: rows.find((x) => x.id === once.id)!.updated_at })).status, 200);
+  return 'no reason: 400; another entry, unknown: 404; reversal −300 000 / −150 000 on its day, nets to 0, original kept; twice, or of a reversal: 409; the right one entered; a fully reversed loan may become a gift';
+});
+
+await check('a change of kind is told to the Member whose entry it is — privately when their chat is known', async () => {
+  const hers = await make({ member_id: BAYSAA, what_for: 'Сервер', amount_mnt: 200_000 });
+  const his = await make({ member_id: BATENKH, what_for: 'Домэйн', amount_mnt: 89_000 });
+  telegram = [];
+  const change = async (e: { id: string }, patch: Record<string, unknown>, token = 'tok-anna') => {
+    const r = await call(token, 'POST', `/api/contributions/${e.id}`, { ...patch, updated_at: rows.find((x) => x.id === e.id)!.updated_at });
+    assert.equal(r.status, 200, r.text);
+  };
+  await change(hers, { amount_mnt: 210_000 });
+  assert.equal(telegram.length, 0, 'an edit that keeps the kind: nothing');
+  await change(hers, { kind: 'gift' });
+  assert.deepEqual(telegram.map((m) => m.chat), ['777'], 'to her, privately — not the group');
+  assert.equal(telegram[0].text, `Хавсралт 2 · Baysaa: таны бичилтийн төрлийг Анна өөрчиллөө — «Зээл» → «Бэлэг». ${daysAgo(2)} · 210 000₮ — Сервер`);
+  await change(his, { kind: 'gift' }, 'tok-saraa');
+  assert.deepEqual(telegram.map((m) => m.chat), ['777', '-200-tasks'], 'no private chat: the group, never silence');
+  refusing.add('777');
+  await change(hers, { kind: 'loan' });
+  assert.deepEqual(telegram.map((m) => m.chat), ['777', '-200-tasks', '-200-tasks'], 'her chat refused: the group instead');
+  const kinds = events.filter((e) => e.field === 'kind');
+  assert.ok(kinds.every((e) => e.notified_at), 'each change of kind marked as told');
+  telegramDown = true;
+  await change(his, { kind: 'loan' });
+  assert.equal(events.filter((e) => e.field === 'kind').at(-1)?.notified_at ?? null, null, 'Telegram down: the edit stands, the change says it was not told');
+  telegramDown = false;
+  const quiet = await call('tok-anna', 'POST', `/api/contributions/${his.id}`, { kind: 'gift', updated_at: rows.find((x) => x.id === his.id)!.updated_at }, env({ TELEGRAM_TASKS_CHAT_ID: undefined }));
+  assert.equal(quiet.status, 200, 'no group configured: skipped, nothing thrown');
+  const shown = (await list()).events as { field: string; notified_at: string | null }[];
+  assert.deepEqual(shown.filter((e) => e.field === 'kind').map((e) => !!e.notified_at), [true, true, true, false, false], 'the list says which were told');
+  return 'kind kept: none; Baysaa → her chat 777; Batenkh → the group; her chat refusing → the group; down or unset: edit 200, marked not told';
 });
 
 /* ----------------------------------------------------------------- report */

@@ -464,8 +464,13 @@ site stays static.
     Member. A value with a decimal mark is refused, never rounded.
   - **No clause 5.1 clock before the agreement exists.** `agreement.in_force_from`,
     one row, is null until the agreement is signed, and while it is null
-    nothing is ever late. Once set — once, by the owner; the trigger refuses
-    a second value — the 30 days apply only to money made on or after it.
+    nothing is ever late. It is set once — in the admin, and only after a
+    preview of what it will mean: how many entries fall before it and can
+    never be late, how many get the clock, how many that marks late at once,
+    with the year spelled out so a typo shows. The confirmation carries those
+    numbers back and is refused if they have changed; the trigger refuses a
+    second value. From then on the 30 days apply only to money made on or
+    after it.
   - **Late is a mark, never a ruling.** `recorded_at` is the Worker's clock,
     never the request's, and never changes (the trigger refuses it). Late
     money is stored — never refused — marked on its row, and the mark is
@@ -477,12 +482,20 @@ site stays static.
     5.1's 7-day notice — and nothing on an edit or a repayment, no digests.
     `notified_at` is set only on delivery, so a notice that did not go out
     shows.
+  - **A change of kind is told to the Member whose entry it is.** Loan →
+    gift takes someone's money away, and clause 5.1 ("unless the Member
+    writes 'gift'") makes it theirs to say: one Telegram line, privately
+    when their chat with the bot is known (`members.telegram_chat_id`), in
+    the tasks group when it is not or does not arrive — never silently. The
+    change's event records whether it was told.
   - **Each repayment is its own row**, in `contribution_repayments`,
     principal and interest apart: clause 5.2(e) makes the 50% uplift the
     Member's taxable income, withheld by the Company, so a single total
     cannot support the withholding. The rate is the accountant's; this
     records the split. Appended, never changed or removed (the trigger
-    refuses): a mistake is corrected by a deliberate migration.
+    refuses). A wrong one is reversed **in the ledger** — a row of its own
+    that names it, gives a reason, and carries its amounts negated on its
+    day, once — never by a migration: corrections stay where the history is.
   - **Repayment is display-only**: per Member, principal, repaid,
     outstanding and outstanding × 1.5, labelled not yet due, with the
     uplift paid and the late principal beside them. Nothing here knows the

@@ -6,6 +6,9 @@
  *   POST /api/contributions                a new entry
  *   POST /api/contributions/<id>           edit it (with the updated_at it read)
  *   POST /api/contributions/<id>/repay     a repayment: its own row, principal and interest apart
+ *   POST /api/contributions/<id>/repayments/<rid>/reverse   a reversal of one, with its reason
+ *   GET  /api/contributions/agreement?date= what setting the agreement's date would mean
+ *   POST /api/contributions/agreement      set it — once, and only as previewed
  *
  * Every route answers editors only, and who is asking comes first: a
  * stranger gets 401 before learning anything is here (./auth.ts). The tables
@@ -31,13 +34,25 @@
  *   nothing on an edit, no digests — and notified_at is set only when
  *   Telegram says it arrived, so a notice that did not go out shows on its
  *   row. Without the secret it is skipped, and nothing else changes.
+ * - THE AGREEMENT'S DATE IS SET ONCE, AND ONLY AS PREVIEWED. Before it is
+ *   committed the editor sees what it will mean — how many entries fall
+ *   before it and so can never be late, how many get the 30-day clock, how
+ *   many that marks late at once — and the confirmation carries those
+ *   numbers back: if they no longer hold, it is refused and shown afresh.
  * - REPAYMENTS ARE ROWS. Each one is appended to contribution_repayments
  *   with its principal and its interest apart — clause 5.2(e) makes the
  *   uplift the Member's taxable income, withheld by the Company, so one
- *   total could not support the withholding. Never changed, never removed;
- *   the rate is the accountant's. Entered against the loan it repays — never
- *   allocated by code. The strip is display-only: nothing here knows the
- *   bank balance, so none of it is "due".
+ *   total could not support the withholding. Never changed, never removed:
+ *   a wrong one is reversed by a row of its own that names it, gives a
+ *   reason, and nets it out — in the ledger, not by a migration. The rate is
+ *   the accountant's. Entered against the loan it repays — never allocated
+ *   by code. The strip is display-only: nothing here knows the bank
+ *   balance, so none of it is "due".
+ * - A CHANGE OF KIND IS TOLD TO THE MEMBER. Loan → gift takes someone's
+ *   money away, and clause 5.1 makes it theirs to say: the Member whose
+ *   entry it is gets one Telegram line — privately when their chat is known,
+ *   in the tasks group otherwise — and the change's event records whether
+ *   it arrived.
  * - HISTORY. A change to member, date, amount or kind is a row in
  *   contribution_events, written by a trigger in the same transaction; every
  *   write sets edited_by, which the trigger records as who.
@@ -47,9 +62,9 @@
  * public page imports it (scripts/test-isolation.ts).
  */
 import { contributions as words } from '../src/content/admin-contributions.ts';
-import { CONTRIBUTION_LIMITS, KINDS, daysToRecord, fiveOneApplies, formatMnt, isDate, isLate, parseMnt, repaidOn, standings, ubDateOf, type Kind, type Tracked } from '../src/lib/contribution-codes.ts';
+import { CONTRIBUTION_LIMITS, KINDS, daysToRecord, fiveOneApplies, formatMnt, isDate, isLate, parseMnt, repaidOn, standings, sumMnt, ubDateOf, type Kind, type Tracked } from '../src/lib/contribution-codes.ts';
 import { answer, callerOf, refusal } from './auth.ts';
-import { fill, nameOf, people as team, tellTeam, type Person, type TeamEnv } from './team.ts';
+import { fill, nameOf, people as team, tellChat, tellTeam, type Person, type TeamEnv } from './team.ts';
 
 export type Env = TeamEnv;
 
@@ -70,27 +85,33 @@ export interface Contribution {
   notified_at: string | null;
 }
 
-/** A Member of the Company (members, migration 0013): a name, and maybe a login. */
+/** A Member of the Company (members, migrations 0013, 0014): a name, maybe a login, maybe a private chat with the bot. */
 export interface Member {
   id: string;
   name: string;
   editor_id: string | null;
   ord: number;
+  /** Never leaves the Worker: whether one is known is all the admin is told. */
+  telegram_chat_id?: string | null;
 }
 
-/** One repayment, kept as it was entered (contribution_repayments, migration 0013). */
+/** One repayment, or the reversal of one, kept as entered (contribution_repayments, migrations 0013, 0014). */
 export interface Repayment {
   id: string;
   created_at: string;
   created_by: string;
   contribution_id: string;
   paid_on: string;
+  /** Negative on a reversal: the repayment's own amounts, negated. */
   principal_mnt: number;
   interest_mnt: number;
   note: string | null;
+  /** The repayment this one reverses, and why — on a reversal only. */
+  reverses?: string | null;
+  reason?: string | null;
 }
 
-/** One change, kept (contribution_events, migration 0012). */
+/** One change, kept (contribution_events, migrations 0012, 0014). */
 export interface ContributionEvent {
   id: number;
   contribution_id: string;
@@ -99,6 +120,8 @@ export interface ContributionEvent {
   field: Tracked;
   from_value: string;
   to_value: string;
+  /** For a change of kind: when the Member's notice arrived. */
+  notified_at?: string | null;
 }
 
 interface Context {
@@ -126,11 +149,23 @@ function store(env: Env, fetcher: typeof fetch) {
   return {
     /** The editors, by name — who entered and changed things. Not who may lend: that is `members`. */
     people: (): Promise<Person[]> => team(env, fetcher),
-    members: () => get<Member[]>('members?select=id,name,editor_id,ord&order=ord,name', 'members'),
+    members: () => get<Member[]>('members?select=id,name,editor_id,ord,telegram_chat_id&order=ord,name', 'members'),
     /** The agreement's date in force, or null: unsigned, or (before 0013) no such row. */
     async inForceFrom(): Promise<string | null> {
       const rows = await get<{ in_force_from: string | null }[]>('agreement?select=in_force_from', 'agreement');
       return rows[0]?.in_force_from ?? null;
+    },
+    /** Sets the date only if none is set — the table's trigger refuses a second value too. Whether it was set. */
+    async setInForce(date: string): Promise<boolean> {
+      const response = await write('PATCH', `${rest}/agreement?id=eq.true&in_force_from=is.null`, { in_force_from: date });
+      return (await read<unknown[]>(response, 'agreement')).length === 1;
+    },
+    /** The newest change of kind on an entry: the event its notice is marked on. */
+    async lastKindEvent(id: string): Promise<ContributionEvent | null> {
+      return (await get<ContributionEvent[]>(`contribution_events?select=*&contribution_id=eq.${id}&field=eq.kind&order=id.desc&limit=1`, 'contribution_events'))[0] ?? null;
+    },
+    async eventNotified(eventId: number, at: string): Promise<void> {
+      await read<unknown>(await write('PATCH', `${rest}/contribution_events?id=eq.${eventId}`, { notified_at: at }), 'contribution_events');
     },
     /** Every entry, newest money first. A record of four people's money is small; the strip needs all of it. */
     all: () => get<Contribution[]>('contributions?select=*&order=date_made.desc,recorded_at.desc&limit=5000', 'contributions'),
@@ -222,9 +257,14 @@ export async function onContributions(request: Request, env: Env, ctx: Context =
   const db = store(env, fetcher);
   try {
     if (request.method === 'GET' && parts.length === 0) return await list(db, me, url.searchParams);
+    if (request.method === 'GET' && parts.length === 1 && parts[0] === 'agreement') return await previewAgreement(db, url.searchParams.get('date'));
+    if (request.method === 'POST' && parts.length === 1 && parts[0] === 'agreement') return await setAgreement(db, await body(request));
     if (request.method === 'POST' && parts.length === 0) return await create(db, env, me, await body(request), fetcher);
-    if (request.method === 'POST' && parts.length === 1 && UUID.test(parts[0])) return await edit(db, me, parts[0], await body(request));
+    if (request.method === 'POST' && parts.length === 1 && UUID.test(parts[0])) return await edit(db, env, me, parts[0], await body(request), fetcher);
     if (request.method === 'POST' && parts.length === 2 && UUID.test(parts[0]) && parts[1] === 'repay') return await repay(db, me, parts[0], await body(request));
+    if (request.method === 'POST' && parts.length === 4 && UUID.test(parts[0]) && parts[1] === 'repayments' && UUID.test(parts[2]) && parts[3] === 'reverse') {
+      return await reverse(db, me, parts[0], parts[2], await body(request));
+    }
     return answer(404, { ok: false, error: 'not-found' });
   } catch (error) {
     return answer(502, { ok: false, error: 'supabase', detail: String((error as Error)?.message ?? error).slice(0, 300) });
@@ -243,7 +283,8 @@ async function list(db: Store, me: string, params: URLSearchParams): Promise<Res
     me,
     today: ubDateOf(Date.now()),
     agreement: { in_force_from: inForceFrom },
-    members: members.map(({ id, name, editor_id }) => ({ id, name, editor_id })),
+    // A Member's chat id stays here; whether their notices come privately is all that is said.
+    members: members.map(({ id, name, editor_id, telegram_chat_id }) => ({ id, name, editor_id, private_notices: !!telegram_chat_id })),
     people,
     items,
     summary: standings(rows, repayments, members.map((m) => m.id), inForceFrom).map((s) => ({ ...s, name: nameOf(members, s.member_id) })),
@@ -275,7 +316,7 @@ async function create(db: Store, env: Env, me: string, input: Record<string, unk
   return answer(201, { ok: true, item: shown(item, [], inForceFrom) });
 }
 
-async function edit(db: Store, me: string, id: string, input: Record<string, unknown>): Promise<Response> {
+async function edit(db: Store, env: Env, me: string, id: string, input: Record<string, unknown>, fetcher: typeof fetch): Promise<Response> {
   const version = text(input.updated_at);
   if (!version) return answer(400, { ok: false, error: 'no-version' });
   const [current, members, inForceFrom] = await Promise.all([db.one(id), db.members(), db.inForceFrom()]);
@@ -288,13 +329,86 @@ async function edit(db: Store, me: string, id: string, input: Record<string, unk
     return answer(409, { ok: false, error: 'late-is-permanent' });
   }
   if (fields.kind !== current.kind || fields.amount_mnt !== current.amount_mnt) {
-    const repayments = await db.repayments(`&contribution_id=eq.${id}`);
-    if (fields.kind !== 'loan' && repayments.length) return answer(409, { ok: false, error: 'gift-has-repayments' });
-    if (fields.amount_mnt < repaidOn(id, repayments).principal) return answer(400, { ok: false, error: 'amount-below-repaid' });
+    // What stands after reversals: a repayment reversed in full no longer holds it a loan.
+    const standing = repaidOn(id, await db.repayments(`&contribution_id=eq.${id}`));
+    if (fields.kind !== 'loan' && (standing.principal !== 0 || standing.interest !== 0)) return answer(409, { ok: false, error: 'gift-has-repayments' });
+    if (fields.amount_mnt < standing.principal) return answer(400, { ok: false, error: 'amount-below-repaid' });
   }
   const item = await db.update(id, version, { ...fields, edited_by: me });
   if (!item) return answer(409, { ok: false, error: 'conflict' });
+  if (item.kind !== current.kind) await tellOfKind(db, env, fetcher, item, current.kind, me, members);
   return answer(200, { ok: true, item: shown(item, await db.repayments(`&contribution_id=eq.${id}`), inForceFrom) });
+}
+
+/**
+ * Loan → gift takes someone's money away; clause 5.1 makes it theirs to say.
+ * So the Member whose entry it is is told, every time the kind changes:
+ * privately when their chat with the bot is known, and in the tasks group
+ * when it is not — or when the private message does not arrive. The change's
+ * event says whether a notice did. A failure never fails the edit.
+ */
+async function tellOfKind(db: Store, env: Env, fetcher: typeof fetch, item: Contribution, was: Kind, me: string, members: Member[]): Promise<void> {
+  try {
+    const member = members.find((m) => m.id === item.member_id);
+    const message = fill(words.notifyKind, {
+      member: nameOf(members, item.member_id),
+      who: nameOf(await db.people(), me),
+      from: words.kinds[was] ?? was,
+      to: words.kinds[item.kind] ?? item.kind,
+      date: item.date_made,
+      amount: formatMnt(item.amount_mnt),
+      what_for: item.what_for,
+    });
+    const what = 'contribution kind notice';
+    const delivered = (member?.telegram_chat_id && (await tellChat(env, member.telegram_chat_id, message, fetcher, `${what} (private)`))) || (await tellTeam(env, message, fetcher, `${what} (group)`));
+    if (!delivered) return;
+    const event = await db.lastKindEvent(item.id);
+    if (event) await db.eventNotified(event.id, new Date().toISOString());
+  } catch (error) {
+    console.error(`contribution kind notice: FAILED — ${(error as Error)?.message ?? error}`);
+  }
+}
+
+/* -------------------------------------------------------------- agreement */
+
+/** What a date would mean, over every entry there is: before it, never late; from it, the 30-day clock — and how many that marks late at once. */
+function consequences(rows: Contribution[], date: string) {
+  const before = rows.filter((r) => r.date_made < date);
+  const from = rows.filter((r) => r.date_made >= date);
+  return {
+    date,
+    year: Number(date.slice(0, 4)),
+    future: date > ubDateOf(Date.now()),
+    before: { count: before.length, total: sumOf(before) },
+    from: { count: from.length, total: sumOf(from), late: from.filter((r) => isLate(r.date_made, r.recorded_at, date)).length },
+  };
+}
+const sumOf = (rows: Contribution[]) => sumMnt(rows.map((r) => r.amount_mnt));
+
+async function previewAgreement(db: Store, date: string | null): Promise<Response> {
+  if (!isDate(date)) return answer(400, { ok: false, error: 'agreement-date' });
+  const [rows, inForceFrom] = await Promise.all([db.all(), db.inForceFrom()]);
+  if (inForceFrom) return answer(409, { ok: false, error: 'agreement-set', in_force_from: inForceFrom });
+  return answer(200, { ok: true, preview: consequences(rows, date) });
+}
+
+/**
+ * Sets the date — once — and only as previewed: the request carries the
+ * counts the editor was shown, and if an entry has come or gone since, they
+ * no longer hold and the date is not set; the preview is sent afresh.
+ */
+async function setAgreement(db: Store, input: Record<string, unknown>): Promise<Response> {
+  const date = text(input.in_force_from);
+  if (!isDate(date)) return answer(400, { ok: false, error: 'agreement-date' });
+  const [rows, inForceFrom] = await Promise.all([db.all(), db.inForceFrom()]);
+  if (inForceFrom) return answer(409, { ok: false, error: 'agreement-set', in_force_from: inForceFrom });
+  const now = consequences(rows, date);
+  const seen = input.seen as { before?: unknown; from?: unknown; late?: unknown } | undefined;
+  if (!seen || seen.before !== now.before.count || seen.from !== now.from.count || seen.late !== now.from.late) {
+    return answer(409, { ok: false, error: seen ? 'agreement-preview-stale' : 'agreement-preview-first', preview: now });
+  }
+  if (!(await db.setInForce(date))) return answer(409, { ok: false, error: 'agreement-set' });
+  return answer(200, { ok: true, in_force_from: date });
 }
 
 /**
@@ -320,4 +434,31 @@ async function repay(db: Store, me: string, id: string, input: Record<string, un
 
   const repayment = await db.repay({ contribution_id: id, paid_on, principal_mnt: principal, interest_mnt: interest, note, created_by: me });
   return answer(201, { ok: true, repayment, item: shown(current, [...earlier, repayment], inForceFrom) });
+}
+
+/**
+ * A wrong repayment, reversed — in the ledger, not by a migration. A row of
+ * its own that names the one it reverses, says why, and carries its amounts
+ * negated on its day, so every sum nets it out and the original stays where
+ * it was. Once per repayment; never of a reversal (enter the right one again).
+ */
+async function reverse(db: Store, me: string, id: string, rid: string, input: Record<string, unknown>): Promise<Response> {
+  const reason = text(input.reason);
+  if (!reason || reason.length > CONTRIBUTION_LIMITS.repayment_note) return answer(400, { ok: false, error: 'reversal-reason' });
+  const [current, rows, inForceFrom] = await Promise.all([db.one(id), db.repayments(`&contribution_id=eq.${id}`), db.inForceFrom()]);
+  const original = rows.find((r) => r.id === rid);
+  if (!current || !original) return answer(404, { ok: false, error: 'not-found' });
+  if (original.reverses) return answer(409, { ok: false, error: 'reversal-of-reversal' });
+  if (rows.some((r) => r.reverses === rid)) return answer(409, { ok: false, error: 'already-reversed' });
+  const reversal = await db.repay({
+    contribution_id: id,
+    reverses: rid,
+    reason,
+    paid_on: original.paid_on,
+    principal_mnt: -original.principal_mnt,
+    interest_mnt: -original.interest_mnt,
+    note: null,
+    created_by: me,
+  });
+  return answer(201, { ok: true, repayment: reversal, item: shown(current, [...rows, reversal], inForceFrom) });
 }

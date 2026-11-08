@@ -40,15 +40,28 @@ export const fill = (template: string, values: Record<string, string>) => templa
  * nothing else changes. Whether it was delivered.
  */
 export async function tellTeam(env: TeamEnv, message: string, fetcher: typeof fetch, what: string): Promise<boolean> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_TASKS_CHAT_ID) {
-    console.log(`${what}: skipped — TELEGRAM_TASKS_CHAT_ID or TELEGRAM_BOT_TOKEN is not set`);
+  if (!env.TELEGRAM_TASKS_CHAT_ID) {
+    console.log(`${what}: skipped — TELEGRAM_TASKS_CHAT_ID is not set`);
+    return false;
+  }
+  return tellChat(env, env.TELEGRAM_TASKS_CHAT_ID, message, fetcher, what);
+}
+
+/**
+ * One message to one chat — a Member's private chat with the bot, or the
+ * tasks group. Never throws; skipped without the bot's token. Whether it was
+ * delivered.
+ */
+export async function tellChat(env: TeamEnv, chatId: string, message: string, fetcher: typeof fetch, what: string): Promise<boolean> {
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    console.log(`${what}: skipped — TELEGRAM_BOT_TOKEN is not set`);
     return false;
   }
   try {
     const response = await fetcher(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: env.TELEGRAM_TASKS_CHAT_ID, text: message }),
+      body: JSON.stringify({ chat_id: chatId, text: message }),
     });
     console.log(`${what}: ${response.ok ? 'sent' : `FAILED — Telegram answered ${response.status}`}`);
     return response.ok;

@@ -102,7 +102,16 @@ export function checkAdmin(seed: Obj, t: AllWords): string[] {
   }
   for (const kind of KINDS) if (!c.kinds[kind]) problems.add(`no name for the Schedule 2 kind "${kind}"`);
   const contributionErrors = ['member', 'date', 'date-future', 'amount', 'what-for', 'receipt', 'kind', 'note', 'late-is-permanent', 'amount-below-repaid', 'gift-has-repayments', 'gift-not-repaid'];
-  const repaymentErrors = ['principal', 'interest', 'repayment-empty', 'repaid-over', 'repaid-date', 'repayment-note', 'not-found'];
+  const repaymentErrors = ['principal', 'interest', 'repayment-empty', 'repaid-over', 'repaid-date', 'repayment-note', 'not-found', 'reversal-reason', 'already-reversed', 'reversal-of-reversal'];
+  const agreementErrors = ['agreement-date', 'agreement-set', 'agreement-preview-first', 'agreement-preview-stale'];
+  for (const code of agreementErrors) if (!c.errors[code]) problems.add(`no sentence for the Schedule 2 error "${code}"`);
+  for (const part of ['open', 'label', 'help', 'preview', 'confirm', 'cancel', 'future', 'final', 'previewFirst', 'set']) {
+    if (!(c.agreement as Record<string, string>)[part]) problems.add(`no words for setting the agreement's date: "${part}"`);
+  }
+  for (const part of ['action', 'label', 'help', 'confirm', 'reversed']) {
+    if (!(c.reversal as Record<string, string>)[part]) problems.add(`no words for reversing a repayment: "${part}"`);
+  }
+  if (!c.history.told || !c.history.notTold) problems.add('a change of kind needs words for whether the Member was told');
   for (const code of [...contributionErrors, ...repaymentErrors]) {
     if (!c.errors[code]) problems.add(`no sentence for the Schedule 2 error "${code}"`);
   }
@@ -125,6 +134,11 @@ export function checkAdmin(seed: Obj, t: AllWords): string[] {
     ['repay.line', c.repay.line, ['{date}', '{principal}', '{interest}', '{who}']],
     ['repay.older', c.repay.older, ['{date}', '{amount}', '{left}']],
     ['repay.appendOnly', c.repay.appendOnly, []],
+    ['reversal.line', c.reversal.line, ['{date}', '{principal}', '{interest}', '{reason}', '{who}']],
+    ['agreement.year', c.agreement.year, ['{year}', '{date}']],
+    ['agreement.before', c.agreement.before, ['{count}', '{total}']],
+    ['agreement.after', c.agreement.after, ['{count}', '{total}', '{late}']],
+    ['notifyKind', c.notifyKind, ['{member}', '{who}', '{from}', '{to}', '{date}', '{amount}', '{what_for}']],
     ['history.line', c.history.line, ['{date}', '{who}', '{field}', '{from}', '{to}']],
   ];
   for (const [name, words, needs] of contributionSlots) {

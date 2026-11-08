@@ -74,7 +74,18 @@ const view = () => {
   const summary = standings(base, repayments, members.map((m) => m.id), inForce).map((s) => ({ ...s, name: members.find((m) => m.id === s.member_id).name }));
   return { items, summary };
 };
-const events = [{ contribution_id: 'e2', at: recorded, who: 'Анна', field: 'amount_mnt', from_value: '1400000', to_value: '1500000' }];
+const events = [
+  { contribution_id: 'e2', at: recorded, who: 'Анна', field: 'amount_mnt', from_value: '1400000', to_value: '1500000' },
+  { contribution_id: 'e2', at: recorded, who: 'Анна', field: 'kind', from_value: 'gift', to_value: 'loan', notified_at: recorded },
+  { contribution_id: 'e1', at: recorded, who: 'Анна', field: 'kind', from_value: 'gift', to_value: 'loan', notified_at: null },
+];
+/** What the Worker says a date would mean (worker/contributions.ts > consequences), over the same entries. */
+const consequences = (date) => {
+  const before = base.filter((e) => e.date_made < date);
+  const from = base.filter((e) => e.date_made >= date);
+  const total = (rows) => rows.reduce((sum, e) => sum + e.amount_mnt, 0);
+  return { date, year: Number(date.slice(0, 4)), future: date > today, before: { count: before.length, total: total(before) }, from: { count: from.length, total: total(from), late: from.filter((e) => isLate(e.date_made, e.recorded_at, date)).length } };
+};
 const asked = [];
 const posted = [];
 let brokenChunk = null; // a pattern: a chunk the server will not serve
@@ -97,6 +108,13 @@ const server = createServer((req, res) => {
       const member = url.searchParams.get('member');
       const { items, summary } = view();
       return json(res, 200, { ok: true, me: ME, today, agreement: { in_force_from: inForce }, members, people, items: member ? items.filter((e) => e.member_id === member) : items, summary, repayments, events });
+    }
+    if (url.pathname === '/api/contributions/agreement' && req.method === 'GET') return json(res, 200, { ok: true, preview: consequences(url.searchParams.get('date')) });
+    if (url.pathname === '/api/contributions/agreement' && req.method === 'POST') {
+      const sent = JSON.parse(body || '{}');
+      posted.push({ path: url.pathname, body: sent });
+      inForce = sent.in_force_from;
+      return json(res, 200, { ok: true, in_force_from: inForce });
     }
     if (url.pathname.startsWith('/api/contributions') && req.method === 'POST') {
       posted.push({ path: url.pathname, body: JSON.parse(body || '{}') });
@@ -253,9 +271,36 @@ try {
     const said = await page.evaluate(elapsedOf('new'));
     if (!/тоологдохгүй/.test(said[0]) || said[1] !== 'false') throw new Error(`form: ${JSON.stringify(said)}`);
     await page.evaluate(`[...document.querySelectorAll('[data-form="new"] .btn--ghost')].find((b) => b.textContent === 'Болих').click()`);
-    inForce = daysAgo(100);
-    await reopen();
     return `top: «${top.slice(0, 60)}…»; no row marked; 90 days in the form: «${said[0]}»`;
+  });
+
+  await check('the agreement date is set only after its consequences are shown — and only for the date shown', async () => {
+    await until(`document.querySelector('[data-agreement-open]')`, 'the button to set the date');
+    await click('[data-agreement-open]');
+    await until(`document.querySelector('[data-agreement-form]')`, 'the form');
+    if (!(await page.evaluate(`document.querySelector('[data-agreement-confirm]').disabled`))) throw new Error('confirm offered before any preview');
+    // A typo in the year first: everything falls before it, and it is in the future — said before anything is set.
+    const typo = `${Number(daysAgo(100).slice(0, 4)) + 10}${daysAgo(100).slice(4)}`;
+    await setValue('contribution-agreement-date', typo);
+    await click('[data-agreement-preview-button]');
+    const wrong = await until(`(() => { const p = document.querySelector('[data-agreement-preview]'); return p?.textContent && [p.querySelector('[data-agreement-year]')?.textContent, p.querySelector('[data-agreement-before]')?.dataset.agreementBefore, p.querySelector('[data-agreement-after]')?.dataset.agreementAfter, p.textContent.includes('ирээдүйд')]; })()`, 'the preview');
+    if (!wrong[0].includes(typo.slice(0, 4)) || wrong[1] !== '4' || wrong[2] !== '0' || !wrong[3]) throw new Error(`typo preview: ${JSON.stringify(wrong)}`);
+    // The right date: the preview, and the confirmation, go the moment the date changes.
+    await setValue('contribution-agreement-date', daysAgo(100));
+    const cleared = await page.evaluate(`[document.querySelector('[data-agreement-preview]').textContent, document.querySelector('[data-agreement-confirm]').disabled]`);
+    if (cleared[0] !== '' || !cleared[1]) throw new Error(`a changed date kept the old preview: ${JSON.stringify(cleared)}`);
+    if (posted.some((p) => p.path === '/api/contributions/agreement')) throw new Error('something was set before confirming');
+    await click('[data-agreement-preview-button]');
+    const right = await until(`(() => { const p = document.querySelector('[data-agreement-preview]'); const a = p?.querySelector('[data-agreement-after]'); return a && [p.querySelector('[data-agreement-before]').dataset.agreementBefore, a.dataset.agreementAfter, a.dataset.agreementLate]; })()`, 'the second preview');
+    const expected = consequences(daysAgo(100));
+    if (JSON.stringify(right) !== JSON.stringify([String(expected.before.count), String(expected.from.count), String(expected.from.late)])) throw new Error(`preview: ${JSON.stringify(right)}`);
+    await click('[data-agreement-confirm]');
+    await until(`document.querySelector('[data-agreement]')?.dataset.agreement === ${JSON.stringify(daysAgo(100))}`, 'the date, set');
+    const sent = posted.find((p) => p.path === '/api/contributions/agreement')?.body;
+    if (sent?.in_force_from !== daysAgo(100) || sent.seen?.before !== expected.before.count || sent.seen?.from !== expected.from.count || sent.seen?.late !== expected.from.late) throw new Error(`sent: ${JSON.stringify(sent)}`);
+    if (await page.evaluate(`!!document.querySelector('[data-agreement-open]')`)) throw new Error('still offered after it was set');
+    await until(`document.querySelectorAll('[data-list="contributions"] [data-entry]').length === 4`, 'the entries');
+    return `year typo ${typo.slice(0, 4)}: 4 before, 0 with a clock, «ирээдүйд»; a new date clears the preview; ${daysAgo(100)}: before ${right[0]}, from ${right[1]}, late at once ${right[2]} — sent with those counts; then no longer offered`;
   });
 
   await check('an amount with a decimal mark is refused before it is sent; what is sent is an integer', async () => {
@@ -337,6 +382,28 @@ try {
     if (!/үндсэн дүн 1₮ · нэмэгдэл 0₮/.test(line)) throw new Error(`e3's repayment: ${line}`);
     posts = posted.length;
     return `on e2: the 5.2(c) note; four fields; empty and "1,5": refused; sent {principal 1000000, interest 500000, paid_on today}; e3 lists «${line}»`;
+  });
+
+  await check('a wrong repayment is reversed with a reason — never edited — and a change of kind says whether the Member was told', async () => {
+    await until(`document.querySelector('[data-entry="e3"]')`, 'the list again');
+    await page.evaluate(`document.querySelector('[data-entry="e3"]').open = true`);
+    await click('[data-reverse-open="r1"]');
+    await until(`document.querySelector('[data-reverse="r1"] textarea')`, 'the reason box');
+    const posts = posted.length;
+    await click('[data-reverse-confirm="r1"]');
+    await until(`(() => { const s = ${statusText}; return /шалтгаанаа бичнэ/.test(s) && s; })()`, 'the refusal of no reason');
+    if (posted.length !== posts) throw new Error('a reversal with no reason was sent');
+    await setValue('contribution-e3-reverse-r1', 'Дүнг буруу бичсэн');
+    await click('[data-reverse-confirm="r1"]');
+    for (let i = 0; i < 50 && posted.length === posts; i++) await sleep(100);
+    const sent = posted.at(-1);
+    if (sent?.path !== '/api/contributions/e3/repayments/r1/reverse' || sent.body.reason !== 'Дүнг буруу бичсэн') throw new Error(`sent: ${JSON.stringify(sent)}`);
+    if (await page.evaluate(`!!document.querySelector('[data-repayments] [data-edit], [data-repayment] input')`)) throw new Error('a repayment can be edited');
+    await until(`document.querySelector('[data-entry="e2"]')`, 'the list again');
+    await page.evaluate(`document.querySelector('[data-entry="e2"]').open = true; document.querySelector('[data-entry="e1"]').open = true`);
+    const told = await page.evaluate(`[document.querySelector('[data-entry="e2"] [data-told]')?.textContent, document.querySelector('[data-entry="e1"] [data-told]')?.textContent]`);
+    if (!/гишүүнд мэдэгдсэн/.test(told[0] ?? '') || !/⚠ гишүүнд мэдэгдээгүй/.test(told[1] ?? '')) throw new Error(`told: ${JSON.stringify(told)}`);
+    return `no reason: refused, nothing sent; sent {reason} to …/e3/repayments/r1/reverse; no way to edit one; kind changes: «${told[0].trim()}», «${told[1].trim()}»`;
   });
 
   await check('the member filter asks the Worker for one Member', async () => {

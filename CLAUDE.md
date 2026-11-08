@@ -377,7 +377,10 @@ here.
   `<h1>` per page, the canonical, Open Graph, the JSON-LD and the sitemap.
   The sitemap and robots.txt are generated at build (`astro.config.mjs`), and
   every host but the production domain says `X-Robots-Tag: noindex`
-  (`src/lib/site-url.mjs`).
+  (`src/lib/site-url.mjs`, the one place the production host is named).
+  `npm run seo` matches `_headers` as Cloudflare does and fails if the
+  production host would get noindex, a workers.dev host would not, or
+  `wrangler.jsonc` attaches a domain other than that host.
 - Every video: `muted`, `playsinline`, `loop`, `preload="none"`, a `poster`
   frame, and `loading="lazy"` on anything below the fold. Below the fold the
   poster is a lazy `<img>` under the video, not the `poster` attribute —

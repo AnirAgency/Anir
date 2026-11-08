@@ -21,8 +21,9 @@
  * buffered in KV while Supabase would not take them, then watches: the
  * hourly digest of flagged enquiries, and a flood (./watch.ts).
  *
- * /api/tasks* is the team's task list (./tasks.ts), editors only, loaded only
- * when asked for and walled off: see makeWorker.
+ * /api/tasks* is the team's task list (./tasks.ts) and /api/contributions* is
+ * Schedule 2, the Members' contributions (./contributions.ts): editors only,
+ * each loaded only when asked for and walled off on its own — see makeWorker.
  */
 import { drain, onHealth, onRequestPost, type Env as EnquiryEnv } from './enquiry.ts';
 import { onAlerts } from './alerts.ts';
@@ -32,19 +33,35 @@ import { onEnquiries, onEnquiryStatus, onStorage } from './inbox.ts';
 import { onBuildReport, type Env as BuildsEnv } from './builds.ts';
 import { answer } from './auth.ts';
 import { indexable } from '../src/lib/site-url.mjs';
-// Types only — erased at build. The task list's code is never imported here
-// statically: see loadTasks below.
+// Types only — erased at build. The team's tools are never imported here
+// statically: see the loaders below.
 import type { Env as TasksEnv } from './tasks.ts';
+import type { Env as ContributionsEnv } from './contributions.ts';
 
 /**
- * The task list's code, loaded only when a /api/tasks* request arrives — never
- * at start-up, never on any other route. Coupled one way (CLAUDE.md > The
- * admin > The task list): if it fails to load or throws, that request is
- * answered with an error and nothing else is touched. Replaceable so
- * scripts/test-isolation.ts can make it fail on purpose.
+ * The team's tools' code, each loaded only when a request for its own routes
+ * arrives — never at start-up, never on any other route. Coupled one way
+ * (CLAUDE.md > The admin): if one fails to load or throws, that request is
+ * answered with an error and nothing else is touched — not the site, not the
+ * other tool. Replaceable so scripts/test-isolation.ts can make them fail on
+ * purpose.
  */
-type TasksModule = { onTasks: (request: Request, env: TasksEnv, ctx: { waitUntil?: (p: Promise<unknown>) => void }) => Promise<Response> };
-const loadTasksModule = (): Promise<TasksModule> => import('./tasks.ts');
+type Handler = (request: Request, env: TasksEnv & ContributionsEnv, ctx: { waitUntil?: (p: Promise<unknown>) => void }) => Promise<Response>;
+type TasksModule = { onTasks: Handler };
+type ContributionsModule = { onContributions: Handler };
+export interface Loaders {
+  tasks: () => Promise<TasksModule>;
+  contributions: () => Promise<ContributionsModule>;
+}
+const LOADERS: Loaders = {
+  tasks: () => import('./tasks.ts'),
+  contributions: () => import('./contributions.ts'),
+};
+/** Which tool a path belongs to, its handler's name, and the error its failure answers. */
+const WALLED = [
+  { prefix: '/api/tasks', tool: 'tasks', handler: 'onTasks' },
+  { prefix: '/api/contributions', tool: 'contributions', handler: 'onContributions' },
+] as const;
 
 // Written by scripts/headers.mjs on every build, from the same list that
 // becomes dist/_headers. Missing means `npm run build` has not run.
@@ -55,7 +72,8 @@ import security from './security-headers.generated.json' with { type: 'json' };
 type Env = EnquiryEnv &
   PublishEnv &
   BuildsEnv &
-  TasksEnv & {
+  TasksEnv &
+  ContributionsEnv & {
     ASSETS: { fetch(request: Request): Promise<Response> };
   };
 
@@ -77,21 +95,23 @@ function withSecurityHeaders(response: Response, hostname: string): Response {
   return secured;
 }
 
-/** The Worker, with the task list's loader passed in — the real one, or in a test, one that fails. */
-export function makeWorker(loadTasks: () => Promise<TasksModule> = loadTasksModule) {
+/** The Worker, with the tools' loaders passed in — the real ones, or in a test, ones that fail. */
+export function makeWorker(loaders: Partial<Loaders> = {}) {
+  const load: Loaders = { ...LOADERS, ...loaders };
   return {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname, hostname } = new URL(request.url);
     const secure = (response: Response) => withSecurityHeaders(response, hostname);
-    // The task list, walled off: its own route prefix, loaded on demand, and
-    // whatever goes wrong inside it ends here, as this route's error.
-    if (pathname === '/api/tasks' || pathname.startsWith('/api/tasks/')) {
+    // The team's tools, each walled off: its own route prefix, loaded on
+    // demand, and whatever goes wrong inside it ends here, as this route's error.
+    const walled = WALLED.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+    if (walled) {
       try {
-        const { onTasks } = await loadTasks();
-        return secure(await onTasks(request, env, { waitUntil: (promise) => ctx.waitUntil(promise) }));
+        const module = (await load[walled.tool]()) as Record<string, Handler>;
+        return secure(await module[walled.handler](request, env, { waitUntil: (promise) => ctx.waitUntil(promise) }));
       } catch (error) {
-        console.error(`tasks: FAILED — ${(error as Error)?.message ?? error}`);
-        return secure(answer(500, { ok: false, error: 'tasks' }));
+        console.error(`${walled.tool}: FAILED — ${(error as Error)?.message ?? error}`);
+        return secure(answer(500, { ok: false, error: walled.tool }));
       }
     }
     if (pathname === '/api/enquiry' && request.method === 'POST') {

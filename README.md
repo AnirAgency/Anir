@@ -617,6 +617,9 @@ How it fits together (CLAUDE.md > The admin has the rules):
 | [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
 | [`worker/tasks.ts`](worker/tasks.ts) | The task list: `/api/tasks` (list, `counts`, `report`, create, edit, `move`) — editors only, service key, every write conditional on the `updated_at` it read. |
 | [`supabase/migrations/0010_tasks.sql`](supabase/migrations/0010_tasks.sql), [`0011_task_events_and_names.sql`](supabase/migrations/0011_task_events_and_names.sql) | `tasks`; then `task_events` (every move, by trigger) and `editors.display_name`. RLS on, no policies. |
+| [`worker/contributions.ts`](worker/contributions.ts), [`src/scripts/admin-contributions.ts`](src/scripts/admin-contributions.ts), [`src/lib/contribution-codes.ts`](src/lib/contribution-codes.ts) | Schedule 2: `/api/contributions` (list and strip, create, edit, `repay`); the admin's «Хавсралт 2»; the rules both obey — days, whole tugrik, × 1.5. |
+| [`supabase/migrations/0012_contributions.sql`](supabase/migrations/0012_contributions.sql), [`0013_members_agreement_repayments.sql`](supabase/migrations/0013_members_agreement_repayments.sql), [`0014_reversals_and_notices.sql`](supabase/migrations/0014_reversals_and_notices.sql) | `contributions` and `contribution_events` (by trigger); then `members`, `agreement` (set once) and `contribution_repayments` (append-only, reversed by a row of its own); a Member's Telegram chat, and whether a change of kind was told. RLS on, no policies. |
+| [`worker/team.ts`](worker/team.ts) | What the two tools share: the team by name, and the tasks group's Telegram. |
 | [`src/scripts/admin-tasks.ts`](src/scripts/admin-tasks.ts) | «Ажил» in the admin: «Даалгавар» (opens on «Минийх») and the read-only «Тайлан». |
 | [`src/lib/task-codes.ts`](src/lib/task-codes.ts) | The states, projects and moves both of them obey. |
 
@@ -665,6 +668,65 @@ sees everything.
   task list ever grows beyond this, it moves to its own Worker.
 - Tests: `npm run test:tasks` (the routes), `npm run test:isolation`,
   `npm run build && npm run test:tasks-browser` (the admin in Chrome or Edge).
+
+### Schedule 2 («Хавсралт 2»)
+
+The founder agreement's Schedule 2, under «Ажил»: the money each Member has
+put into the Company. Clause 5.2 makes it a loan repaid at 150% of principal;
+clause 5.1 makes it a gift if it is not recorded within 30 days of being made,
+and requires every new entry to reach all Members within 7 days. Only this —
+jobs, costs, the Buffer and distributions come with the first paid job.
+
+- **The strip** at the top: per Member, principal, repaid, outstanding, and
+  outstanding × 1.5 — labelled *not yet due* — with the uplift paid and how
+  much of the principal was recorded late. Clause 5.2 pays only once the
+  Company holds 20,000,000₮ after every obligation, and nothing here knows
+  the bank balance.
+- **Members, not logins.** The picker lists `members` — Batuka, Batenkh,
+  Baysaa, Deegii — not the editors: someone on salary may sign in without
+  being a Member (4.9), and a Member may have no login. Link a Member to their
+  login so the form opens on them:
+  `update public.members set editor_id = '<user_id>' where name = 'Batuka';`.
+  Someone who is not a Member cannot lend (5.4 needs a 9.2 decision).
+- **Whole tugrik only.** Type `1 500 000`; a decimal point or comma is refused
+  before it is sent, and again by the Worker. × 1.5 rounds half up, to the
+  Member (`owedMnt` in [`src/lib/contribution-codes.ts`](src/lib/contribution-codes.ts)).
+- **Clause 5.1 starts with the agreement.** Until the agreement's date is set,
+  nothing is late, so money paid before it is entered as the loan it was. Set
+  it once, when the agreement is signed, with «Гэрээний огноог тогтоох» at the
+  top of «Хавсралт 2»: type the date, press «Үр дагаврыг харах», and read what
+  it will mean — the year on its own line, how many entries fall before it
+  and can never be late, how many get the clock, how many that marks late at
+  once. Only then «Баталгаажуулах». Change the date and the preview goes; if
+  an entry arrives between preview and confirm, the confirm is refused and
+  the new preview shown. After, the 30 days apply to money made on or after
+  that date: past 30 an entry is marked «⚠ Хоцорч бүртгэгдсэн» for good. It
+  stays the kind it was entered as.
+- **A change of kind is told to its Member.** Whether money is a gift is the
+  contributing Member's to say (5.1), so changing an entry's kind sends that
+  Member one Telegram line — privately once they have sent the bot `/start`
+  and their chat id is set
+  (`update public.members set telegram_chat_id = '…' where name = 'Baysaa';`),
+  in the tasks group until then. Its history line says whether it arrived.
+- **The 7-day notice**: each new entry sends «Хавсралт 2: {member} {amount}₮ —
+  {what_for}» to the tasks group. If it did not arrive, the row says so, and
+  the Leader tells the Members by hand.
+- **«Хуулах»** copies an entry into a new form dated today — a subscription's
+  next month.
+- **«Буцаан төлөх»** appends a repayment against one loan: the day it was paid,
+  the principal, and the uplift apart — clause 5.2(e) makes the uplift taxable
+  income the Company withholds on, and the accountant sets the rate. Partial
+  is fine (5.2(d)); oldest loan first (5.2(c)) is the editor's to follow, and
+  the box names an older outstanding loan if there is one. A repayment is
+  never changed or removed: a wrong one gets «Хүчингүй болгох», which asks
+  why and adds a row that cancels it — the original stays, marked — and the
+  right one is entered again.
+- **History**: every change to member, date, amount or kind is a row in
+  `contribution_events`, shown under the entry, with its repayments.
+- Tests: `npm run test:contributions` (routes and rules — no clock before the
+  agreement, 29/30/31 days after it, Members, integers, rounding, repayments,
+  notices, events, no grants), `npm run test:isolation`,
+  `npm run build && npm run test:contributions-browser`.
 
 ### Setting it up (once)
 

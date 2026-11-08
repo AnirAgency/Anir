@@ -10,7 +10,6 @@
  * start at `product`.
  */
 import type { admin as Copy } from '../content/admin';
-import { MOVES, TASK_PROJECTS, TASK_STATES } from '../lib/task-codes.ts';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Obj = { [key: string]: Json };
@@ -177,7 +176,7 @@ export const PRODUCT_ORDER = ['name', 'tagline', 'description', 'spec', 'href', 
   one, or the build stops (checkAdmin).
 */
 type Copied = typeof Copy;
-const text = (value: Json | undefined) => (typeof value === 'string' ? value.trim() : '');
+export const text = (value: Json | undefined) => (typeof value === 'string' ? value.trim() : '');
 const at = (item: Obj, key: string) => key.split('.').reduce<Json | undefined>((node, part) => (node && typeof node === 'object' && !Array.isArray(node) ? (node as Obj)[part] : undefined), item);
 
 export const SUMMARY: Record<string, (item: Obj, t: Copied) => { title: string; sub: string }> = {
@@ -334,98 +333,4 @@ export function allFields(seed: Obj): Field[] {
   fieldsOf(((products.pages as Obj).testimonial as Obj).stand, ['product', 'testimonial'], out);
   fieldsOf((((products.items as Obj[])[0].front as Obj).after as Obj), ['product', 'front', 'before'], out);
   return out;
-}
-
-const shape = (path: Path) => path.map((segment) => (typeof segment === 'number' ? '*' : segment)).join('.');
-
-/**
- * What the admin would show without Mongolian words: each problem a line.
- * Empty means every field, section, group, list, length and value has them.
- */
-export function checkAdmin(seed: Obj, t: Copied): string[] {
-  const problems = new Set<string>();
-  const fields = allFields(seed);
-  const off = (path: Path) => VIEWS.some((v) => v.off && v.parts.some((part) => path[0] === part));
-
-  for (const { path, kind } of fields) {
-    const key = path[path.length - 1];
-    // Every name a field is shown under. An item of a list is shown by its number.
-    if (typeof key === 'string' && !t.labels[key]) problems.add(`no label for "${key}" (${shape(path)})`);
-    // A line of help under every field and list; a section that is off says so instead.
-    if (kind !== 'group' && !off(path) && !whereFor(path, t)) problems.add(`no help saying where ${shape(path)} shows`);
-    // Every list of things names its rows.
-    if (kind === 'things' && !summaryRule(path)) problems.add(`no row summary for the list ${shape(path)}`);
-  }
-
-  // Every section's every key is in some view, hidden, or under a view that is off.
-  for (const [section, value] of Object.entries(seed)) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-    for (const key of Object.keys(value)) {
-      const path = [section, key];
-      if (isHidden(path)) continue;
-      const home = VIEWS.some((v) => v.parts.some((part) => part === section || part === `${section}.${key}`));
-      if (!home) problems.add(`${section}.${key} is in no view: give it a home, or hide it in RULES`);
-    }
-  }
-
-  for (const view of VIEWS) {
-    if (!t.views[view.id]) problems.add(`no name for the view "${view.id}"`);
-    if (!t.viewHelp[view.id]) problems.add(`no description for the view "${view.id}"`);
-  }
-  for (const group of GROUPS) if (!t.groups[group]) problems.add(`no name for the group "${group}"`);
-  for (const says of new Set(Object.values(LIMITS).map((limit) => limit.says))) {
-    if (!t.limits.says[says]) problems.add(`no words for the length consequence "${says}"`);
-  }
-  for (const status of ['new', 'read', 'replied', 'closed']) {
-    if (!t.inbox.statuses[status]) problems.add(`no name for the enquiry status "${status}"`);
-  }
-  // The task list: every code src/lib/task-codes.ts names has its words here.
-  for (const state of TASK_STATES) if (!t.tasks.states[state]) problems.add(`no name for the task state "${state}"`);
-  for (const project of TASK_PROJECTS) if (!t.tasks.projects[project]) problems.add(`no name for the task project "${project}"`);
-  for (const name of Object.keys(MOVES)) if (!t.tasks.moves[name]) problems.add(`no words for the task move "${name}"`);
-  for (const field of ['title', 'done_means', 'project', 'owner_id', 'approver_id', 'due_date']) {
-    if (!t.tasks.fields[field]) problems.add(`no label for the task field "${field}"`);
-    if (!t.tasks.fieldHelp[field]) problems.add(`no help under the task field "${field}"`);
-  }
-  for (const code of ['title', 'done-means', 'done-means-repeats-title', 'project', 'owner', 'approver', 'due', 'reason-required', 'not-approver', 'bad-transition', 'approved']) {
-    if (!t.tasks.errors[code]) problems.add(`no sentence for the task error "${code}"`);
-  }
-  const slots: Record<string, string[]> = { assigned: ['{who}', '{title}', '{done}'], submitted: ['{who}', '{by}', '{title}'], sentBack: ['{who}', '{title}', '{reason}'] };
-  for (const [message, needs] of Object.entries(slots)) {
-    const words = (t.tasks.notify as Record<string, string>)[message] ?? '';
-    if (!needs.every((slot) => words.includes(slot))) problems.add(`the task Telegram message "${message}" needs its words, with ${needs.join(', ')}`);
-  }
-  if (!t.tasks.badgeMine.includes('{n}') || !t.tasks.badgeApprove.includes('{n}')) problems.add('the task badge needs its two sentences, with {n}');
-  for (const [name, rule] of Object.entries(MOVES)) {
-    if (!rule.reason) continue;
-    if (!t.tasks.reasons[name] || !t.tasks.reasonHelp[name] || !t.tasks.reasonRequired[name]) problems.add(`the task move "${name}" needs a reason's label, help and refusal`);
-  }
-  if (!t.removedPerson) problems.add('no words for a person who is no longer an editor');
-  for (const part of ['submitted', 'approved', 'sentBack', 'reopened', 'overdue']) {
-    if (!(t.tasks.report as Record<string, string>)[part]) problems.add(`no heading for the Тайлан's "${part}"`);
-  }
-  if (!['{date}', '{who}'].every((slot) => t.tasks.report.when.includes(slot))) problems.add("the Тайлан's fact line needs {date} and {who}");
-  if (!t.tasks.report.reason?.includes('{reason}')) problems.add("the Тайлан's reason line needs {reason}");
-  for (const filter of ['new', 'flagged', 'read', 'replied', 'closed']) {
-    if (!t.inbox.filters[filter]) problems.add(`no name for the inbox filter "${filter}"`);
-  }
-  if (!t.notify.digest.includes('{n}') || !t.notify.flood.includes('{n}')) problems.add('the Telegram digest and flood messages need their words, with {n}');
-  if (!t.alerts.limiter.includes('{when}')) problems.add('the limiter alert needs its words, with {when}');
-  if (!t.alerts.drain.includes('{when}')) problems.add('the stuck-enquiry alert needs its words, with {when}');
-  if (!t.notify.stuck.includes('{n}')) problems.add('the stuck-enquiry Telegram line needs its words, with {n}');
-  if (!['{kind}', '{when}'].every((slot) => t.alerts.other.includes(slot))) problems.add('an alert of a kind with no words of its own needs words, with {kind} and {when}');
-  for (const flag of ['name', 'contact', 'body', 'userAgent']) {
-    if (!(t.inbox.flags as Record<string, string>)[flag]) problems.add(`no words for the enquiry flag "${flag}"`);
-  }
-  if (!['{field}', '{length}', '{max}'].every((slot) => t.inbox.flags.cut.includes(slot))) problems.add('a cut value needs its words, with {field}, {length} and {max}');
-  for (const reason of ['content', 'image', 'claim', 'budget', 'contrast', 'labels', 'alt', 'seo', 'video', 'other']) {
-    if (!t.publish.reasons[reason]) problems.add(`no sentence for a build that failed for "${reason}"`);
-  }
-  // The values an editor picks between in the contact form: each needs words a visitor reads.
-  for (const group of (((seed.contact as Obj).form as Obj).groups as Obj[]) ?? []) {
-    for (const option of (group.options as Obj[]) ?? []) {
-      if (!text(option.label)) problems.add(`the contact option "${String(option.value)}" has no label`);
-    }
-  }
-  return [...problems];
 }

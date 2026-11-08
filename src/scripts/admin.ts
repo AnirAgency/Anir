@@ -33,7 +33,6 @@
 import config from '../lib/supabase.json';
 import { admin as t } from '../content/admin';
 import { ENQUIRY_MAX } from '../lib/enquiry-limits';
-import { createTasks } from './admin-tasks';
 import { overlay } from '../content/live';
 import {
   GROUPS,
@@ -110,10 +109,10 @@ interface Product {
 }
 
 /** What is open on the right: a view of the sections, a product, or the enquiries. */
-type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' } | { kind: 'tasks' } | { kind: 'report' };
+type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' } | { kind: 'tasks' } | { kind: 'report' } | { kind: 'contributions' };
 const refKey = (ref: Ref) => (ref.kind === 'section' ? ref.id : ref.kind === 'product' ? `product:${ref.id}` : ref.kind);
-/** The inbox and the task list: tools with no page of the site's own and nothing of site.ts to edit. */
-const isTool = (ref: Ref) => ref.kind === 'inbox' || ref.kind === 'tasks' || ref.kind === 'report';
+/** The inbox, the task list and Schedule 2: tools with no page of the site's own and nothing of site.ts to edit. */
+const isTool = (ref: Ref) => ref.kind === 'inbox' || ref.kind === 'tasks' || ref.kind === 'report' || ref.kind === 'contributions';
 const sameRef = (a: Ref, b: Ref) => refKey(a) === refKey(b);
 
 let saved: Record<string, Obj> = {};
@@ -1001,7 +1000,16 @@ function countOf(ref: Ref): number | null {
   return Array.isArray(list) ? list.length : null;
 }
 
-const hasDraft = (ref: Ref) => (ref.kind === 'tasks' ? tasks.hasDraft() : isTool(ref) ? false : sameRef(ref, view) ? dirty : !!readDraft(ref));
+const hasDraft = (ref: Ref) =>
+  ref.kind === 'tasks'
+    ? draftsUnder(taskDrafts())
+    : ref.kind === 'contributions'
+      ? draftsUnder(contributionDrafts())
+      : isTool(ref)
+        ? false
+        : sameRef(ref, view)
+          ? dirty
+          : !!readDraft(ref);
 
 function renderNav() {
   const item = (ref: Ref, label: string, extra: Child[] = [], off = false) =>
@@ -1057,8 +1065,14 @@ function renderNav() {
   navEl.replaceChildren(
     h('ul', { class: 'nav__list nav__list--first' }, h('li', {}, item({ kind: 'inbox' }, t.views.inbox, [unread ? h('span', { class: 'nav__badge', 'aria-label': `${t.inbox.statuses.new}: ${unread}` }, String(unread)) : null]))),
     // The team's work, opened daily like the enquiries — not part of the site's pages.
-    h('p', { class: 'nav__title' }, t.tasks.group),
-    h('ul', { class: 'nav__list' }, h('li', {}, item({ kind: 'tasks' }, t.views.tasks, tasks.badges())), h('li', {}, item({ kind: 'report' }, t.views.report))),
+    h('p', { class: 'nav__title' }, t.work.group),
+    h(
+      'ul',
+      { class: 'nav__list' },
+      h('li', {}, item({ kind: 'tasks' }, t.views.tasks, taskBadges())),
+      h('li', {}, item({ kind: 'report' }, t.views.report)),
+      h('li', {}, item({ kind: 'contributions' }, t.views.contributions))
+    ),
     ...groups,
     h('ol', { class: 'steps' }, ...t.steps.map((text) => h('li', {}, text)))
   );
@@ -1067,8 +1081,13 @@ function renderNav() {
 
 function renderMain() {
   if (view.kind === 'inbox') return renderInbox();
-  if (view.kind === 'tasks') return void tasks.renderTasks();
-  if (view.kind === 'report') return void tasks.renderReport();
+  // The team's tools load on first use; until then their place says it is loading.
+  if (isTool(view)) {
+    mainEl.replaceChildren(h('p', { class: 'main__hint' }, t.loading));
+    if (view.kind === 'tasks') return void openTool(tasksTool, (tool) => tool.renderTasks());
+    if (view.kind === 'report') return void openTool(tasksTool, (tool) => tool.renderReport());
+    return void openTool(contributionsTool, (tool) => tool.render());
+  }
   const v = view.kind === 'section' ? viewOf(view.id) : null;
   const title = view.kind === 'section' ? t.views[view.id] : String((draft.product as Obj).name || (draft.product as Obj).id);
 
@@ -1440,7 +1459,16 @@ function showPage() {
     frame?.remove();
     frame = null;
     framePage = '';
-    const why = view.kind === 'inbox' ? t.preview.inbox : isTool(view) ? t.preview.tasks : view.kind === 'section' && viewOf(view.id).off ? t.offHelp : t.preview.noPage;
+    const why =
+      view.kind === 'inbox'
+        ? t.preview.inbox
+        : view.kind === 'contributions'
+          ? t.preview.contributions
+          : isTool(view)
+            ? t.preview.tasks
+            : view.kind === 'section' && viewOf(view.id).off
+              ? t.offHelp
+              : t.preview.noPage;
     stage.replaceChildren(h('p', { class: 'preview__empty' }, why));
     return;
   }
@@ -2070,7 +2098,9 @@ async function publish() {
 function keys(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    if (view.kind === 'tasks') tasks.save();
+    // A tool's form is saved by the tool — loaded already, since its view is open.
+    if (view.kind === 'tasks') void tasksTool().then((tool) => tool.save(), () => {});
+    else if (view.kind === 'contributions') void contributionsTool().then((tool) => tool.save(), () => {});
     else save();
     return;
   }
@@ -2082,30 +2112,91 @@ function keys(e: KeyboardEvent) {
   }
 }
 
-// ------------------------------------------------------------ task list
+// --------------------------------------------------------------- «Ажил»
 
 /*
-  «Ажил»: the team's tasks and the Тайлан (./admin-tasks.ts), built from the
-  parts above. Handed functions, not values, so nothing here is read before
-  the admin has loaded. A failure inside it stays inside it.
+  The team's tools — the task list and the Тайлан (./admin-tasks.ts), and
+  Schedule 2 (./admin-contributions.ts) — each loaded only when opened, with
+  its own words: none of their code is in the admin's first load. Built from
+  the parts above, handed functions, not values. What the tree shows before
+  either is opened — the task badge, and a draft's dot — is the core's,
+  here, so the tree never waits on a tool. A tool that fails to load says so
+  where it would have been, and the rest of the admin carries on.
 */
-const tasks = createTasks({
+const toolDeps = (draftPrefix: () => string) => ({
   h,
   t,
   main: () => mainEl,
   me: () => (session ? { id: session.id, email: session.email } : null),
-  worker: (path, init) => worker(path, init),
-  status: (text, tone, detail) => status(text, tone, detail),
-  said: (text, detail) => said(text, detail),
-  explain: (error, sentence) => explain(error, sentence),
-  isSignedOut: (error) => error instanceof SignedOut,
+  worker: (path: string, init?: RequestInit) => worker(path, init),
+  status: (text: string, tone?: Tone, detail?: string) => status(text, tone, detail),
+  said: (text: string, detail?: string) => said(text, detail),
+  explain: (error: unknown, sentence: string) => explain(error, sentence),
+  isSignedOut: (error: unknown) => error instanceof SignedOut,
   signedOut: () => renderSignIn(t.signIn.expired),
   renderNav: () => renderNav(),
   showPage: () => showPage(),
-  when: (iso) => when(iso),
+  when: (iso: string) => when(iso),
   remember,
-  showing: (kind) => view.kind === kind,
+  draftPrefix,
+  showing: (kind: string) => view.kind === kind,
 });
+
+/** Where each tool keeps its drafts, by editor: what the tree's dot looks for. */
+const taskDrafts = () => `anir-admin-task:${session?.id ?? ''}:`;
+const contributionDrafts = () => `anir-admin-contribution:${session?.id ?? ''}:`;
+const draftsUnder = (prefix: string) => remember.keys().some((key) => key.startsWith(prefix));
+
+/** A tool, loaded once on first use; a failed load is forgotten, so the next click tries again. */
+function onDemand<T>(load: () => Promise<T>): () => Promise<T> {
+  let loading: Promise<T> | null = null;
+  return () =>
+    (loading ??= load().catch((error) => {
+      loading = null;
+      throw error;
+    }));
+}
+const tasksTool = onDemand(async () => (await import('./admin-tasks')).createTasks({ ...toolDeps(taskDrafts), readCounts: () => readTaskCounts() }));
+const contributionsTool = onDemand(async () => (await import('./admin-contributions')).createContributions(toolDeps(contributionDrafts)));
+
+/** Opens a tool's view: loading it if it is not yet, and saying so in its place if it cannot be. */
+async function openTool<T>(load: () => Promise<T>, run: (tool: T) => unknown) {
+  const shown = view;
+  try {
+    const tool = await load();
+    if (sameRef(shown, view)) await run(tool);
+  } catch (error) {
+    if (error instanceof SignedOut) return renderSignIn(t.signIn.expired);
+    if (!sameRef(shown, view)) return;
+    const { detail } = explain(error, t.toolFailed);
+    mainEl.replaceChildren(h('div', { class: 'main__hint', 'data-tool-failed': refKey(shown) }, ...said(t.toolFailed, detail)));
+    showPage();
+  }
+}
+
+/** The task badge's two numbers: assigned to me and not done; waiting on my approval. Read without loading the tool. */
+let taskCounts: { mine: number; approve: number } | null = null;
+async function readTaskCounts() {
+  if (!session) return;
+  try {
+    const { response, body } = await worker('/api/tasks/counts');
+    if (!response.ok) return;
+    taskCounts = { mine: Number(body.mine) || 0, approve: Number(body.approve) || 0 };
+    renderNav();
+  } catch {
+    // The badge waits for the next read; the tree is never broken by it.
+  }
+}
+/** Two numbers, never one: mine to do, and what waits on my approval — the one people forget. */
+const taskBadges = (): Child[] => {
+  if (!taskCounts) return [];
+  const mine = t.work.badgeMine.replace('{n}', String(taskCounts.mine));
+  const approve = t.work.badgeApprove.replace('{n}', String(taskCounts.approve));
+  return [
+    taskCounts.mine ? h('span', { class: 'nav__badge', title: mine, 'aria-label': mine, 'data-badge': 'mine' }, String(taskCounts.mine)) : null,
+    taskCounts.approve ? h('span', { class: 'nav__badge nav__badge--approve', title: approve, 'aria-label': approve, 'data-badge': 'approve' }, `✓${taskCounts.approve}`) : null,
+  ];
+};
 
 // ---------------------------------------------------------------- start
 
@@ -2168,9 +2259,9 @@ async function load() {
   select({ kind: 'inbox' });
   readStorage();
   readAlerts();
-  tasks.readCounts();
-  setInterval(() => (readCounts(), readAlerts(), tasks.readCounts()), 2 * 60 * 1000);
-  addEventListener('focus', () => (readCounts(), readAlerts(), tasks.readCounts()));
+  void readTaskCounts();
+  setInterval(() => (readCounts(), readAlerts(), readTaskCounts()), 2 * 60 * 1000);
+  addEventListener('focus', () => (readCounts(), readAlerts(), readTaskCounts()));
 
   // A build started before a reload is followed again.
   try {

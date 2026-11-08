@@ -39,6 +39,8 @@
     "test:tasks": "node scripts/test-tasks.ts",
     "test:isolation": "node scripts/test-isolation.ts",
     "test:tasks-browser": "node scripts/test-tasks-browser.mjs",
+    "test:contributions": "node scripts/test-contributions.ts",
+    "test:contributions-browser": "node scripts/test-contributions-browser.mjs",
     "pretest:watch": "node scripts/content-pull.mjs --ensure",
     "pretest:builds": "node scripts/content-pull.mjs --ensure",
     "grain": "node scripts/grain.mjs"

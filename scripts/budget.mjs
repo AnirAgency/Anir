@@ -23,7 +23,7 @@ import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { placeholderMode, placeholderReason } from '../src/lib/placeholders.mjs';
-import { POSTER_MAX, VIDEO_MAX } from './limits.mjs';
+import { PLACEHOLDER_ALLOWANCE, PLACEHOLDER_MAX, POSTER_MAX, VIDEO_MAX } from './limits.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -302,14 +302,31 @@ for (const tag of pageHtml.matchAll(/<(\w+)\b([^>]*)>/g)) {
   });
 }
 
-const laneTotal = (lane) => below.filter((item) => item.lane === lane).reduce((sum, item) => sum + item.bytes, 0);
-const belowTotal = below.reduce((sum, item) => sum + item.bytes, 0);
+/*
+  Real media and placeholders are held apart (scripts/limits.mjs >
+  PLACEHOLDER_ALLOWANCE): real media to production's caps exactly, whatever
+  the build, so a regression in real weight fails a branch build too;
+  placeholders — only ever in a placeholder build — to the stated allowance
+  on top. A production build has none: the backstop below fails it if one
+  appears.
+*/
+const isStandIn = (item) => item.path.startsWith('media/placeholder/');
+const real = below.filter((item) => !isStandIn(item));
+const standIn = below.filter(isStandIn);
+const bytesOf = (items) => items.reduce((sum, item) => sum + item.bytes, 0);
+const laneTotal = (lane, items = real) => bytesOf(items.filter((item) => item.lane === lane));
+const belowTotal = bytesOf(real);
 const tilesTotal = laneTotal('tile');
+const standInBelow = bytesOf(standIn);
+const standInTiles = laneTotal('tile', standIn);
 const ungated = below.filter((item) => !item.gated);
 const saveDataLargest = Math.max(0, ...ungated.map((item) => item.bytes));
 const overSaveData = ungated.filter((item) => item.bytes > SAVE_DATA_MAX);
-const overVideos = below.filter((item) => item.lane === 'video' && item.bytes > VIDEO_MAX);
-const overPosters = below.filter((item) => item.lane === 'poster' && item.bytes > POSTER_MAX);
+const overVideos = real.filter((item) => item.lane === 'video' && item.bytes > VIDEO_MAX);
+const overPosters = real.filter((item) => item.lane === 'poster' && item.bytes > POSTER_MAX);
+const overStandInBelow = standInBelow > PLACEHOLDER_ALLOWANCE.below;
+const overStandInTiles = standInTiles > PLACEHOLDER_ALLOWANCE.tiles;
+const overStandInFiles = standIn.filter((item) => item.lane !== 'tile' && item.bytes > PLACEHOLDER_MAX);
 
 // The backstop behind the showreel's render gate (src/components/Showreel.astro).
 if (!placeholderBuild) {
@@ -495,7 +512,14 @@ const tooManyLazy = lazyFiles.length > LAZY_MAX_COUNT;
 const overBelow = belowTotal > BELOW_MAX;
 const overTiles = tilesTotal > TILES_MAX;
 const belowFails =
-  overBelow || overTiles || overSaveData.length > 0 || overVideos.length > 0 || overPosters.length > 0;
+  overBelow ||
+  overTiles ||
+  overSaveData.length > 0 ||
+  overVideos.length > 0 ||
+  overPosters.length > 0 ||
+  overStandInBelow ||
+  overStandInTiles ||
+  overStandInFiles.length > 0;
 
 console.log('\n  BUDGET\n');
 console.log(`  total   ${kb(total)} of ${kb(TOTAL_MAX)}   ${pct(total, TOTAL_MAX).padStart(6)}  ${overTotal ? 'OVER' : 'ok'}`);
@@ -513,6 +537,19 @@ console.log(`    poster    ${kb(laneTotal('poster'))} of ${kb(POSTER_MAX)}  ${ov
 console.log(
   `    saveData  ${kb(saveDataLargest)} of ${kb(SAVE_DATA_MAX)}  ${overSaveData.length ? 'OVER' : 'ok'}   largest single file`
 );
+if (placeholderBuild || standIn.length) {
+  // Above: real media only, against production's caps. Here: the placeholders, against the stated allowance.
+  console.log(`  placeholders - an allowance on top of the caps above (scripts/limits.mjs)`);
+  console.log(
+    `    below     ${kb(standInBelow)} of ${kb(PLACEHOLDER_ALLOWANCE.below)}  ${overStandInBelow ? 'OVER' : 'ok'}   ceiling ${kb(BELOW_MAX + PLACEHOLDER_ALLOWANCE.below).trim()} with real media`
+  );
+  console.log(
+    `    tiles     ${kb(standInTiles)} of ${kb(PLACEHOLDER_ALLOWANCE.tiles)}  ${overStandInTiles ? 'OVER' : 'ok'}   ceiling ${kb(TILES_MAX + PLACEHOLDER_ALLOWANCE.tiles).trim()} with real media`
+  );
+  console.log(
+    `    files     ${kb(Math.max(0, ...standIn.filter((item) => item.lane !== 'tile').map((item) => item.bytes)))} of ${kb(PLACEHOLDER_MAX)}  ${overStandInFiles.length ? 'OVER' : 'ok'}   largest video or poster`
+  );
+}
 console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the budget is enforced on raw bytes)\n`);
 
 if (
@@ -534,6 +571,15 @@ if (
   if (overTiles) console.error(`  FAIL  tiles are ${kb(tilesTotal - TILES_MAX).trim()} over 300 kB together.`);
   for (const item of overVideos) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - VIDEO_MAX).trim()} over the 1.2 MB video cap.`);
   for (const item of overPosters) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - POSTER_MAX).trim()} over the 40 kB poster cap.`);
+  if (overStandInBelow) {
+    console.error(`  FAIL  placeholders are ${kb(standInBelow - PLACEHOLDER_ALLOWANCE.below).trim()} over their ${kb(PLACEHOLDER_ALLOWANCE.below).trim()} allowance below the fold.`);
+  }
+  if (overStandInTiles) {
+    console.error(`  FAIL  placeholder tiles are ${kb(standInTiles - PLACEHOLDER_ALLOWANCE.tiles).trim()} over their ${kb(PLACEHOLDER_ALLOWANCE.tiles).trim()} allowance.`);
+  }
+  for (const item of overStandInFiles) {
+    console.error(`  FAIL  ${item.path} is ${kb(item.bytes - PLACEHOLDER_MAX).trim()} over the 3 MB placeholder cap.`);
+  }
   for (const item of overSaveData) {
     console.error(`  FAIL  ${item.path} is fetched on saveData at ${kb(item.bytes).trim()}; no single file may exceed 300 kB.`);
   }

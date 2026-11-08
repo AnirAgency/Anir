@@ -11,16 +11,19 @@
  *
  * It reports only on Workers Builds, on the production branch, and only
  * with BUILD_REPORT_SECRET set as a build secret; anywhere else it says why
- * it did nothing. Workers Builds sets WORKERS_CI, WORKERS_CI_BRANCH,
- * WORKERS_CI_COMMIT_SHA and WORKERS_CI_BUILD_UUID — the last is the same id
- * the deploy hook hands the admin, which is how the admin knows the report
- * is for the build it started.
+ * it did nothing. Workers Builds sets WORKERS_CI, WORKERS_CI_BRANCH and
+ * WORKERS_CI_BUILD_UUID — the last is the same id the deploy hook hands the
+ * admin, which is how the admin knows the report is for the build it
+ * started — and, on a push but not from the deploy hook,
+ * WORKERS_CI_COMMIT_SHA; the commit comes from git when that is missing
+ * (./commit-of.mjs).
  *
  * It sends the build's last lines that say why it stopped (FAIL, Error), at
  * most 200, never the whole log.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { PRODUCTION_BRANCH } from '../src/lib/placeholders.mjs';
+import { commitOf } from './commit-of.mjs';
 
 /** The live Worker. Override with BUILD_REPORT_URL once aniragency.mn is the address. */
 const DEFAULT_URL = 'https://anir.b-batuka0627.workers.dev/api/builds';
@@ -51,7 +54,7 @@ async function main() {
     body: JSON.stringify({
       build: env.WORKERS_CI_BUILD_UUID,
       branch: env.WORKERS_CI_BRANCH,
-      sha: env.WORKERS_CI_COMMIT_SHA,
+      sha: commitOf(env),
       event: finished ? 'finished' : 'started',
       code: finished ? Number(what) : undefined,
       lines,

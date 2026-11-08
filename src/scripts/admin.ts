@@ -34,6 +34,7 @@ import config from '../lib/supabase.json';
 import { admin as t } from '../content/admin';
 import { ENQUIRY_MAX } from '../lib/enquiry-limits';
 import { createTasks } from './admin-tasks';
+import { createContributions } from './admin-contributions';
 import { overlay } from '../content/live';
 import {
   GROUPS,
@@ -110,10 +111,10 @@ interface Product {
 }
 
 /** What is open on the right: a view of the sections, a product, or the enquiries. */
-type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' } | { kind: 'tasks' } | { kind: 'report' };
+type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' } | { kind: 'tasks' } | { kind: 'report' } | { kind: 'contributions' };
 const refKey = (ref: Ref) => (ref.kind === 'section' ? ref.id : ref.kind === 'product' ? `product:${ref.id}` : ref.kind);
-/** The inbox and the task list: tools with no page of the site's own and nothing of site.ts to edit. */
-const isTool = (ref: Ref) => ref.kind === 'inbox' || ref.kind === 'tasks' || ref.kind === 'report';
+/** The inbox, the task list and Schedule 2: tools with no page of the site's own and nothing of site.ts to edit. */
+const isTool = (ref: Ref) => ref.kind === 'inbox' || ref.kind === 'tasks' || ref.kind === 'report' || ref.kind === 'contributions';
 const sameRef = (a: Ref, b: Ref) => refKey(a) === refKey(b);
 
 let saved: Record<string, Obj> = {};
@@ -1001,7 +1002,8 @@ function countOf(ref: Ref): number | null {
   return Array.isArray(list) ? list.length : null;
 }
 
-const hasDraft = (ref: Ref) => (ref.kind === 'tasks' ? tasks.hasDraft() : isTool(ref) ? false : sameRef(ref, view) ? dirty : !!readDraft(ref));
+const hasDraft = (ref: Ref) =>
+  ref.kind === 'tasks' ? tasks.hasDraft() : ref.kind === 'contributions' ? contributions.hasDraft() : isTool(ref) ? false : sameRef(ref, view) ? dirty : !!readDraft(ref);
 
 function renderNav() {
   const item = (ref: Ref, label: string, extra: Child[] = [], off = false) =>
@@ -1058,7 +1060,13 @@ function renderNav() {
     h('ul', { class: 'nav__list nav__list--first' }, h('li', {}, item({ kind: 'inbox' }, t.views.inbox, [unread ? h('span', { class: 'nav__badge', 'aria-label': `${t.inbox.statuses.new}: ${unread}` }, String(unread)) : null]))),
     // The team's work, opened daily like the enquiries — not part of the site's pages.
     h('p', { class: 'nav__title' }, t.tasks.group),
-    h('ul', { class: 'nav__list' }, h('li', {}, item({ kind: 'tasks' }, t.views.tasks, tasks.badges())), h('li', {}, item({ kind: 'report' }, t.views.report))),
+    h(
+      'ul',
+      { class: 'nav__list' },
+      h('li', {}, item({ kind: 'tasks' }, t.views.tasks, tasks.badges())),
+      h('li', {}, item({ kind: 'report' }, t.views.report)),
+      h('li', {}, item({ kind: 'contributions' }, t.views.contributions))
+    ),
     ...groups,
     h('ol', { class: 'steps' }, ...t.steps.map((text) => h('li', {}, text)))
   );
@@ -1069,6 +1077,7 @@ function renderMain() {
   if (view.kind === 'inbox') return renderInbox();
   if (view.kind === 'tasks') return void tasks.renderTasks();
   if (view.kind === 'report') return void tasks.renderReport();
+  if (view.kind === 'contributions') return void contributions.render();
   const v = view.kind === 'section' ? viewOf(view.id) : null;
   const title = view.kind === 'section' ? t.views[view.id] : String((draft.product as Obj).name || (draft.product as Obj).id);
 
@@ -1440,7 +1449,16 @@ function showPage() {
     frame?.remove();
     frame = null;
     framePage = '';
-    const why = view.kind === 'inbox' ? t.preview.inbox : isTool(view) ? t.preview.tasks : view.kind === 'section' && viewOf(view.id).off ? t.offHelp : t.preview.noPage;
+    const why =
+      view.kind === 'inbox'
+        ? t.preview.inbox
+        : view.kind === 'contributions'
+          ? t.preview.contributions
+          : isTool(view)
+            ? t.preview.tasks
+            : view.kind === 'section' && viewOf(view.id).off
+              ? t.offHelp
+              : t.preview.noPage;
     stage.replaceChildren(h('p', { class: 'preview__empty' }, why));
     return;
   }
@@ -2071,6 +2089,7 @@ function keys(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
     if (view.kind === 'tasks') tasks.save();
+    else if (view.kind === 'contributions') contributions.save();
     else save();
     return;
   }
@@ -2090,6 +2109,28 @@ function keys(e: KeyboardEvent) {
   the admin has loaded. A failure inside it stays inside it.
 */
 const tasks = createTasks({
+  h,
+  t,
+  main: () => mainEl,
+  me: () => (session ? { id: session.id, email: session.email } : null),
+  worker: (path, init) => worker(path, init),
+  status: (text, tone, detail) => status(text, tone, detail),
+  said: (text, detail) => said(text, detail),
+  explain: (error, sentence) => explain(error, sentence),
+  isSignedOut: (error) => error instanceof SignedOut,
+  signedOut: () => renderSignIn(t.signIn.expired),
+  renderNav: () => renderNav(),
+  showPage: () => showPage(),
+  when: (iso) => when(iso),
+  remember,
+  showing: (kind) => view.kind === kind,
+});
+
+/*
+  «Хавсралт 2»: Schedule 2, the Members' contributions (./admin-contributions.ts),
+  under «Ажил» with the task list — built and walled off the same way.
+*/
+const contributions = createContributions({
   h,
   t,
   main: () => mainEl,

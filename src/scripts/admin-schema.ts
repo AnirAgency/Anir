@@ -11,6 +11,7 @@
  */
 import type { admin as Copy } from '../content/admin';
 import { MOVES, TASK_PROJECTS, TASK_STATES } from '../lib/task-codes.ts';
+import { KINDS, TRACKED } from '../lib/contribution-codes.ts';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Obj = { [key: string]: Json };
@@ -406,6 +407,37 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
   }
   if (!['{date}', '{who}'].every((slot) => t.tasks.report.when.includes(slot))) problems.add("the Тайлан's fact line needs {date} and {who}");
   if (!t.tasks.report.reason?.includes('{reason}')) problems.add("the Тайлан's reason line needs {reason}");
+  // Schedule 2: every field, kind and refusal src/lib/contribution-codes.ts and the Worker name has its words.
+  const c = t.contributions;
+  if (!t.views.contributions || !t.preview.contributions) problems.add('«Хавсралт 2» needs its name in the tree and its preview sentence');
+  const contributionFields = ['member_id', 'date_made', 'amount_mnt', 'what_for', 'receipt_held', 'kind', 'note', 'repaid_mnt'];
+  for (const field of contributionFields) {
+    if (!c.fields[field]) problems.add(`no label for the Schedule 2 field "${field}"`);
+    if (!c.fieldHelp[field]) problems.add(`no help under the Schedule 2 field "${field}"`);
+  }
+  for (const field of TRACKED) if (!contributionFields.includes(field)) problems.add(`the tracked Schedule 2 field "${field}" has no label`);
+  for (const kind of KINDS) if (!c.kinds[kind]) problems.add(`no name for the Schedule 2 kind "${kind}"`);
+  for (const code of ['member', 'date', 'date-future', 'amount', 'what-for', 'receipt', 'kind', 'note', 'repaid', 'repaid-over', 'gift-not-repaid', 'late-is-permanent', 'late-is-gift', 'not-found']) {
+    if (!c.errors[code]) problems.add(`no sentence for the Schedule 2 error "${code}"`);
+  }
+  for (const part of ['title', 'member', 'principal', 'repaid', 'outstanding', 'owed', 'notDue']) {
+    if (!(c.summary as Record<string, string>)[part]) problems.add(`no words for the Schedule 2 strip's "${part}"`);
+  }
+  const contributionSlots: [string, string | undefined, string[]][] = [
+    ['notify', c.notify, ['{member}', '{amount}', '{what_for}']],
+    ['elapsed', c.elapsed, ['{days}']],
+    ['elapsedLate', c.elapsedLate, ['{days}']],
+    ['lateRow', c.lateRow, ['{days}']],
+    ['recorded', c.recorded, ['{date}', '{who}']],
+    ['notified', c.notified, ['{date}']],
+    ['repaidLine', c.repaidLine, ['{repaid}', '{left}']],
+    ['amount', c.amount, ['{amount}']],
+    ['repay.older', c.repay.older, ['{date}', '{amount}', '{left}']],
+    ['history.line', c.history.line, ['{date}', '{who}', '{field}', '{from}', '{to}']],
+  ];
+  for (const [name, words, needs] of contributionSlots) {
+    if (!words || !needs.every((slot) => words.includes(slot))) problems.add(`the Schedule 2 words "${name}" need ${needs.join(', ')}`);
+  }
   for (const filter of ['new', 'flagged', 'read', 'replied', 'closed']) {
     if (!t.inbox.filters[filter]) problems.add(`no name for the inbox filter "${filter}"`);
   }

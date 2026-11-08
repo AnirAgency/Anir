@@ -91,18 +91,24 @@ const form = () =>
     body: JSON.stringify({ service: 'web', budget: '1-3m', timing: 'this-month', name: 'Бат', contact: 'bat@example.com', message: 'Сайт' }),
   });
 
-const broken = {
-  'fails to load': () => Promise.reject(new Error('the task module failed to load')),
+// Each of the team's tools, broken two ways: the other tool, and the site, must not notice.
+const TOOLS = {
+  tasks: { name: 'task list', path: '/api/tasks', nested: '/api/tasks/report', handler: 'onTasks', other: '/api/contributions' },
+  contributions: { name: 'Schedule 2', path: '/api/contributions', nested: '/api/contributions/0a0a0a0a-0000-4000-8000-00000000000a/repay', handler: 'onContributions', other: '/api/tasks' },
+} as const;
+const broken = (handler: string) => ({
+  'fails to load': () => Promise.reject(new Error('the module failed to load')),
   'throws on every call': async () => ({
-    onTasks: async () => {
-      throw new Error('the task route threw');
+    [handler]: async () => {
+      throw new Error('the route threw');
     },
   }),
-};
+});
 
-for (const [how, loader] of Object.entries(broken)) {
-  await check(`the task code ${how}: the site is untouched`, async () => {
-    const worker = makeWorker(loader as never);
+for (const [tool, about] of Object.entries(TOOLS))
+for (const [how, loader] of Object.entries(broken(about.handler))) {
+  await check(`the ${about.name} code ${how}: the site is untouched`, async () => {
+    const worker = makeWorker({ [tool]: loader } as never);
     const page = await worker.fetch(new Request('https://anir.example.workers.dev/'), env() as never, ctx);
     assert.equal(page.status, 200);
     assert.equal(await page.text(), PAGE, 'the home page, from the static assets');
@@ -119,24 +125,29 @@ for (const [how, loader] of Object.entries(broken)) {
     await worker.scheduled({}, env() as never, ctx);
     await Promise.all(waited.splice(0));
 
-    const tasks = await worker.fetch(new Request('https://anir.example.workers.dev/api/tasks', { headers: { Authorization: 'Bearer x' } }), env() as never, ctx);
-    assert.equal(tasks.status, 500);
-    assert.deepEqual(await tasks.json(), { ok: false, error: 'tasks' }, 'only this route says it failed — and not why');
-    assert.ok(tasks.headers.get('Content-Security-Policy'), 'with the security headers every route carries');
-    assert.equal(tasks.headers.get('X-Robots-Tag'), 'noindex');
-    const nested = await worker.fetch(new Request('https://anir.example.workers.dev/api/tasks/report'), env() as never, ctx);
+    const failed = await worker.fetch(new Request(`https://anir.example.workers.dev${about.path}`, { headers: { Authorization: 'Bearer x' } }), env() as never, ctx);
+    assert.equal(failed.status, 500);
+    assert.deepEqual(await failed.json(), { ok: false, error: tool }, 'only this route says it failed — and not why');
+    assert.ok(failed.headers.get('Content-Security-Policy'), 'with the security headers every route carries');
+    assert.equal(failed.headers.get('X-Robots-Tag'), 'noindex');
+    const nested = await worker.fetch(new Request(`https://anir.example.workers.dev${about.nested}`, { method: 'POST' }), env() as never, ctx);
     assert.equal(nested.status, 500);
-    return 'pages 200 from the assets, 404 as before, enquiry stored, health/inbox/alerts answer, schedule runs; /api/tasks* alone: 500';
+    // The other tool is its own wall: it answers a stranger as it always does.
+    const other = await worker.fetch(new Request(`https://anir.example.workers.dev${about.other}`), env() as never, ctx);
+    assert.equal(other.status, 401, `${about.other} is not taken down with it`);
+    return `pages 200 from the assets, 404 as before, enquiry stored, health/inbox/alerts answer, schedule runs, ${about.other} 401 as ever; ${about.path}* alone: 500`;
   });
 }
 
-await check('the real task code loads only when asked for, and answers a stranger 401', async () => {
-  const worker = makeWorker();
-  const response = await worker.fetch(new Request('https://anir.example.workers.dev/api/tasks'), env() as never, ctx);
-  assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { ok: false, error: 'signed-out' });
-  return '/api/tasks with no session: 401 signed-out';
-});
+for (const [tool, about] of Object.entries(TOOLS)) {
+  await check(`the real ${about.name} code loads only when asked for, and answers a stranger 401`, async () => {
+    const worker = makeWorker();
+    const response = await worker.fetch(new Request(`https://anir.example.workers.dev${about.path}`), env() as never, ctx);
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { ok: false, error: 'signed-out' });
+    return `${about.path} with no session: 401 signed-out (${tool})`;
+  });
+}
 
 /* ------------------------------------------------------- what imports what */
 
@@ -147,26 +158,28 @@ const files = (dir: string): string[] =>
     return statSync(full).isDirectory() ? files(relative(root, full)) : [relative(root, full).split(sep).join('/')];
   });
 const imports = (file: string) => [...readFileSync(join(root, file), 'utf8').matchAll(/(?:^|\n)\s*import\s+(type\s+)?[^'"]*?from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => ({ type: !!m[1], dynamic: !!m[3], target: (m[2] ?? m[3]) as string }));
-const TASK_CODE = /(^|\/)(tasks(\.ts)?|task-codes(\.ts)?|admin-tasks(\.ts)?)$/;
+// The team's tools: the task list, Schedule 2, and the little they share (worker/team.ts).
+const TOOL_CODE = /(^|\/)(tasks|task-codes|admin-tasks|contributions|contribution-codes|admin-contributions|team)(\.ts)?$/;
+const OWN_CODES = ['src/lib/task-codes.ts', 'src/lib/contribution-codes.ts'];
 
-await check('worker/index.ts never imports the task code at start-up', async () => {
-  const found = imports('worker/index.ts').filter((i) => TASK_CODE.test(i.target));
+await check("worker/index.ts never imports the team's tools at start-up", async () => {
+  const found = imports('worker/index.ts').filter((i) => TOOL_CODE.test(i.target));
   const eager = found.filter((i) => !i.type && !i.dynamic);
   assert.deepEqual(eager, [], 'a static import would load it with everything else');
-  assert.ok(found.some((i) => i.dynamic), 'loaded on demand');
-  return `${found.length} reference(s): ${found.map((i) => (i.dynamic ? 'import() on demand' : 'import type')).join(', ')}`;
+  for (const tool of ['tasks', 'contributions']) assert.ok(found.some((i) => i.dynamic && i.target === `./${tool}.ts`), `${tool}: loaded on demand`);
+  return `${found.length} reference(s): ${found.map((i) => `${i.target} ${i.dynamic ? 'import() on demand' : 'import type'}`).join(', ')}`;
 });
 
-await check('no public page, layout, component, style or shared library imports the task code', async () => {
+await check("no public page, layout, component, style or shared library imports the team's tools", async () => {
   const outside = ['src/pages', 'src/components', 'src/layouts', 'src/styles', 'src/content', 'src/lib']
     .flatMap(files)
-    .filter((file) => /\.(astro|ts|mjs|js)$/.test(file) && file !== 'src/lib/task-codes.ts')
-    .filter((file) => imports(file).some((i) => TASK_CODE.test(i.target)));
+    .filter((file) => /\.(astro|ts|mjs|js)$/.test(file) && !OWN_CODES.includes(file))
+    .filter((file) => imports(file).some((i) => TOOL_CODE.test(i.target)));
   assert.deepEqual(outside, []);
   const importers = ['src/scripts', 'worker', 'src/pages/admin']
     .flatMap(files)
-    .filter((file) => /\.(astro|ts|mjs)$/.test(file) && imports(file).some((i) => TASK_CODE.test(i.target)) && !TASK_CODE.test(file.replace(/\.(ts|mjs)$/, '')));
-  return `none; the task code is imported only by ${importers.join(', ')}`;
+    .filter((file) => /\.(astro|ts|mjs)$/.test(file) && imports(file).some((i) => TOOL_CODE.test(i.target)) && !TOOL_CODE.test(file.replace(/\.(ts|mjs)$/, '')));
+  return `none; the tools' code is imported only by ${importers.join(', ')}`;
 });
 
 Object.assign(console, quiet);

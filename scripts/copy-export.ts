@@ -148,6 +148,7 @@ const ADMIN_PARTS: Record<string, string> = {
   rows: 'Жагсаалтын мөр',
   newProduct: 'Шинэ бүтээгдэхүүн',
   tasks: 'Ажил (даалгавар, тайлан)',
+  contributions: 'Ажил › Хавсралт 2',
   notify: 'Telegram мэдэгдэл',
   alerts: 'Төлөвийн мөрийн анхааруулга',
 };

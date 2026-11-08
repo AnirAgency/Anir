@@ -617,6 +617,9 @@ How it fits together (CLAUDE.md > The admin has the rules):
 | [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
 | [`worker/tasks.ts`](worker/tasks.ts) | The task list: `/api/tasks` (list, `counts`, `report`, create, edit, `move`) — editors only, service key, every write conditional on the `updated_at` it read. |
 | [`supabase/migrations/0010_tasks.sql`](supabase/migrations/0010_tasks.sql), [`0011_task_events_and_names.sql`](supabase/migrations/0011_task_events_and_names.sql) | `tasks`; then `task_events` (every move, by trigger) and `editors.display_name`. RLS on, no policies. |
+| [`worker/contributions.ts`](worker/contributions.ts), [`src/scripts/admin-contributions.ts`](src/scripts/admin-contributions.ts), [`src/lib/contribution-codes.ts`](src/lib/contribution-codes.ts) | Schedule 2: `/api/contributions` (list and strip, create, edit, `repay`); the admin's «Хавсралт 2»; the rules both obey — days, whole tugrik, × 1.5. |
+| [`supabase/migrations/0012_contributions.sql`](supabase/migrations/0012_contributions.sql) | `contributions` and `contribution_events` (by trigger); `recorded_at` never changes. RLS on, no policies. |
+| [`worker/team.ts`](worker/team.ts) | What the two tools share: the team by name, and the tasks group's Telegram. |
 | [`src/scripts/admin-tasks.ts`](src/scripts/admin-tasks.ts) | «Ажил» in the admin: «Даалгавар» (opens on «Минийх») and the read-only «Тайлан». |
 | [`src/lib/task-codes.ts`](src/lib/task-codes.ts) | The states, projects and moves both of them obey. |
 
@@ -665,6 +668,40 @@ sees everything.
   task list ever grows beyond this, it moves to its own Worker.
 - Tests: `npm run test:tasks` (the routes), `npm run test:isolation`,
   `npm run build && npm run test:tasks-browser` (the admin in Chrome or Edge).
+
+### Schedule 2 («Хавсралт 2»)
+
+The founder agreement's Schedule 2, under «Ажил»: the money each Member has
+put into the Company. Clause 5.2 makes it a loan repaid at 150% of principal;
+clause 5.1 makes it a gift if it is not recorded within 30 days of being made,
+and requires every new entry to reach all Members within 7 days. Only this —
+jobs, costs, the Buffer and distributions come with the first paid job.
+
+- **The strip** at the top: per Member, principal, repaid, outstanding, and
+  outstanding × 1.5 — labelled *not yet due*. Clause 5.2 pays only once the
+  Company holds 20,000,000₮ after every obligation, and nothing here knows
+  the bank balance.
+- **Whole tugrik only.** Type `1 500 000`; a decimal point or comma is refused
+  before it is sent, and again by the Worker. × 1.5 rounds half up, to the
+  Member (`owedMnt` in [`src/lib/contribution-codes.ts`](src/lib/contribution-codes.ts)).
+- **Clause 5.1.** The form counts the days from the money moving to today as
+  the date is typed. Past 30, it says so and the entry is saved as a gift —
+  stored, never refused — marked «⚠ Хоцорч бүртгэгдсэн» on its row for good.
+  The day it was recorded is the Worker's clock, and never changes.
+- **The 7-day notice**: each new entry sends «Хавсралт 2: {member} {amount}₮ —
+  {what_for}» to the tasks group. If it did not arrive, the row says so, and
+  the Leader tells the Members by hand.
+- **«Хуулах»** copies an entry into a new form dated today — a subscription's
+  next month. **«Буцаан төлөх»** records principal repaid against one row;
+  oldest loan first (5.2(c)) is the editor's to follow, and the box names an
+  older outstanding loan if there is one.
+- **History**: every change to member, date, amount, kind or repayment is a
+  row in `contribution_events`, shown under the entry.
+- **Members only**: the picker lists editors. Someone who is not a Member
+  cannot lend (5.4 needs a 9.2 decision), so their payment is not entered here.
+- Tests: `npm run test:contributions` (routes and rules — 29/30/31 days,
+  integers, rounding, notices, events, no grants), `npm run test:isolation`,
+  `npm run build && npm run test:contributions-browser`.
 
 ### Setting it up (once)
 

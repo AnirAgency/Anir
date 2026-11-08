@@ -39,14 +39,10 @@
 import { admin as t } from '../src/content/admin.ts';
 import { MOVES, TASK_LIMITS, TASK_PROJECTS, isDate, repeatsTitle, ubToday, weekOf, type Move, type TaskState } from '../src/lib/task-codes.ts';
 import { answer, callerOf, refusal } from './auth.ts';
+import { fill, nameOf, people as team, tellTeam, type Person, type TeamEnv } from './team.ts';
 
-export interface Env {
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  TELEGRAM_BOT_TOKEN?: string;
-  /** The tasks group, apart from the enquiries one. Unset: no task messages, nothing else changes. */
-  TELEGRAM_TASKS_CHAT_ID?: string;
-}
+export type { Person };
+export type Env = TeamEnv;
 
 export interface Task {
   id: string;
@@ -67,12 +63,6 @@ export interface Task {
   reject_reason: string | null;
   /** Who moved it last — what the trigger writes into task_events.by. */
   moved_by?: string | null;
-}
-
-/** Someone on the team, as shown: their display name, else their email (editors, migration 0011). */
-export interface Person {
-  id: string;
-  name: string;
 }
 
 /** One change of a task's state, kept (task_events, migration 0011). */
@@ -105,10 +95,7 @@ function store(env: Env, fetcher: typeof fetch) {
     return (await response.json()) as T;
   };
   return {
-    async people(): Promise<Person[]> {
-      const rows = await read<{ user_id: string; email: string; display_name: string | null }[]>(await fetcher(`${rest}/editors?select=user_id,email,display_name&order=email`, { headers }), 'editors');
-      return rows.map((row) => ({ id: row.user_id, name: row.display_name?.trim() || row.email }));
-    },
+    people: (): Promise<Person[]> => team(env, fetcher),
     /** The changes of state in a span of time, oldest first. */
     events: async (from: string, until: string) =>
       read<TaskEvent[]>(await fetcher(`${rest}/task_events?select=*&at=gte.${encodeURIComponent(from)}&at=lt.${encodeURIComponent(until)}&order=at`, { headers }), 'task_events'),
@@ -144,33 +131,8 @@ type Store = ReturnType<typeof store>;
 
 /* ---------------------------------------------------------------- Telegram */
 
-/**
- * One message to the tasks group. Never the enquiries chat, never throws,
- * and with TELEGRAM_TASKS_CHAT_ID unset it is skipped — said in the log, and
- * nothing else changes. Whether it was delivered.
- */
-export async function tellTasks(env: Env, message: string, fetcher: typeof fetch = fetch): Promise<boolean> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_TASKS_CHAT_ID) {
-    console.log('task notification: skipped — TELEGRAM_TASKS_CHAT_ID or TELEGRAM_BOT_TOKEN is not set');
-    return false;
-  }
-  try {
-    const response = await fetcher(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: env.TELEGRAM_TASKS_CHAT_ID, text: message }),
-    });
-    console.log(`task notification: ${response.ok ? 'sent' : `FAILED — Telegram answered ${response.status}`}`);
-    return response.ok;
-  } catch (error) {
-    console.error(`task notification: FAILED — ${(error as Error)?.message ?? error}`);
-    return false;
-  }
-}
-
-const fill = (template: string, values: Record<string, string>) => template.replace(/\{(\w+)\}/g, (all, key) => values[key] ?? all);
-/** A person as shown — never a bare id: someone no longer an editor is «Хасагдсан хэрэглэгч». */
-const nameOf = (people: Person[], id: string | null) => (id ? (people.find((p) => p.id === id)?.name ?? t.removedPerson) : '—');
+/** One message to the tasks group (./team.ts): never the enquiries chat, never throws, skipped when unset. */
+export const tellTasks = (env: Env, message: string, fetcher: typeof fetch = fetch) => tellTeam(env, message, fetcher, 'task notification');
 
 /* -------------------------------------------------------------- the fields */
 

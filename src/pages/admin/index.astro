@@ -1013,4 +1013,56 @@ const data = JSON.stringify({ seed, published: site }, (_key, value) =>
     padding-left: 1.1rem;
   }
 
+  /* ------------------------------------------------------ Хавсралт 2 */
+
+  /* The strip: per Member, drawn in hairlines like every grid here. */
+  .ledger {
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+  }
+
+  .ledger__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger__table caption {
+    text-align: left;
+    padding-bottom: 0.5rem;
+  }
+
+  .ledger__table th,
+  .ledger__table td {
+    padding: 0.5rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .ledger__table td {
+    text-align: right;
+  }
+
+  .ledger__table thead th {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  /* Clause 5.1's count under the date: past 30 days it is a warning, in a sign and words. */
+  .ledger__elapsed[data-late='true'] {
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  .ledger__history {
+    margin: 0 0 0.75rem;
+    padding-left: 1.1rem;
+  }
+
+  [data-money] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
 </style>

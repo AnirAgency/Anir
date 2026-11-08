@@ -207,6 +207,8 @@ export interface Product {
   name: string;
   tagline: string;
   description: string;
+  /** Its own page's title and description for search and link previews. */
+  seo: Seo;
   spec: {
     role: string;
     tech: string;
@@ -287,6 +289,8 @@ export interface Products {
   };
   /** The products page, and what every product's own page shares. */
   pages: {
+    /** The products page's own title and description for search and link previews. */
+    seo: Seo;
     title: string;
     headline: string;
     intro: string;
@@ -480,6 +484,25 @@ export interface Chrome {
   skipToContent: string;
   /** Rail marker for the hero, which has no visible section heading. */
   heroLabel: string;
+  /** The page for an address that does not exist (src/pages/404.astro): status 404, kept out of search. */
+  notFound: {
+    /** The browser tab. */
+    title: string;
+    heading: string;
+    text: string;
+    /** The link back to the home page. */
+    home: string;
+  };
+}
+
+/**
+ * What a page says in search results and link previews, written for that
+ * page: the <title> (about 60 characters before Google cuts it) and the
+ * description (about 155). Not shown on the page itself.
+ */
+export interface Seo {
+  title: string;
+  description: string;
 }
 
 /* -------------------------------------------------------------------- meta */
@@ -495,6 +518,13 @@ export interface Meta {
   countryCode: string;
   /** Year the company was founded, for the same. */
   founded: string;
+  /** Square mark, at least 112 px, for the Organization record's logo. */
+  logo: string;
+  /**
+   * The studio's own social accounts, as full URLs, for the Organization
+   * record's sameAs. Empty until the real ones are given — never guessed.
+   */
+  sameAs: string[];
 }
 
 /* -------------------------------------------------------------------- site */
@@ -561,6 +591,8 @@ export const seed: Site = {
     country: 'Монгол Улс',
     countryCode: 'MN',
     founded: '2026',
+    logo: '/apple-touch-icon.png',
+    sameAs: [],
   },
   chrome: {
     railTick: 'УБ',
@@ -568,6 +600,12 @@ export const seed: Site = {
     railLabel: 'Хуудсны явц',
     skipToContent: 'Үндсэн хэсэг рүү очих',
     heroLabel: 'Нүүр',
+    notFound: {
+      title: 'Хуудас олдсонгүй',
+      heading: 'Хуудас олдсонгүй',
+      text: 'Таны хайсан хуудас байхгүй, эсвэл өөр хаяг руу шилжсэн байна.',
+      home: 'Нүүр хуудас руу буцах',
+    },
   },
   nav: {
     wordmark: 'ANIR',
@@ -693,6 +731,10 @@ export const seed: Site = {
       backdropLight: { src: '/media/statement-backdrop-light.avif', width: 1400, height: 752 },
     },
     pages: {
+      seo: {
+        title: 'Бүтээгдэхүүн — Anir',
+        description: 'Бидний бүтээж, өдөр бүр ажиллуулдаг гурван бүтээгдэхүүн.',
+      },
       title: 'Бүтээгдэхүүн',
       headline: 'Бүтээгдэхүүн бүр өөрийн түүхтэй',
       intro: 'Бидний бүтээж, өдөр бүр ажиллуулдаг гурван бүтээгдэхүүн.',
@@ -749,6 +791,10 @@ export const seed: Site = {
         name: 'Ezmath',
         tagline: 'Математикаа бэлд. Шалгалтаа дав.',
         description: 'Математикийн мэдлэгээ бататгах хүртэлх таны ухаалаг туслах.',
+        seo: {
+          title: 'Ezmath — Anir',
+          description: 'Математикийн мэдлэгээ бататгах хүртэлх таны ухаалаг туслах.',
+        },
         spec: {
           role: 'Бүтээгдэхүүн, брэнд, хөгжүүлэлт',
           tech: 'Next · Supabase',
@@ -804,6 +850,10 @@ export const seed: Site = {
         name: 'Ethos',
         tagline: 'Зөв хандив. Бодит тус.',
         description: 'Бодит сайн үйлсийг холбож, сайн дурын оролцоог дэмжинэ.',
+        seo: {
+          title: 'Ethos — Anir',
+          description: 'Бодит сайн үйлсийг холбож, сайн дурын оролцоог дэмжинэ.',
+        },
         spec: {
           role: 'Бүтээгдэхүүн, хөгжүүлэлт',
           tech: 'Next · Supabase',
@@ -855,6 +905,10 @@ export const seed: Site = {
         name: 'Olymo',
         tagline: 'Боловсролын шинэ мэдээлэл бүхнийг нэг дороос.',
         description: 'Олимпиад, боловсролын хамгийн хэрэгтэй мэдээллийг нэг дороос шуурхай хүргэнэ.',
+        seo: {
+          title: 'Olymo — Anir',
+          description: 'Олимпиад, боловсролын хамгийн хэрэгтэй мэдээллийг нэг дороос шуурхай хүргэнэ.',
+        },
         spec: {
           role: 'Бүтээгдэхүүн, эдиториал',
           tech: 'Astro · CMS',

@@ -90,8 +90,11 @@ await check('causes, each by its own line', async () => {
   assert.equal(await cause('  FAIL  the page shows the stand-in testimonial in a production build.'), 'claim');
   assert.equal(await cause('  FAIL  showreel.mp4 is 100.0 kB over the 1200.0 kB video cap.'), 'video');
   assert.equal(await cause('Error: admin copy: 1 missing'), 'labels');
+  // The lines scripts/seo.mjs prints, exactly.
+  assert.equal(await cause('  FAIL  alt: / /media/live/tile-01.avif has an empty alt but is not declared decorative (aria-hidden="true")'), 'alt');
+  assert.equal(await cause('  FAIL  seo: /products/ezmath/ shares its title with /products/ethos/: "Ezmath — Anir"'), 'seo');
   assert.equal(await cause('Error: something nobody planned for'), 'other');
-  return 'content, claim, video, labels, other';
+  return 'content, claim, video, labels, alt, seo, other';
 });
 
 await check('a late «started» never undoes how the build ended', async () => {

@@ -13,7 +13,7 @@ import { site, type Product } from '../content/site';
   and on hover it leans in and the button swells.
 
   The picture is decoration here — the words name where the link goes — so
-  alt="". It is shown only where there is something to show, the next
+  alt="" aria-hidden="true". It is shown only where there is something to show, the next
   product's big picture or else its shot, and without either, before the
   shoot in production, the section is the words and the button on the
   dark. A plain lazy <img> in the tile lane. The button is round by the
@@ -46,7 +46,7 @@ const backdrop = [product.feature, product.shot]
               src={backdrop.pic!.src}
               width={backdrop.media.width}
               height={backdrop.media.height}
-              alt=""
+              alt="" aria-hidden="true"
               loading="lazy"
               decoding="async"
               data-lane="tile"

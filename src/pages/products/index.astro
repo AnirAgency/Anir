@@ -16,7 +16,7 @@ import { site } from '../../content/site';
 const { pages } = site.products;
 ---
 
-<Base title={`${pages.title} — Anir`} description={pages.intro} home={false}>
+<Base title={pages.seo.title} description={pages.seo.description} home={false}>
   <PageHead />
   <ProductIndex />
   <ContactCta tone="light" />

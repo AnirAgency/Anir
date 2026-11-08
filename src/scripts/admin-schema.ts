@@ -26,6 +26,10 @@ export const RULES = {
   hidden: [
     'meta.ogImage',
     'meta.countryCode',
+    // A file path and the studio's account URLs, for search engines' records
+    // (Base.astro): set by the developer, not copy.
+    'meta.logo',
+    'meta.sameAs',
     'hero.mark',
     'hero.video',
     'showreel.media',
@@ -154,13 +158,14 @@ export const VIEWS: View[] = [
     on: 'header, .rail, .skip-link, footer',
   },
   { id: 'meta', group: 'site', parts: ['meta'], page: null },
+  { id: 'notFound', group: 'site', parts: ['chrome.notFound'], page: null },
 ];
 export const viewOf = (id: string) => VIEWS.find((v) => v.id === id) as View;
 /** The sections a view saves. */
 export const sectionsOf = (v: View) => [...new Set(v.parts.map((part) => part.split('.')[0]))];
 
 /** A product's fields in the order its page shows them. */
-export const PRODUCT_ORDER = ['name', 'tagline', 'description', 'spec', 'href', 'shot', 'feature', 'impressions', 'front', 'responsive', 'gallery', 'testimonial'];
+export const PRODUCT_ORDER = ['name', 'tagline', 'description', 'spec', 'href', 'shot', 'feature', 'impressions', 'front', 'responsive', 'gallery', 'testimonial', 'seo'];
 
 // ------------------------------------------------------------- list rows
 
@@ -211,6 +216,10 @@ export type Consequence = 'twoLines' | 'moreLines' | 'button' | 'round' | 'googl
 export const LIMITS: Record<string, { max: number; says: Consequence }> = {
   'meta.title': { max: 60, says: 'google' },
   'meta.description': { max: 155, says: 'google' },
+  'products.pages.seo.title': { max: 60, says: 'google' },
+  'products.pages.seo.description': { max: 155, says: 'google' },
+  'product.seo.title': { max: 60, says: 'google' },
+  'product.seo.description': { max: 155, says: 'google' },
   'nav.links.*.label': { max: 15, says: 'phone' },
   'hero.tagline.line': { max: 55, says: 'moreLines' },
   'hero.tagline.lineItalic': { max: 22, says: 'twoLines' },
@@ -381,7 +390,7 @@ export function checkAdmin(seed: Obj, t: Copied): string[] {
     if (!(t.inbox.flags as Record<string, string>)[flag]) problems.add(`no words for the enquiry flag "${flag}"`);
   }
   if (!['{field}', '{length}', '{max}'].every((slot) => t.inbox.flags.cut.includes(slot))) problems.add('a cut value needs its words, with {field}, {length} and {max}');
-  for (const reason of ['content', 'image', 'claim', 'budget', 'contrast', 'labels', 'video', 'other']) {
+  for (const reason of ['content', 'image', 'claim', 'budget', 'contrast', 'labels', 'alt', 'seo', 'video', 'other']) {
     if (!t.publish.reasons[reason]) problems.add(`no sentence for a build that failed for "${reason}"`);
   }
   // The values an editor picks between in the contact form: each needs words a visitor reads.

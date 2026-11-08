@@ -19,42 +19,83 @@ interface Props {
   /** False on the products pages, which do not hold the home page's
    *  sections: the nav's anchors lead back to it. */
   home?: boolean;
+  /** False on a page with no address of its own — the 404 page — so it names
+   *  no canonical URL and no og:url. */
+  canonical?: boolean;
 }
 
-const { title, description, chrome = true, noindex = false, home = true } = Astro.props;
+const { title, description, chrome = true, noindex = false, home = true, canonical: hasCanonical = true } = Astro.props;
 
 const pageTitle = title ?? site.meta.title;
 const pageDescription = description ?? site.meta.description;
-const canonical = new URL(noindex ? '/' : Astro.url.pathname, Astro.site).href;
+const canonical = hasCanonical ? new URL(noindex ? '/' : Astro.url.pathname, Astro.site).href : null;
 const ogImage = site.meta.ogImage ? new URL(site.meta.ogImage, Astro.site).href : null;
 
 /*
-  A business record for search engines. ProfessionalService rather than
-  LocalBusiness: there is no shopfront to walk into, and the services are the
-  point. Built from site.ts so it cannot drift from the visible copy.
+  The studio's records for search engines — on the home page only, the
+  page they describe, and never on a page kept out of search. Built from
+  site.ts so they cannot drift from the visible copy.
+
+    Organization       who Anir is: name, logo, contact, its own accounts.
+    ProfessionalService  the business — a LocalBusiness subtype, chosen
+                       because there is no shopfront to walk into and the
+                       services are the point. Its address is the city and
+                       country only: a street address waits on a real one.
+    WebSite            carries inLanguage: "mn" — schema.org gives that
+                       property to a site or a page, not to an organization.
+
+  sameAs appears only once site.meta.sameAs holds the real accounts.
 */
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'ProfessionalService',
-  name: 'Anir',
-  legalName: 'Анир ХХК',
-  url: Astro.site?.href,
-  ...(ogImage ? { image: ogImage, logo: ogImage } : {}),
-  description: site.meta.description,
-  email: site.contact.email,
-  foundingDate: site.meta.founded,
-  address: {
-    '@type': 'PostalAddress',
-    addressLocality: site.meta.locality,
-    addressCountry: site.meta.countryCode,
+const base = Astro.site?.href ?? '/';
+const organizationId = `${base}#organization`;
+const records = home && !noindex;
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': organizationId,
+    name: 'Anir',
+    legalName: 'Анир ХХК',
+    url: base,
+    logo: new URL(site.meta.logo, Astro.site).href,
+    email: site.contact.email,
+    foundingDate: site.meta.founded,
+    knowsLanguage: 'mn',
+    ...(site.meta.sameAs.length ? { sameAs: site.meta.sameAs } : {}),
   },
-  areaServed: site.meta.country,
-  knowsLanguage: 'mn',
-  makesOffer: site.services.items.map((item) => ({
-    '@type': 'Offer',
-    itemOffered: { '@type': 'Service', name: item.name },
-  })),
-};
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ProfessionalService',
+    '@id': `${base}#business`,
+    name: 'Anir',
+    url: base,
+    ...(ogImage ? { image: ogImage } : {}),
+    logo: new URL(site.meta.logo, Astro.site).href,
+    description: site.meta.description,
+    email: site.contact.email,
+    parentOrganization: { '@id': organizationId },
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: site.meta.locality,
+      addressCountry: site.meta.countryCode,
+    },
+    areaServed: site.meta.country,
+    knowsLanguage: 'mn',
+    makesOffer: site.services.items.map((item) => ({
+      '@type': 'Offer',
+      itemOffered: { '@type': 'Service', name: item.name },
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${base}#website`,
+    name: 'Anir',
+    url: base,
+    inLanguage: 'mn',
+    publisher: { '@id': organizationId },
+  },
+];
 ---
 
 <!doctype html>
@@ -64,7 +105,7 @@ const jsonLd = {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={pageDescription} />
-    <link rel="canonical" href={canonical} />
+    {canonical && <link rel="canonical" href={canonical} />}
     {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -77,7 +118,7 @@ const jsonLd = {
     <meta property="og:site_name" content="Anir" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDescription} />
-    <meta property="og:url" content={canonical} />
+    {canonical && <meta property="og:url" content={canonical} />}
     {ogImage && <meta property="og:image" content={ogImage} />}
     {ogImage && <meta property="og:image:width" content="1200" />}
     {ogImage && <meta property="og:image:height" content="630" />}
@@ -102,7 +143,7 @@ const jsonLd = {
     <link rel="preload" href="/fonts/jetbrainsmono-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/ptserif-400-italic.woff2" as="font" type="font/woff2" crossorigin />
 
-    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    {records && jsonLd.map((record) => <script type="application/ld+json" set:html={JSON.stringify(record)} />)}
 
     <slot name="head" />
 

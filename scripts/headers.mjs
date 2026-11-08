@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SITE_URL } from '../src/lib/site-url.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -137,6 +138,20 @@ ${security.map(([name, value]) => `  ${name}: ${value}`).join('\n')}
 # re-encode reaches people without a purge.
 /media/*
   Cache-Control: public, max-age=604800
+
+# Kept out of search, by host: every workers.dev address — the Worker's own,
+# anir.<account>.workers.dev, and each preview, <name>-anir.<account>.workers.dev
+# — is a copy of a site whose address is ${SITE_URL}. Each placeholder stops
+# at a dot, so this matches any two labels before workers.dev, and never the
+# production domain, which matches no rule here and is indexed. The Worker
+# adds the same header to its own responses (worker/index.ts).
+https://:worker.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex
+
+# The admin, on every host. Not disallowed in robots.txt: a crawler that is
+# kept out never reads the noindex, and can still list the bare address.
+/admin/*
+  X-Robots-Tag: noindex
 `;
 
 /*
@@ -145,7 +160,7 @@ ${security.map(([name, value]) => `  ${name}: ${value}`).join('\n')}
   permissive, and splitting it is not the fix.
 */
 const lines = headers.split('\n');
-const rules = lines.filter((line) => line.startsWith('/')).length;
+const rules = lines.filter((line) => line.startsWith('/') || line.startsWith('https://')).length;
 const longest = Math.max(...lines.map((line) => line.length));
 if (rules > 100) throw new Error(`_headers has ${rules} rules; Workers Static Assets allows 100.`);
 if (longest > 2000) throw new Error(`_headers has a ${longest}-character line; Workers Static Assets allows 2,000.`);

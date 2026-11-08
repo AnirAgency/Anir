@@ -1,0 +1,60 @@
+---
+/*
+  The page for an address that does not exist. Workers Static Assets serves
+  it with status 404 for any URL that matches no file (wrangler.jsonc >
+  assets.not_found_handling = "404-page"); /api/* goes to the Worker first,
+  so this never stands in for an enquiry.
+
+  Kept out of search (noindex), with no canonical — it has no address of its
+  own — and the full nav, so a lost visitor has somewhere to go. Every word
+  from site.ts > chrome.notFound.
+*/
+import Base from '../layouts/Base.astro';
+import Section from '../components/Section.astro';
+import { site } from '../content/site';
+
+const { notFound } = site.chrome;
+---
+
+<Base title={notFound.title} description={notFound.text} home={false} noindex canonical={false}>
+  <Section tone="dark" id="not-found" label={notFound.heading}>
+    <div class="lost">
+      <p class="lost__code t-mono-label" aria-hidden="true">404</p>
+      <h1 class="lost__title t-display-l">{notFound.heading}</h1>
+      <p class="lost__text t-mono-body">{notFound.text}</p>
+      <a class="lost__home t-mono-label" href="/">{notFound.home}</a>
+    </div>
+  </Section>
+</Base>
+
+<style>
+  .lost {
+    min-height: 60vh;
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    max-width: 46ch;
+  }
+  .lost__code {
+    color: var(--muted);
+  }
+  .lost__title {
+    margin: 0;
+  }
+  .lost__text {
+    margin: 0;
+    color: var(--muted);
+  }
+  /* Clickable, so orange (CLAUDE.md > The orange rule); 5.43:1 on --ink. */
+  .lost__home {
+    color: var(--orange);
+    justify-self: start;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 2px;
+  }
+  .lost__home:hover,
+  .lost__home:focus-visible {
+    color: var(--paper);
+  }
+</style>

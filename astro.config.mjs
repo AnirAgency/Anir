@@ -1,8 +1,11 @@
 // @ts-check
-import { rmSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 
 import { placeholderMode, placeholderReason } from './src/lib/placeholders.mjs';
+import { SITE_URL } from './src/lib/site-url.mjs';
 
 /**
  * /styleguide exists in `astro dev` and nowhere else.
@@ -51,11 +54,59 @@ function stripPlaceholders() {
 
 // Static output only. Workers Static Assets serves dist/, and the Worker in
 // worker/ answers the contact endpoint — no SSR adapter, see README > Cloudflare Workers.
+/**
+ * sitemap.xml and robots.txt, written from what the build produced — never by
+ * hand, so a new product's page is listed the moment it exists. Every built
+ * page goes in except one that says noindex (the admin, /v2, the 404 page):
+ * the rule is the page's own robots meta, not a list to keep in step.
+ */
+function searchFiles() {
+  return {
+    name: 'anir:search-files',
+    hooks: {
+      'astro:build:done': ({ dir, logger }) => {
+        const out = fileURLToPath(dir);
+        const pages = [];
+        const walk = (folder) => {
+          for (const name of readdirSync(folder)) {
+            const full = join(folder, name);
+            if (statSync(full).isDirectory()) walk(full);
+            else if (name === 'index.html') pages.push(full);
+          }
+        };
+        walk(out);
+        const urls = pages
+          .filter((file) => !/<meta\s+name="robots"\s+content="[^"]*noindex/i.test(readFileSync(file, 'utf8')))
+          .map((file) => new URL(relative(out, dirname(file)).split(sep).join('/').replace(/^(.+)$/, '$1/'), SITE_URL).href)
+          .sort();
+        writeFileSync(
+          join(out, 'sitemap.xml'),
+          `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url><loc>${url}</loc></url>`).join('\n')}\n</urlset>\n`
+        );
+        writeFileSync(
+          join(out, 'robots.txt'),
+          [
+            'User-agent: *',
+            'Allow: /',
+            '',
+            "# The Worker's endpoints are not pages.",
+            'Disallow: /api/',
+            '',
+            `Sitemap: ${new URL('/sitemap.xml', SITE_URL).href}`,
+            '',
+          ].join('\n')
+        );
+        logger.info(`sitemap.xml: ${urls.length} page(s); robots.txt written`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  site: 'https://aniragency.mn',
+  site: SITE_URL,
   output: 'static',
   compressHTML: true,
-  integrations: [devStyleguide(), stripPlaceholders()],
+  integrations: [devStyleguide(), stripPlaceholders(), searchFiles()],
   build: {
     assets: '_astro',
     // Small sheets get inlined; anything larger stays a cacheable file.

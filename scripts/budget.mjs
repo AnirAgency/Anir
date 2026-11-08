@@ -178,7 +178,26 @@ function inlineBytes(html) {
 
 // ------------------------------------------------------------------ traverse
 
+/*
+  A script's own imports. A static one — `import … from "./x.js"`, `import
+  "./x.js"`, `export … from "./x.js"` — is fetched before the script runs:
+  first load, as surely as a <script src>. A dynamic one — `import("./x.js")`
+  — is fetched when the code asks for it: a view opened on demand, like the
+  admin's tools. Splitting code moves weight from the first into the second;
+  it must never move it out of sight.
+*/
+const STATIC_IMPORT = /(?:\bimport|\bexport)\s*(?:[\w*$\s{},]*?\bfrom\s*)?["'](\.{1,2}\/[^"']+\.js)["']/g;
+const DYNAMIC_IMPORT = /\bimport\(\s*["'](\.{1,2}\/[^"']+\.js)["']\s*\)/g;
+const jsImports = (file) => {
+  const source = readFileSync(file, 'utf8');
+  return {
+    static: [...source.matchAll(STATIC_IMPORT)].map((m) => resolveRef(m[1], file)).filter(Boolean),
+    dynamic: [...source.matchAll(DYNAMIC_IMPORT)].map((m) => resolveRef(m[1], file)).filter(Boolean),
+  };
+};
+
 const seen = new Map(); // absolute path -> bytes
+const onDemand = new Set(); // absolute paths reached only through import()
 const queue = [entry];
 
 while (queue.length) {
@@ -187,6 +206,12 @@ while (queue.length) {
   seen.set(file, statSync(file).size);
 
   const type = typeOf(file);
+  if (type === 'js') {
+    const found = jsImports(file);
+    for (const target of found.static) if (!seen.has(target)) queue.push(target);
+    for (const target of found.dynamic) onDemand.add(target);
+    continue;
+  }
   if (type !== 'html' && type !== 'css') continue;
 
   const raw = readFileSync(file, 'utf8');
@@ -505,8 +530,31 @@ if (placeholderBuild) console.log(`\n  PLACEHOLDER BUILD (${placeholderReason()}
 */
 const grainRequests = files.filter((file) => /(^|\/)grain[.-]/i.test(file.path));
 
+/*
+  On demand: each chunk the first load can import(), with the chunks it
+  imports statically in turn (less what the first load already has). A
+  visitor opens one view at a time, so each is held with the first load to
+  the same JS ceiling: first load + the heaviest view ≤ 200 kB. Code split
+  out still counts — just once, where it is paid.
+*/
+const views = [...onDemand]
+  .filter((file) => !seen.has(file))
+  .map((file) => {
+    const own = new Set([file]);
+    const more = [file];
+    while (more.length) for (const next of jsImports(more.shift()).static) if (!seen.has(next) && !own.has(next)) (own.add(next), more.push(next));
+    return { path: relative(dist, file).split(sep).join('/'), bytes: [...own].reduce((sum, f) => sum + statSync(f).size, 0) };
+  })
+  .sort((a, b) => b.bytes - a.bytes);
+const heaviestView = views[0]?.bytes ?? 0;
+if (views.length) {
+  console.log('\n  ON DEMAND - JS fetched only when a view asks for it (import())\n');
+  for (const view of views) console.log(`  ${view.path.padEnd(width)}  ${kb(view.bytes)}   with the first load ${kb(jsTotal + view.bytes).trim()}`);
+}
+
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;
+const overView = jsTotal + heaviestView > JS_MAX;
 const overLazy = lazyTotal > LAZY_MAX;
 const tooManyLazy = lazyFiles.length > LAZY_MAX_COUNT;
 const overBelow = belowTotal > BELOW_MAX;
@@ -524,6 +572,7 @@ const belowFails =
 console.log('\n  BUDGET\n');
 console.log(`  total   ${kb(total)} of ${kb(TOTAL_MAX)}   ${pct(total, TOTAL_MAX).padStart(6)}  ${overTotal ? 'OVER' : 'ok'}`);
 console.log(`  js      ${kb(jsTotal)} of ${kb(JS_MAX)}   ${pct(jsTotal, JS_MAX).padStart(6)}  ${overJs ? 'OVER' : 'ok'}`);
+if (views.length) console.log(`  + view  ${kb(jsTotal + heaviestView)} of ${kb(JS_MAX)}   ${pct(jsTotal + heaviestView, JS_MAX).padStart(6)}  ${overView ? 'OVER' : 'ok'}   first load + the heaviest view on demand`);
 console.log(
   `  lazy    ${kb(lazyTotal)} of ${kb(LAZY_MAX)}   ${pct(lazyTotal, LAZY_MAX).padStart(6)}  ${overLazy ? 'OVER' : 'ok'}` +
     `   ${lazyFiles.length} of ${LAZY_MAX_COUNT} asset${tooManyLazy ? '  OVER' : ''}`
@@ -555,6 +604,7 @@ console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the bud
 if (
   overTotal ||
   overJs ||
+  overView ||
   overLazy ||
   tooManyLazy ||
   lazyProblems.length > 0 ||
@@ -564,6 +614,7 @@ if (
 ) {
   if (overTotal) console.error(`  FAIL  total is ${kb(total - TOTAL_MAX).trim()} over the 1 MB first-load budget.`);
   if (overJs) console.error(`  FAIL  JS is ${kb(jsTotal - JS_MAX).trim()} over the 200 kB budget.`);
+  if (overView) console.error(`  FAIL  the first load with ${views[0].path} is ${kb(jsTotal + heaviestView - JS_MAX).trim()} over the 200 kB budget.`);
   if (overLazy) console.error(`  FAIL  lazy is ${kb(lazyTotal - LAZY_MAX).trim()} over the 500 kB lazy budget.`);
   if (tooManyLazy) console.error(`  FAIL  ${lazyFiles.length} lazy assets; CLAUDE.md allows ${LAZY_MAX_COUNT}.`);
   for (const problem of lazyProblems) console.error(`  FAIL  ${problem}`);

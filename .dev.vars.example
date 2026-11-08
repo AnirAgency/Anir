@@ -20,3 +20,8 @@ HEALTH_CHECK_SECRET=
 # message production sends. Leave empty and the Worker logs "no channel".
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+
+# The task list's own Telegram group (worker/tasks.ts) — a second group with the
+# same bot, never the enquiries one. Unset: task messages are skipped, nothing
+# else changes.
+TELEGRAM_TASKS_CHAT_ID=

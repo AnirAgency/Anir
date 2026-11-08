@@ -35,7 +35,7 @@ These are not preferences. Breaking one is a bug.
 | Language | **Mongolian only.** No English toggle, no i18n framework. |
 | First load | **Under 1 MB.** JS under 200 KB. See Budget below for the one lazy asset and the below-the-fold media allowed on top. |
 | Hosting | **Cloudflare Workers**, with Static Assets. Not Vercel — Cloudflare has a PoP in Ulaanbaatar, Vercel's nearest edge is Tokyo/Seoul. |
-| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form and its health check, the admin's — publishing, and, by the owner's direction, the enquiries inbox and the Worker's alerts — for editors only, and the build's report on itself, with its own secret; and the 15-minute schedule (drain, digest, flood). |
+| Output | **Static.** No SSR, no server runtime except the Worker's routes: the contact form and its health check, the admin's — publishing, and, by the owner's direction, the enquiries inbox, the Worker's alerts, the team's task list and Schedule 2, the Members' contributions — for editors only, and the build's report on itself, with its own secret; and the 15-minute schedule (drain, digest, flood). |
 | Enquiries | **No visitor input may cause one not to be stored.** What does not match the published form is stored as sent and flagged — even a body that cannot be read — never refused; only the honeypot and the rate limit (5 per IP an hour, the only bound on the table) keep one out. Nothing about a request's *shape* discards it: the health check is known by a credential (`HEALTH_CHECK_SECRET`), never by its body. The table checks only the lengths the Worker cuts to — every field, the User-Agent header too, in characters as Postgres counts them (`src/lib/enquiry-limits.ts`). A cut is never silent: a cut form field is flagged; a cut User-Agent is only noted (`diagnostics`) — its length is no evidence about the visitor, so it never decides «Шалгах» or holds back a notification. `scripts/test-enquiry.ts` holds it with hundreds of hostile inputs, every limit tried at, past and far past, against the lengths it reads from the migrations themselves. |
 | 3D / WebGL | **No runtime 3D. Pre-rendered stills are allowed.** Nothing ships a render loop, a scene graph or a WebGL context. The hero mark is 7 pre-rendered frames in one 7 × 1 strip at 600 × 667; the tilt is a `background-position` lookup. |
 | Cyrillic | Every font must render **Ө Ү ө ү**. These live in the `cyrillic-ext` subset — a font with only `cyrillic` will tofu on Mongolian. |
@@ -50,6 +50,11 @@ kilobyte is felt.
 Three budgets, checked separately:
 
 - **First load: 1 MB, of which JS 200 KB.** Exactly as above, for everyone.
+  A script's static imports are first load too, as surely as its `<script
+  src>`. Code split out with `import()` — the admin's tools, each loaded
+  when opened — is counted where it is paid: **the first load plus the
+  heaviest such view stays under 200 KB of JS**. Splitting moves weight out
+  of the first load, never out of the budget (`scripts/budget.mjs`).
 - **Lazy: up to 500 KB, on top of that.** One desktop-only asset may load
   *after* first paint, gated on `(pointer: fine)` and `(min-width: 861px)` —
   the same query, character for character, as the layout it serves — and
@@ -355,7 +360,9 @@ here.
   build time. Components read `site` and nothing else. Never hardcode
   Mongolian strings in a component — the team needs one place to proofread:
   `site.ts` and the admin for the site, `src/content/admin.ts` for the admin's
-  own words. Nobody proofreads those files: `npm run copy:export` writes every
+  own words — and, for each tool under «Ажил», its own
+  `src/content/admin-<tool>.ts`, so its words load only with it. Nobody
+  proofreads those files: `npm run copy:export` writes every
   Mongolian string, site and admin, as one ordered list with where each appears.
 - Prices are data, not markup. They change; they live in `site.ts` and the
   admin.
@@ -415,6 +422,99 @@ site stays static.
   check, and the badge counts only those; flagged ones — almost always bots,
   now that nothing is refused — wait under «Шалгах», counted apart, so the
   badge keeps counting people.
+- **The task list** («Ажил»: «Даалгавар», «Тайлан»), by the owner's
+  direction: the four of them assign, submit and approve work inside the
+  admin (`worker/tasks.ts`, `src/scripts/admin-tasks.ts`, migrations 0010,
+  0011). `tasks` and `task_events` are the inbox's model: RLS on, no
+  policies, read and written only by the Worker for an editor. Every task
+  says what done means (`done_means`, required, never the title again);
+  anyone may submit, only the named approver approves, sends back or
+  reopens an approval, and a send-back or a reopening needs a reason.
+  **History is appended, never overwritten**: every change of state is a
+  row in `task_events`, written by a trigger in the same transaction, and
+  the «Тайлан» reads those — a task sent back twice is two send-backs, not
+  one tidy approval. People are shown by `editors.display_name`, the email
+  where it is empty, and an id no longer in `editors` as «Хасагдсан
+  хэрэглэгч» — never a bare id, anywhere.
+  Its Telegram goes to a group of its own (`TELEGRAM_TASKS_CHAT_ID`), never
+  the enquiries one — three messages only: assigned, submitted for your
+  approval, sent back — and with the secret unset it is skipped, silently.
+  Deliberately not in it: attachments, comments, recurring tasks, time
+  tracking, sub-tasks, custom fields, labels, per-person permissions.
+  **The coupling is one-way.** The tasks routes are loaded only when a
+  `/api/tasks*` request arrives, behind their own try/catch, and nothing a
+  public page, layout or component imports touches them — a failure anywhere
+  in the task code answers that route with an error and nothing else
+  (`npm run test:isolation` proves it). **If the task list ever grows beyond
+  this spec, it moves to its own Worker** rather than growing here.
+- **Schedule 2** («Ажил» › «Хавсралт 2»), by the owner's direction: the
+  record of money Members put into the Company under the founder agreement
+  — clause 5.2 makes each a loan repaid at 150% of principal; clause 5.1
+  makes one not recorded within 30 days of being made a gift
+  (`worker/contributions.ts`, `src/scripts/admin-contributions.ts`,
+  `src/lib/contribution-codes.ts`, migrations 0012, 0013). The inbox's model
+  again: `contributions`, `contribution_events`, `contribution_repayments`,
+  `members` and `agreement`, RLS on, no policies, the Worker only — and all
+  four editors read everything (clause 10.2).
+  - **Members are not editors.** `members` holds the Company's Members —
+    seeded Batuka, Batenkh, Baysaa, Deegii — each with an optional link to an
+    editor account; the picker reads it. Clause 4.9 allows someone on salary
+    with no Shares, so who signs in and who lends genuinely diverge: never
+    patch one with the other by creating logins. A non-Member's money is not
+    a loan (5.4, 9.2).
+  - **Money is whole tugrik, never a float**: bigint in the table, a safe
+    integer in JSON, digits on the page; × 1.5 in BigInt, half up, to the
+    Member. A value with a decimal mark is refused, never rounded.
+  - **No clause 5.1 clock before the agreement exists.** `agreement.in_force_from`,
+    one row, is null until the agreement is signed, and while it is null
+    nothing is ever late. It is set once — in the admin, and only after a
+    preview of what it will mean: how many entries fall before it and can
+    never be late, how many get the clock, how many that marks late at once,
+    with the year spelled out so a typo shows. The confirmation carries those
+    numbers back and is refused if they have changed; the trigger refuses a
+    second value. From then on the 30 days apply only to money made on or
+    after it.
+  - **Late is a mark, never a ruling.** `recorded_at` is the Worker's clock,
+    never the request's, and never changes (the trigger refuses it). Late
+    money is stored — never refused — marked on its row, and the mark is
+    never hidden: an edit that would clear it is refused. But nothing
+    changes its kind: whether it is a gift is a legal conclusion for the
+    Members, not a form validation. The form warns as the date is typed;
+    the strip shows late principal in a column of its own.
+  - **One Telegram message per new entry**, to the tasks group — clause
+    5.1's 7-day notice — and nothing on an edit or a repayment, no digests.
+    `notified_at` is set only on delivery, so a notice that did not go out
+    shows.
+  - **A change of kind is told to the Member whose entry it is.** Loan →
+    gift takes someone's money away, and clause 5.1 ("unless the Member
+    writes 'gift'") makes it theirs to say: one Telegram line, privately
+    when their chat with the bot is known (`members.telegram_chat_id`), in
+    the tasks group when it is not or does not arrive — never silently. The
+    change's event records whether it was told.
+  - **Each repayment is its own row**, in `contribution_repayments`,
+    principal and interest apart: clause 5.2(e) makes the 50% uplift the
+    Member's taxable income, withheld by the Company, so a single total
+    cannot support the withholding. The rate is the accountant's; this
+    records the split. Appended, never changed or removed (the trigger
+    refuses). A wrong one is reversed **in the ledger** — a row of its own
+    that names it, gives a reason, and carries its amounts negated on its
+    day, once — never by a migration: corrections stay where the history is.
+  - **Repayment is display-only**: per Member, principal, repaid,
+    outstanding and outstanding × 1.5, labelled not yet due, with the
+    uplift paid and the late principal beside them. Nothing here knows the
+    bank balance, so neither the Buffer nor the 20,000,000₮ threshold is
+    modelled. A repayment is typed against the loan it repays; nothing
+    allocates.
+  - A change to member, date, amount or kind is appended to
+    `contribution_events` by trigger, never overwritten.
+  - Walled off like the task list (`/api/contributions*`, its own loader;
+    `npm run test:isolation` breaks each tool alone), under the same rule:
+    grown beyond this, it moves to its own Worker.
+  - **The rest of the money system — jobs, Direct Costs, carve-outs,
+    Running Costs, the Buffer, distributions — arrives when there is a
+    first paid job, not before.** Each computes over data that does not
+    exist yet — no revenue, no clients, no closed period — and would be
+    rewritten by the first real invoice.
 - **The order to switch publishing on** (README > The admin): migrations,
   the build secret, the merge with the build command unchanged, the same
   value as a Worker secret, `DEPLOY_HOOK_URL`, `HEALTH_CHECK_SECRET` (required:
@@ -448,10 +548,18 @@ site stays static.
   hidden in the admin (`RULES` in `src/scripts/admin-schema.ts`). Add a field
   to `site.ts` and the admin shows it; hide it there if it is not copy.
 - **No field shows as its English key.** Every field the admin shows needs a
-  label and a line of help saying where it shows (`src/content/admin.ts`),
+  label and a line of help saying where it shows (`src/content/admin*.ts`),
   and every list of things a declared row title (`SUMMARY`). The admin page's
-  build checks them all and fails naming each one missing — so adding a field
-  to `site.ts` means giving it words, or hiding it.
+  build checks them all (`src/scripts/admin-check.ts`, build-only) and fails
+  naming each one missing — so adding a field to `site.ts` means giving it
+  words, or hiding it.
+- **The admin loads its tools on demand.** Its first load is the core — the
+  content editor, the inbox it opens on, the tree with the task badge and
+  every draft's dot. The task list and Schedule 2 are each a chunk of their
+  own, code and words, fetched when first opened; one that fails to load
+  says so in its place and the rest carries on. The core never imports a
+  tool statically (`npm run test:isolation` holds it), and a new tool comes
+  in the same way.
 - **Length guidance, never a limit.** Past a field's length the admin says
   what happens — a second line, a cut Google title — and the editor decides.
   Each length (`LIMITS`) is measured on the built page at 1440 and 390, not

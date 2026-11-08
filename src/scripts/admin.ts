@@ -109,8 +109,10 @@ interface Product {
 }
 
 /** What is open on the right: a view of the sections, a product, or the enquiries. */
-type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' };
-const refKey = (ref: Ref) => (ref.kind === 'inbox' ? 'inbox' : ref.kind === 'product' ? `product:${ref.id}` : ref.id);
+type Ref = { kind: 'section'; id: string } | { kind: 'product'; id: string } | { kind: 'inbox' } | { kind: 'tasks' } | { kind: 'report' } | { kind: 'contributions' };
+const refKey = (ref: Ref) => (ref.kind === 'section' ? ref.id : ref.kind === 'product' ? `product:${ref.id}` : ref.kind);
+/** The inbox, the task list and Schedule 2: tools with no page of the site's own and nothing of site.ts to edit. */
+const isTool = (ref: Ref) => ref.kind === 'inbox' || ref.kind === 'tasks' || ref.kind === 'report' || ref.kind === 'contributions';
 const sameRef = (a: Ref, b: Ref) => refKey(a) === refKey(b);
 
 let saved: Record<string, Obj> = {};
@@ -432,7 +434,7 @@ function differences(base: Json | undefined, cur: Json | undefined, path: Path, 
 }
 
 function writeDraft() {
-  if (view.kind === 'inbox') return;
+  if (isTool(view)) return;
   let fields: Record<string, Json> = {};
   differences(JSON.parse(baseline), draft, [], fields);
   // A draft still waiting on «сэргээх үү?» is kept, under what is typed now.
@@ -462,7 +464,7 @@ function applyDraft(stored: Stored) {
 /** When the open view's sections, or its product, were last saved by anyone. */
 function lastSaved(ref: Ref): number {
   if (ref.kind === 'product') return savedAt[`product:${ref.id}`] ?? 0;
-  if (ref.kind === 'inbox') return 0;
+  if (isTool(ref)) return 0;
   return Math.max(0, ...sectionsOf(viewOf(ref.id)).map((key) => savedAt[key] ?? 0));
 }
 
@@ -962,7 +964,7 @@ function productDraft(product: Product): Obj {
 /** A view's content as saved, by root. */
 function contentOf(ref: Ref): Obj {
   if (ref.kind === 'product') return { product: clone(productDraft(products.find((p) => p.id === ref.id) as Product)) };
-  if (ref.kind === 'inbox') return {};
+  if (isTool(ref)) return {};
   return Object.fromEntries(sectionsOf(viewOf(ref.id)).map((key) => [key, clone(sectionDraft(key))]));
 }
 
@@ -976,7 +978,7 @@ function select(next: Ref) {
   draft = contentOf(next);
   baseline = JSON.stringify(draft);
   offered = null;
-  const stored = next.kind === 'inbox' ? null : readDraft(next);
+  const stored = isTool(next) ? null : readDraft(next);
   if (stored && ownDrafts.has(refKey(next))) applyDraft(stored);
   else if (stored) offered = stored;
   dirty = JSON.stringify(draft) !== baseline;
@@ -998,7 +1000,16 @@ function countOf(ref: Ref): number | null {
   return Array.isArray(list) ? list.length : null;
 }
 
-const hasDraft = (ref: Ref) => (sameRef(ref, view) ? dirty : !!readDraft(ref));
+const hasDraft = (ref: Ref) =>
+  ref.kind === 'tasks'
+    ? draftsUnder(taskDrafts())
+    : ref.kind === 'contributions'
+      ? draftsUnder(contributionDrafts())
+      : isTool(ref)
+        ? false
+        : sameRef(ref, view)
+          ? dirty
+          : !!readDraft(ref);
 
 function renderNav() {
   const item = (ref: Ref, label: string, extra: Child[] = [], off = false) =>
@@ -1053,6 +1064,15 @@ function renderNav() {
   const focused = navEl.contains(document.activeElement) ? (document.activeElement as HTMLElement).textContent : null;
   navEl.replaceChildren(
     h('ul', { class: 'nav__list nav__list--first' }, h('li', {}, item({ kind: 'inbox' }, t.views.inbox, [unread ? h('span', { class: 'nav__badge', 'aria-label': `${t.inbox.statuses.new}: ${unread}` }, String(unread)) : null]))),
+    // The team's work, opened daily like the enquiries — not part of the site's pages.
+    h('p', { class: 'nav__title' }, t.work.group),
+    h(
+      'ul',
+      { class: 'nav__list' },
+      h('li', {}, item({ kind: 'tasks' }, t.views.tasks, taskBadges())),
+      h('li', {}, item({ kind: 'report' }, t.views.report)),
+      h('li', {}, item({ kind: 'contributions' }, t.views.contributions))
+    ),
     ...groups,
     h('ol', { class: 'steps' }, ...t.steps.map((text) => h('li', {}, text)))
   );
@@ -1061,6 +1081,13 @@ function renderNav() {
 
 function renderMain() {
   if (view.kind === 'inbox') return renderInbox();
+  // The team's tools load on first use; until then their place says it is loading.
+  if (isTool(view)) {
+    mainEl.replaceChildren(h('p', { class: 'main__hint' }, t.loading));
+    if (view.kind === 'tasks') return void openTool(tasksTool, (tool) => tool.renderTasks());
+    if (view.kind === 'report') return void openTool(tasksTool, (tool) => tool.renderReport());
+    return void openTool(contributionsTool, (tool) => tool.render());
+  }
   const v = view.kind === 'section' ? viewOf(view.id) : null;
   const title = view.kind === 'section' ? t.views[view.id] : String((draft.product as Obj).name || (draft.product as Obj).id);
 
@@ -1389,7 +1416,7 @@ let device: 'desktop' | 'phone' = 'desktop';
 /** Where a view shows: its page, or null where it shows on none. */
 function pageOf(ref: Ref): string | null {
   const items = publishedItems();
-  if (ref.kind === 'inbox') return null;
+  if (isTool(ref)) return null;
   if (ref.kind === 'section') {
     const v = viewOf(ref.id);
     if (v.off) return null;
@@ -1432,7 +1459,16 @@ function showPage() {
     frame?.remove();
     frame = null;
     framePage = '';
-    const why = view.kind === 'inbox' ? t.preview.inbox : view.kind === 'section' && viewOf(view.id).off ? t.offHelp : t.preview.noPage;
+    const why =
+      view.kind === 'inbox'
+        ? t.preview.inbox
+        : view.kind === 'contributions'
+          ? t.preview.contributions
+          : isTool(view)
+            ? t.preview.tasks
+            : view.kind === 'section' && viewOf(view.id).off
+              ? t.offHelp
+              : t.preview.noPage;
     stage.replaceChildren(h('p', { class: 'preview__empty' }, why));
     return;
   }
@@ -1507,7 +1543,7 @@ const swapped = new Map<HTMLImageElement, string>();
 
 /** The draft shown on the page: every word that differs from what is published, and every new upload. */
 function applyPreview() {
-  if (!frame?.contentDocument || view.kind === 'inbox') return;
+  if (!frame?.contentDocument || isTool(view)) return;
 
   const walk = (d: Json | undefined, p: Json | undefined, path: Path) => {
     if (typeof d === 'string' && typeof p === 'string') {
@@ -1609,7 +1645,7 @@ function index() {
     if (typeof value === 'object') for (const [key, child] of Object.entries(value)) add(ref, child, [...path, Array.isArray(value) ? Number(key) : key]);
   };
   // The open view first, as typed: it wins where two fields hold the same words.
-  if (view.kind !== 'inbox') for (const key of Object.keys(draft)) add(view, draft[key], [key]);
+  if (!isTool(view)) for (const key of Object.keys(draft)) add(view, draft[key], [key]);
   for (const v of VIEWS) {
     if (v.off) continue;
     for (const part of v.parts) add({ kind: 'section', id: v.id }, publishedAt(pathOf(part)), pathOf(part));
@@ -1925,7 +1961,7 @@ function wasSaved() {
 }
 
 async function save() {
-  if (view.kind === 'inbox' || !dirty) return;
+  if (isTool(view) || !dirty) return;
   // A section the page code switches off is shown, not edited.
   if (view.kind === 'section' && viewOf(view.id).off) return;
   if (saveButton) saveButton.disabled = true;
@@ -2030,7 +2066,7 @@ function follow(build: string, since = Date.now()) {
 }
 
 async function publish() {
-  if (view.kind !== 'inbox' && dirty) return void publishStatus(t.publish.saveFirst, 'bad');
+  if (!isTool(view) && dirty) return void publishStatus(t.publish.saveFirst, 'bad');
   const waiting = [
     ...VIEWS.filter((v) => readDraft({ kind: 'section', id: v.id })).map((v) => t.views[v.id]),
     ...products.filter((p) => readDraft({ kind: 'product', id: p.id })).map((p) => String(p.data.name ?? p.id)),
@@ -2062,7 +2098,10 @@ async function publish() {
 function keys(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    save();
+    // A tool's form is saved by the tool — loaded already, since its view is open.
+    if (view.kind === 'tasks') void tasksTool().then((tool) => tool.save(), () => {});
+    else if (view.kind === 'contributions') void contributionsTool().then((tool) => tool.save(), () => {});
+    else save();
     return;
   }
   if (e.key === 'Escape') {
@@ -2072,6 +2111,92 @@ function keys(e: KeyboardEvent) {
     (open.querySelector(':scope > summary') as HTMLElement | null)?.focus();
   }
 }
+
+// --------------------------------------------------------------- «Ажил»
+
+/*
+  The team's tools — the task list and the Тайлан (./admin-tasks.ts), and
+  Schedule 2 (./admin-contributions.ts) — each loaded only when opened, with
+  its own words: none of their code is in the admin's first load. Built from
+  the parts above, handed functions, not values. What the tree shows before
+  either is opened — the task badge, and a draft's dot — is the core's,
+  here, so the tree never waits on a tool. A tool that fails to load says so
+  where it would have been, and the rest of the admin carries on.
+*/
+const toolDeps = (draftPrefix: () => string) => ({
+  h,
+  t,
+  main: () => mainEl,
+  me: () => (session ? { id: session.id, email: session.email } : null),
+  worker: (path: string, init?: RequestInit) => worker(path, init),
+  status: (text: string, tone?: Tone, detail?: string) => status(text, tone, detail),
+  said: (text: string, detail?: string) => said(text, detail),
+  explain: (error: unknown, sentence: string) => explain(error, sentence),
+  isSignedOut: (error: unknown) => error instanceof SignedOut,
+  signedOut: () => renderSignIn(t.signIn.expired),
+  renderNav: () => renderNav(),
+  showPage: () => showPage(),
+  when: (iso: string) => when(iso),
+  remember,
+  draftPrefix,
+  showing: (kind: string) => view.kind === kind,
+});
+
+/** Where each tool keeps its drafts, by editor: what the tree's dot looks for. */
+const taskDrafts = () => `anir-admin-task:${session?.id ?? ''}:`;
+const contributionDrafts = () => `anir-admin-contribution:${session?.id ?? ''}:`;
+const draftsUnder = (prefix: string) => remember.keys().some((key) => key.startsWith(prefix));
+
+/** A tool, loaded once on first use; a failed load is forgotten, so the next click tries again. */
+function onDemand<T>(load: () => Promise<T>): () => Promise<T> {
+  let loading: Promise<T> | null = null;
+  return () =>
+    (loading ??= load().catch((error) => {
+      loading = null;
+      throw error;
+    }));
+}
+const tasksTool = onDemand(async () => (await import('./admin-tasks')).createTasks({ ...toolDeps(taskDrafts), readCounts: () => readTaskCounts() }));
+const contributionsTool = onDemand(async () => (await import('./admin-contributions')).createContributions(toolDeps(contributionDrafts)));
+
+/** Opens a tool's view: loading it if it is not yet, and saying so in its place if it cannot be. */
+async function openTool<T>(load: () => Promise<T>, run: (tool: T) => unknown) {
+  const shown = view;
+  try {
+    const tool = await load();
+    if (sameRef(shown, view)) await run(tool);
+  } catch (error) {
+    if (error instanceof SignedOut) return renderSignIn(t.signIn.expired);
+    if (!sameRef(shown, view)) return;
+    const { detail } = explain(error, t.toolFailed);
+    mainEl.replaceChildren(h('div', { class: 'main__hint', 'data-tool-failed': refKey(shown) }, ...said(t.toolFailed, detail)));
+    showPage();
+  }
+}
+
+/** The task badge's two numbers: assigned to me and not done; waiting on my approval. Read without loading the tool. */
+let taskCounts: { mine: number; approve: number } | null = null;
+async function readTaskCounts() {
+  if (!session) return;
+  try {
+    const { response, body } = await worker('/api/tasks/counts');
+    if (!response.ok) return;
+    taskCounts = { mine: Number(body.mine) || 0, approve: Number(body.approve) || 0 };
+    renderNav();
+  } catch {
+    // The badge waits for the next read; the tree is never broken by it.
+  }
+}
+/** Two numbers, never one: mine to do, and what waits on my approval — the one people forget. */
+const taskBadges = (): Child[] => {
+  if (!taskCounts) return [];
+  const mine = t.work.badgeMine.replace('{n}', String(taskCounts.mine));
+  const approve = t.work.badgeApprove.replace('{n}', String(taskCounts.approve));
+  return [
+    taskCounts.mine ? h('span', { class: 'nav__badge', title: mine, 'aria-label': mine, 'data-badge': 'mine' }, String(taskCounts.mine)) : null,
+    taskCounts.approve ? h('span', { class: 'nav__badge nav__badge--approve', title: approve, 'aria-label': approve, 'data-badge': 'approve' }, `✓${taskCounts.approve}`) : null,
+  ];
+};
 
 // ---------------------------------------------------------------- start
 
@@ -2134,8 +2259,9 @@ async function load() {
   select({ kind: 'inbox' });
   readStorage();
   readAlerts();
-  setInterval(() => (readCounts(), readAlerts()), 2 * 60 * 1000);
-  addEventListener('focus', () => (readCounts(), readAlerts()));
+  void readTaskCounts();
+  setInterval(() => (readCounts(), readAlerts(), readTaskCounts()), 2 * 60 * 1000);
+  addEventListener('focus', () => (readCounts(), readAlerts(), readTaskCounts()));
 
   // A build started before a reload is followed again.
   try {

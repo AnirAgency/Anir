@@ -82,6 +82,10 @@ export const admin = {
 
   /** Someone saved this part after it was opened here: nothing is overwritten, the typing is kept. */
   conflict: 'Өөр хүн энэ хэсгийг хадгалсан байна. Дахин нээж, өөрчлөлтөө оруулна уу.',
+  /** Someone no longer an editor, wherever a person is shown — never a bare id. */
+  removedPerson: 'Хасагдсан хэрэглэгч',
+  /** A tool of «Ажил» loads only when opened; if it cannot, this is said and the rest carries on. */
+  toolFailed: 'Энэ хэсгийг ачаалж чадсангүй. Хуудсаа дахин ачаалаад оролдоно уу — бусад хэсэг хэвийн ажиллана.',
   reopen: 'Дахин нээх',
   detail: 'Дэлгэрэнгүй',
   keys: 'Ctrl+S — хадгалах · Esc — нээлттэй мөрийг хаах',
@@ -193,6 +197,9 @@ export const admin = {
   } as Record<string, string>,
   views: {
     inbox: 'Хүсэлтүүд',
+    tasks: 'Даалгавар',
+    report: 'Тайлан',
+    contributions: 'Хавсралт 2',
     hero: 'Эхний дэлгэц',
     marquee: 'Гүйдэг тууз',
     showreel: 'Бүтээлийн мозайк',
@@ -239,8 +246,22 @@ export const admin = {
     notFound: 'Энэ талбарыг хуудсан дээрээс олсонгүй — харагддаггүй эсвэл одоо нуугдсан байж болно.',
     noField: 'Үүнд тохирох талбар олдсонгүй — энэ бичвэрийг хөгжүүлэгч засна.',
     inbox: 'Хүсэлтүүд хуудсан дээр харагдахгүй.',
+    tasks: 'Даалгавар, тайлан сайтын хуудсан дээр харагдахгүй — зөвхөн энд.',
+    contributions: 'Хавсралт 2 сайтын хуудсан дээр харагдахгүй — зөвхөн энд.',
   },
   productHelp: 'Энэ бүтээгдэхүүний өөрийн хуудас. Нийтэлсний дараа «Бүтээгдэхүүн» хуудсанд картаар гарна.',
+
+  /**
+   * «Ажил» in the admin's tree, and the task list's badge — words the tree
+   * shows before any tool is opened. The tools' own words load with them:
+   * src/content/admin-tasks.ts, src/content/admin-contributions.ts.
+   */
+  work: {
+    group: 'Ажил',
+    /** The badge's two numbers, read aloud. */
+    badgeMine: 'Танд оноосон, дуусаагүй: {n}',
+    badgeApprove: 'Таны баталгааг хүлээж буй: {n}',
+  },
 
   /** The enquiries inbox (worker/inbox.ts). Opening one never marks it read: that is a click. */
   inbox: {

@@ -15,6 +15,7 @@
  * There is no delete. An enquiry is a client trying to give the studio
  * money; closing one sets its status, and nothing here can destroy one.
  */
+import { admin as t } from '../src/content/admin.ts';
 import { answer, callerOf, refusal, type Caller } from './auth.ts';
 
 export interface Env {
@@ -65,12 +66,12 @@ async function editorOnly(request: Request, env: Env, fetcher: typeof fetch): Pr
   return caller;
 }
 
-/** Who changed what, by email, for the inbox to name them. */
-async function editorEmails(env: Env, fetcher: typeof fetch): Promise<Record<string, string>> {
-  const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/editors?select=user_id,email`, { headers: service(env) });
+/** Who changed what, by name — display_name, else the email (migration 0011) — for the inbox to show. */
+async function editorNames(env: Env, fetcher: typeof fetch): Promise<Record<string, string>> {
+  const response = await fetcher(`${env.SUPABASE_URL}/rest/v1/editors?select=user_id,email,display_name`, { headers: service(env) });
   if (!response.ok) return {};
-  const rows = (await response.json()) as { user_id: string; email: string }[];
-  return Object.fromEntries(rows.map((row) => [row.user_id, row.email]));
+  const rows = (await response.json()) as { user_id: string; email: string; display_name?: string | null }[];
+  return Object.fromEntries(rows.map((row) => [row.user_id, row.display_name?.trim() || row.email]));
 }
 
 export async function onEnquiries(request: Request, env: Env, fetcher: typeof fetch = fetch): Promise<Response> {
@@ -89,7 +90,7 @@ export async function onEnquiries(request: Request, env: Env, fetcher: typeof fe
       }),
       // Two short columns per enquiry, counted here: one small read, not five.
       fetcher(`${env.SUPABASE_URL}/rest/v1/enquiries?select=status,unrecognised&limit=10000`, { headers: service(env) }),
-      editorEmails(env, fetcher),
+      editorNames(env, fetcher),
     ]);
     if (!list.ok || !all.ok) return answer(502, { ok: false, error: 'supabase', detail: `enquiries answered ${list.ok ? all.status : list.status}` });
 
@@ -100,7 +101,8 @@ export async function onEnquiries(request: Request, env: Env, fetcher: typeof fe
     }
     const items = ((await list.json()) as Record<string, unknown>[]).map((row) => ({
       ...row,
-      status_changed_by: row.status_changed_by ? (emails[String(row.status_changed_by)] ?? null) : null,
+      // Never a bare id: someone no longer an editor is said so.
+      status_changed_by: row.status_changed_by ? (emails[String(row.status_changed_by)] ?? t.removedPerson) : null,
     }));
     return answer(200, { ok: true, status: wanted, counts, items });
   } catch {

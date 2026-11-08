@@ -2,92 +2,138 @@
 import { site } from '../content/site';
 
 /*
-  Fixed top bar.
+  Fixed top bar: the words alone, no ground, by the owner's direction. It
+  gets out of the way — scrolling down slides it up out of sight, scrolling
+  up brings it back — and is always there at the top of the page and
+  whenever something in it has keyboard focus.
 
-  It reads on both tones via mix-blend-mode: difference — --paper differenced
-  against --paper is pure black, and against --ink is near-white, so the same
-  markup renders dark on light sections and light on dark ones with no JS.
+  With no ground of its own it takes the tone of the section under it: --paper
+  words over a dark section, --ink over a light one. On light, the orange
+  links become --ink with a 2px orange rule under them, because orange as
+  small text on --paper fails (CLAUDE.md > Contrast). The script below
+  tracks the section; without JS the bar keeps a solid --ink ground and
+  needs no tracking, as it always did.
 
-  The catch: difference would also eat the --orange CTA. Orange over --ink stays
-  orange, but orange over --paper comes out cyan (#11BDF3), which breaks the
-  orange rule exactly where it matters — the one link that converts. So the bar
-  is two fixed layers: the blended one carries the wordmark and the two plain
-  links, and the CTA — the third nav link — is a separate unblended fixed
-  element in true --orange —
-  over dark sections. Over light ones orange is 3.21:1, which fails AA at the
-  CTA's 10px, so a script below tells it the tone and it takes --muted there.
-  A hidden ghost of the CTA's label holds its width open in the blended bar so
-  the two layers line up without either knowing the other's measurements.
-
-  Both layers have to be fixed siblings rather than nested: position: fixed
-  creates a stacking context, which isolates the blend group, so a blended child
-  inside a fixed parent would have nothing to blend against.
+  So the words never sit straight on a heading or the silk, a soft shade of
+  the section's own ground lies behind them, fading to nothing just below
+  the bar — a fade, not a bar. Two layers, dark and light, cross-fade when the
+  tone changes. A section can also call itself busy (.section--busy): over
+  the orange silk the orange call to action would vanish, so there it turns
+  --paper with the orange as a rule under it. No backdrop blur: it would
+  re-blur the strip on every frame of scrolling.
 */
 
+interface Props {
+  /** False on a page that does not hold the home page's sections — the
+   *  products pages — where its anchors lead back to the home page. */
+  home?: boolean;
+}
+
+const { home = true } = Astro.props;
 const { navLabel } = site.chrome;
 const links = site.nav.links.filter((link) => !link.accent);
 const cta = site.nav.links.find((link) => link.accent);
+
+const to = (href: string) => (!home && href.startsWith('#') ? `/${href}` : href);
+// A link to a page is current on that page and everything under it.
+const current = (href: string) => (href.startsWith('/') && Astro.url.pathname.startsWith(href) ? 'page' : undefined);
 ---
 
 <header class="header">
-  <div class="header__blend">
-    <a class="header__mark t-display-s" href="#top">{site.nav.wordmark}</a>
+  <a class="header__mark t-display-s" href={home ? '#top' : '/'}>{site.nav.wordmark}</a>
 
-    <nav class="header__nav" aria-label={navLabel}>
-      <ul class="header__list">
-        {
-          links.map((link) => (
-            <li>
-              <a class="header__link t-mono-label" href={link.href}>
-                {link.label}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-      {cta && <span class="header__ghost t-mono-label" aria-hidden="true">{cta.label}</span>}
-    </nav>
-  </div>
-
-  {
-    cta && (
-      <a class="header__cta t-mono-label" href={cta.href} data-header-cta>
-        {cta.label}
-      </a>
-    )
-  }
+  <nav class="header__nav" aria-label={navLabel}>
+    <ul class="header__list">
+      {
+        links.map((link) => (
+          <li>
+            <a class="header__link t-mono-label" href={to(link.href)} aria-current={current(link.href)}>
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    {
+      cta && (
+        <a class="header__cta t-mono-label" href={to(cta.href)}>
+          {cta.label}
+        </a>
+      )
+    }
+  </nav>
 </header>
 
 <style>
-  /*
-    Deliberately not positioned and with no z-index: .header must not become a
-    stacking context, or it would isolate the blend below it.
-  */
   .header {
-    display: contents;
-  }
-
-  .header__blend,
-  .header__cta {
     position: fixed;
-    top: 0;
+    inset: 0 0 auto 0;
     z-index: 40;
-    padding-block: 0.625rem;
-    /* The bar spans the viewport; only its links should catch the pointer. */
-    pointer-events: none;
-  }
-
-  .header__blend {
-    left: 0;
-    right: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 2rem;
+    height: var(--header-h);
     padding-left: var(--inset);
     padding-right: var(--inset-right);
+    background: var(--ink);
     color: var(--paper);
-    mix-blend-mode: difference;
+    transition:
+      translate 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
+      color 0.3s ease;
+  }
+
+  /* With JS: no ground, and out of the way while reading down the page. */
+  :global(html.js) .header {
+    background: transparent;
+  }
+
+  /* The fade: the section's ground behind the words, gone a little below
+     the bar. Dark in ::before, light in ::after; the tone picks one. */
+  :global(html.js) .header::before,
+  :global(html.js) .header::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: -1;
+    height: 170%;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+
+  :global(html.js) .header::before {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--ink) 82%, transparent),
+      color-mix(in srgb, var(--ink) 45%, transparent) 55%,
+      transparent
+    );
+  }
+
+  :global(html.js) .header::after {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--paper) 86%, transparent),
+      color-mix(in srgb, var(--paper) 48%, transparent) 55%,
+      transparent
+    );
+    opacity: 0;
+  }
+
+  :global(html.js) .header[data-tone='light']::before {
+    opacity: 0;
+  }
+
+  :global(html.js) .header[data-tone='light']::after {
+    opacity: 1;
+  }
+
+  .header.is-hidden {
+    translate: 0 -100%;
+  }
+
+  .header:focus-within {
+    translate: none;
   }
 
   .header__mark {
@@ -98,7 +144,6 @@ const cta = site.nav.links.find((link) => link.accent);
     min-width: 44px;
     padding-inline: 3px;
     margin-inline: -3px;
-    pointer-events: auto;
     letter-spacing: 0.14em;
   }
 
@@ -115,78 +160,65 @@ const cta = site.nav.links.find((link) => link.accent);
     margin: 0;
   }
 
-  .header__link {
+  .header__link,
+  .header__cta {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
     min-width: 44px;
-    pointer-events: auto;
     transition: color 0.3s ease;
+  }
+
+  /* The page you are on is the live link. */
+  .header__link[aria-current='page'] {
+    color: var(--orange);
   }
 
   .header__link:hover {
     color: var(--dim);
   }
 
-  /* Holds the CTA's width open in the blended layer. Never seen, never read. */
-  .header__ghost {
-    visibility: hidden;
-  }
-
-  /*
-    The CTA has no bar around it, so the bar's 0.625rem block padding becomes
-    an offset instead: same 44px box, same vertical centre as the links.
-  */
   .header__cta {
-    top: 0.625rem;
-    padding-block: 0;
-    right: var(--inset-right);
-    z-index: 41;
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    pointer-events: auto;
     color: var(--orange);
-    transition: color 0.3s ease;
   }
 
   .header__cta:hover {
     color: var(--paper);
   }
 
-  /*
-    Over a light section: that tone's --muted, hovering to its --fg. This is
-    Section.astro's light mapping restated, because the CTA sits outside every
-    section and cannot inherit it.
-  */
-  .header__cta[data-tone='light'] {
-    --muted: var(--dim-2);
-    color: var(--muted);
-  }
-
-  .header__cta[data-tone='light']:hover {
+  /* Over a light section. */
+  .header[data-tone='light'] {
     color: var(--ink);
   }
 
-  /*
-    Without JS nothing can tell the CTA which ground it is over, and no single
-    colour clears 4.5:1 on both --ink and --paper. So it falls back to the
-    blended bar's own treatment — --paper under difference — which reads on both.
-  */
-  :global(html:not(.js)) .header__cta {
+  .header[data-tone='light'] .header__link:hover {
+    color: var(--dim-2);
+  }
+
+  .header[data-tone='light'] .header__link[aria-current='page'],
+  .header[data-tone='light'] .header__cta {
+    color: var(--ink);
+    text-decoration: underline 2px var(--orange);
+    text-underline-offset: 0.55em;
+  }
+
+  .header[data-tone='light'] .header__cta:hover {
+    color: var(--dim-2);
+  }
+
+  /* Over busy dark ground — the silk — the orange call to action would sink
+     into the orange: --paper words, the orange kept as the rule under them. */
+  .header[data-busy]:not([data-tone='light']) .header__cta {
     color: var(--paper);
-    mix-blend-mode: difference;
+    text-decoration: underline 2px var(--orange);
+    text-underline-offset: 0.55em;
   }
 
   @media (max-width: 860px) {
-    .header__blend {
+    .header {
       padding-left: var(--inset-mobile);
       padding-right: var(--inset-mobile);
-    }
-
-    .header__cta {
-      right: var(--inset-mobile);
     }
 
     .header__nav,
@@ -208,8 +240,7 @@ const cta = site.nav.links.find((link) => link.accent);
     }
 
     .header__link,
-    .header__cta,
-    .header__ghost {
+    .header__cta {
       letter-spacing: 0.1em;
     }
   }
@@ -217,40 +248,37 @@ const cta = site.nav.links.find((link) => link.accent);
 
 <script>
   /*
-    Tells the CTA which tone it is over. The blended layer gets this for free
-    from mix-blend-mode; the CTA is unblended so it can stay true orange, which
-    means it has to be told. The ground is whichever section spans the CTA's
-    vertical centre. Anything that is not a light section — the footer
-    included — is dark.
+    The tone: whichever section crosses a band along the top of the screen —
+    where the bar sits — sets it. The footer counts as dark.
 
-    Same pattern as the rail: the scroll handler only raises a flag, and the
-    reads happen once per frame.
+    Hiding: down past the bar's own height hides it, any scroll up brings it
+    back. A few pixels of slack, so a trackpad's jitter cannot flicker it.
   */
-  const cta = document.querySelector<HTMLElement>('[data-header-cta]');
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
+  const header = document.querySelector<HTMLElement>('.header');
+  if (header) {
+    const tone = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            header.dataset.tone = entry.target.classList.contains('section--light') ? 'light' : 'dark';
+            header.toggleAttribute('data-busy', entry.target.classList.contains('section--busy'));
+          }
+        }
+      },
+      { rootMargin: '0px 0px -95% 0px' }
+    );
+    document.querySelectorAll('[data-section], .footer').forEach((el) => tone.observe(el));
 
-  if (cta) {
-    let queued = false;
-
-    const render = () => {
-      queued = false;
-      const box = cta.getBoundingClientRect();
-      const line = box.top + box.height / 2;
-      const ground = sections.find((section) => {
-        const rect = section.getBoundingClientRect();
-        return rect.top <= line && rect.bottom > line;
-      });
-      cta.dataset.tone = ground?.dataset.tone === 'light' ? 'light' : 'dark';
-    };
-
-    const request = () => {
-      if (queued) return;
-      queued = true;
-      requestAnimationFrame(render);
-    };
-
-    render();
-    window.addEventListener('scroll', request, { passive: true });
-    window.addEventListener('resize', request, { passive: true });
+    let last = scrollY;
+    addEventListener(
+      'scroll',
+      () => {
+        const y = scrollY;
+        if (Math.abs(y - last) < 8) return;
+        header.classList.toggle('is-hidden', y > last && y > header.offsetHeight);
+        last = y;
+      },
+      { passive: true }
+    );
   }
 </script>

@@ -1,0 +1,24 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import ProductIndex from '../../components/ProductIndex.astro';
+import ContactCta from '../../components/ContactCta.astro';
+import Footer from '../../components/Footer.astro';
+import { site } from '../../content/site';
+
+/*
+  /products/ — the page's name among the products' floating screens, then
+  the products, one full-width card each, every card the way into that
+  product's own page. Then the way to the enquiry form, on the light ground
+  after two dark sections.
+*/
+
+const { pages } = site.products;
+---
+
+<Base title={`${pages.title} — Anir`} description={pages.intro} home={false}>
+  <PageHead />
+  <ProductIndex />
+  <ContactCta tone="light" />
+  <Footer />
+</Base>

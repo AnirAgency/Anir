@@ -1,0 +1,432 @@
+---
+import Section from './Section.astro';
+import { site, type ShowreelMedia } from '../content/site';
+import { placeholderMode } from '../lib/placeholders.mjs';
+
+/*
+  The showreel mosaic: the work as three columns of tiles scattered a little
+  out of line, with the video in the middle of the centre one. The video's
+  cell is a miniature of the screen — a third of its width and a third of its
+  height — sitting at its centre. The section pins as it arrives, and as you
+  keep scrolling the camera moves in on the video: the whole mosaic grows
+  around it, every tile with it, until the cell fills the screen and the rest
+  has been carried off the edges. The left column drifts up and the right one
+  down as it goes. Then the video holds the screen for a moment and the pin
+  lets go.
+
+  It is one transform on the mosaic and one on each side column, all on the
+  one view timeline on the track, so everything moves in lockstep by
+  construction. No scroll handler — a tall track with a sticky child — so
+  keyboard, trackpad momentum, find-in-page and screen readers all scroll
+  exactly as they do anywhere else. Without scroll-driven animation, under
+  reduced motion and with JS off, the mosaic is the same composition, still.
+
+  Render-gated on real media. In production, with nothing real in site.ts the
+  section is not emitted at all — no markup, no script — so main is
+  deployable before the shoot, and the day the manifest is filled in, the
+  section appears. Dev and preview builds render the placeholders where real
+  media is missing (src/lib/placeholders.mjs has the rule).
+
+  The tiles are the portfolio's content, so they are plain lazy <img>s that
+  load on every connection, saveData included, with JS on or off. Only the
+  video is gated (the script below); without it, the poster stays.
+*/
+
+const PLACEHOLDER_DIR = '/media/placeholder/';
+
+const { label, media, placeholder } = site.showreel;
+
+const tilesOf = (reel: ShowreelMedia) => [...reel.left, reel.above, reel.below, ...reel.right];
+const paths = (reel: ShowreelMedia) => [reel.video.src, reel.video.poster, ...tilesOf(reel).map((tile) => tile.src)];
+
+// The backstop. The real manifest pointing at the placeholders would ship
+// ОРЛУУЛАХ tiles to clients the moment someone forgets the flag is off.
+const leaked = media ? paths(media).filter((path) => path.startsWith(PLACEHOLDER_DIR)) : [];
+if (leaked.length > 0) {
+  throw new Error(
+    `site.showreel.media points inside ${PLACEHOLDER_DIR}: ${leaked.join(', ')}. ` +
+      'Real media only — site.showreel.placeholder stands in for it in dev and preview builds.'
+  );
+}
+
+const reel = media ?? (placeholderMode({ dev: import.meta.env.DEV }) ? placeholder : null);
+---
+
+{
+  reel && (
+    <Section tone="dark" id="showreel" label={label} layout="bleed">
+      <div class="track">
+        <div class="pin">
+          <div class="mosaic-grid">
+            <div class="col col-left">
+              {reel.left.map((tile) => (
+                <img
+                  class="tile"
+                  src={tile.src}
+                  width={tile.width}
+                  height={tile.height}
+                  alt={tile.alt}
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="tile"
+                />
+              ))}
+            </div>
+
+            <div class="col col-centre">
+              <img
+                class="tile centre-top"
+                src={reel.above.src}
+                width={reel.above.width}
+                height={reel.above.height}
+                alt={reel.above.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+              <div class="slot">
+                <img
+                  class="slot__media"
+                  src={reel.video.poster}
+                  width={reel.video.width}
+                  height={reel.video.height}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="poster"
+                />
+                <video
+                  class="slot__media"
+                  width={reel.video.width}
+                  height={reel.video.height}
+                  aria-label={reel.video.label}
+                  muted
+                  playsinline
+                  loop
+                  preload="none"
+                  data-lane="video"
+                  data-defer={reel.video.src}
+                />
+              </div>
+              <img
+                class="tile centre-bottom"
+                src={reel.below.src}
+                width={reel.below.width}
+                height={reel.below.height}
+                alt={reel.below.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+            </div>
+
+            <div class="col col-right">
+              {reel.right.map((tile) => (
+                <img
+                  class="tile"
+                  src={tile.src}
+                  width={tile.width}
+                  height={tile.height}
+                  alt={tile.alt}
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="tile"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        /*
+          Attaches the video's src once the section is within one viewport —
+          never on saveData, a slow device or reduced motion, where the poster
+          stays instead. The same gates as the hero mark. No scroll handler:
+          the observer plays it near the viewport and pauses it away from it.
+
+          It starts watching only after load. On a desktop the section begins
+          within a viewport of the top, so watching from the start would put
+          the video on the wire with the first load.
+        */
+        const video = document.querySelector<HTMLVideoElement>('[data-defer]');
+        const src = video?.dataset.defer;
+        const data = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+
+        if (
+          video &&
+          src &&
+          !data?.saveData &&
+          (navigator.hardwareConcurrency || 8) > 4 &&
+          !matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          const watch = () =>
+            new IntersectionObserver(
+              ([entry]) => {
+                if (!entry.isIntersecting) return video.pause();
+                if (!video.src) video.src = src;
+                video.play().catch(() => {});
+              },
+              { rootMargin: '100% 0px' }
+            ).observe(video.closest('section') ?? video);
+
+          if (document.readyState === 'complete') watch();
+          else addEventListener('load', watch, { once: true });
+        }
+      </script>
+    </Section>
+  )
+}
+
+<style>
+  /*
+    The geometry. --k is the video's cell as a share of the screen, the same
+    share each way, so the cell has the screen's shape and growing the mosaic
+    by 1 / --k makes it exactly fill the screen. The centre column is the
+    cell's width; the images above and below the video are the cell's size
+    too, so the centre column is the screen's height, cut in three. The sides
+    share what is left.
+
+    The track is a size container so the cell's width can be a share of it
+    in cqw: an absolute length, like the height's svh.
+  */
+  .track {
+    container-type: inline-size;
+    --k: calc(1 / 3);
+    --g: 8px;
+    --cw: calc(var(--k) * 100cqw);
+    --ch: calc(var(--k) * 100svh);
+  }
+
+  /*
+    The tiles run past the screen, and the zoom carries them further, so the
+    section clips them — with clip, not hidden, which would make it a scroll
+    container and freeze the timeline. The pin itself does not clip: a tile
+    hidden by an ancestor's overflow never starts its lazy load.
+  */
+  :global(#showreel) {
+    overflow: clip;
+  }
+
+  .pin {
+    position: relative;
+    height: 100svh;
+    background: var(--bg);
+  }
+
+  /*
+    The tiles sit apart on the page's own ground rather than on hairlines — a
+    contact sheet scattered on a table (CLAUDE.md > Layout records the
+    exception). The grid fills the screen, so its centre is the screen's
+    centre: the zoom's origin, and the video's.
+  */
+  .mosaic-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--cw) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: var(--g);
+    height: 100%;
+  }
+
+  /*
+    The sides: tiles at their own aspect ratios, so the seams fall in
+    different places down each column, and the columns start at different
+    heights above the screen — out of line on purpose. Each is at least 1.3
+    screens tall, so it covers top to bottom however it drifts; tiles shorter
+    than that grow, and cover crops them rather than distorting.
+  */
+  .col-left,
+  .col-right {
+    display: flex;
+    flex-direction: column;
+    gap: var(--g);
+    align-self: start;
+    min-height: calc(1.3 * 100svh);
+  }
+
+  .col-left {
+    margin-top: calc(-0.14 * 100svh);
+  }
+
+  .col-right {
+    margin-top: calc(-0.04 * 100svh);
+  }
+
+  .tile {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    background: var(--plate);
+  }
+
+  .col-left .tile,
+  .col-right .tile {
+    flex: 1 0 auto;
+    min-height: 0;
+  }
+
+  /*
+    The centre hangs off the video's cell at the screen's middle: the image
+    above, the cell, the image below, each the cell's size.
+  */
+  .col-centre {
+    position: relative;
+  }
+
+  .slot,
+  .centre-top,
+  .centre-bottom {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: var(--ch);
+  }
+
+  .slot {
+    top: calc(50% - var(--ch) / 2);
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .centre-top {
+    bottom: calc(50% + var(--ch) / 2 + var(--g));
+  }
+
+  .centre-bottom {
+    top: calc(50% + var(--ch) / 2 + var(--g));
+  }
+
+  /* cover, never contain: the poster and the video fill the cell at every
+     size, all the way to the full screen, and never letterbox. */
+  .slot__media {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @media (max-width: 860px) {
+    .track {
+      --g: 4px;
+    }
+  }
+
+  /*
+    The pin and the zoom, only where both work. 340svh is the one knob for
+    how long the visitor is held: the camera moves in across the first 85% of
+    the 240svh during which the track covers the screen, and the video holds
+    the screen for the rest.
+
+    The zoom runs in equal ratios — each quarter of the way multiplies the
+    size by the same amount — so the camera moves at an even pace instead of
+    lunging at the start.
+
+    The nav yields while the video holds the screen: it fades out as the
+    video comes to fill it, stays out while it does, and comes back as the pin
+    lets go — so footage never runs under a bar, and the bar is there again
+    for the rest of the page.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      :global(html) {
+        timeline-scope: --sr;
+      }
+
+      .track {
+        height: 340svh;
+        view-timeline: --sr block;
+      }
+
+      .pin {
+        position: sticky;
+        top: 0;
+      }
+
+      .mosaic-grid,
+      .col-left,
+      .col-right {
+        animation: linear both;
+        animation-timeline: --sr;
+        animation-range: contain 0% contain 85%;
+      }
+
+      .mosaic-grid {
+        animation-name: zoom;
+      }
+
+      .col-left {
+        animation-name: drift-up;
+      }
+
+      .col-right {
+        animation-name: drift-down;
+      }
+
+      :global(.header) {
+        animation: nav-yield linear both;
+        animation-timeline: --sr;
+        animation-range: contain 55% exit 30%;
+      }
+    }
+
+    @keyframes zoom {
+      0% {
+        scale: 1;
+      }
+      25% {
+        scale: pow(calc(1 / var(--k)), 0.25);
+      }
+      50% {
+        scale: pow(calc(1 / var(--k)), 0.5);
+      }
+      75% {
+        scale: pow(calc(1 / var(--k)), 0.75);
+      }
+      100% {
+        scale: calc(1 / var(--k));
+      }
+    }
+
+    @keyframes drift-up {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 -20svh;
+      }
+    }
+
+    @keyframes drift-down {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 20svh;
+      }
+    }
+
+    /* contain 55% to exit 30%: 26% is the video three quarters of the way
+       to the screen, 78% is contain 100% — the pin letting go. */
+    @keyframes nav-yield {
+      0% {
+        opacity: 1;
+        visibility: visible;
+      }
+      26% {
+        opacity: 0;
+        visibility: hidden;
+      }
+      78% {
+        opacity: 0;
+        visibility: hidden;
+      }
+      100% {
+        opacity: 1;
+        visibility: visible;
+      }
+    }
+  }
+</style>

@@ -24,8 +24,13 @@ create table if not exists public.enquiries (
   user_agent  text                 check (user_agent is null or char_length(user_agent) <= 400)
 );
 
+-- The same warning as the end of this file, where a tidy-up would happen: in
+-- the dashboard, beside the advisor's notice (0003 sets it on the live table).
 comment on table public.enquiries is
-  'Contact-form submissions. Written only by the Cloudflare Pages Function using the service_role key.';
+  'Contact-form submissions, written only by the Worker (worker/enquiry.ts) with the service_role key. '
+  'RLS on with NO policies is the design: the advisor notice "RLS enabled, no policies" is expected and permanent. '
+  'Do not add a policy to clear it: a policy is how client enquiries become readable through the public API. '
+  'Read them in the dashboard or the SQL editor, which bypass RLS.';
 
 -- Newest first is the only way anyone will read this table.
 create index if not exists enquiries_created_at_idx
@@ -43,3 +48,12 @@ revoke all on public.enquiries from anon, authenticated;
 -- Deliberately NO policies. Any policy added here becomes a way to read other
 -- people's contact details — if you need dashboard access, read it as an admin
 -- in the Supabase UI, which uses service_role, rather than opening this up.
+--
+-- THE ADVISOR WARNING IS EXPECTED AND PERMANENT. Supabase's security advisor
+-- reports this table as "RLS enabled, no policies". That is the design: RLS
+-- on with zero policies, plus the revoke above, is what makes service_role
+-- the only reader. Adding any policy to clear the warning is how client
+-- enquiries become publicly readable — every name, phone number and message.
+-- The revoke would then be the last thing standing, and a single grant, of
+-- the kind dashboards and guides add as routine, removes it. Leave the
+-- warning where it is.

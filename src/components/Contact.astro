@@ -1,6 +1,7 @@
 ---
 import Section from './Section.astro';
 import { site } from '../content/site';
+import { ENQUIRY_MAX } from '../lib/enquiry-limits';
 
 /*
   The enquiry form. A real form, not a decoration.
@@ -65,7 +66,7 @@ const { fields, honeypot } = form;
           name={fields.name.name}
           type="text"
           placeholder={fields.name.placeholder}
-          maxlength="100"
+          maxlength={ENQUIRY_MAX.name}
           autocomplete="name"
           required
         />
@@ -79,7 +80,7 @@ const { fields, honeypot } = form;
           name={fields.contact.name}
           type="text"
           placeholder={fields.contact.placeholder}
-          maxlength="120"
+          maxlength={ENQUIRY_MAX.contact}
           autocomplete="email"
           required
         />
@@ -92,7 +93,7 @@ const { fields, honeypot } = form;
           id="f-message"
           name={fields.message.name}
           placeholder={fields.message.placeholder}
-          maxlength="2000"
+          maxlength={ENQUIRY_MAX.message}
           rows="4"></textarea>
       </div>
 
@@ -133,6 +134,12 @@ const { fields, honeypot } = form;
     text-wrap: balance;
   }
 
+  /*
+    Orange as text on --ink is 4.89:1 with the grain and passes AA at any
+    size. The section was light once, where orange is large text only
+    (CLAUDE.md > Contrast, rule 2) — the status line keeps orange as a mark,
+    so it reads the same on either ground.
+  */
   .contact__email {
     display: inline-flex;
     align-items: center;
@@ -195,14 +202,21 @@ const { fields, honeypot } = form;
     pointer-events: none;
   }
 
+  /*
+    Chips and fields are controls, not structure, so their edges are drawn
+    in --muted rather than the --line hairline: a control's boundary needs
+    3:1 against the ground (WCAG 1.4.11), and --line is about 1.3:1 on dark.
+    The options are what the visitor reads, so they are --fg; the legends
+    above them stay --muted.
+  */
   .chip__face {
     display: inline-flex;
     align-items: center;
     /* 44px minimum touch target (CLAUDE.md > Phase 09 and WCAG). */
     min-height: 44px;
     padding: 0 0.9rem;
-    border: var(--hairline) solid var(--line);
-    color: var(--muted);
+    border: var(--hairline) solid var(--muted);
+    color: var(--fg);
     cursor: pointer;
     transition:
       background 0.3s ease,
@@ -211,8 +225,7 @@ const { fields, honeypot } = form;
   }
 
   .chip:hover .chip__face {
-    color: var(--fg);
-    border-color: var(--muted);
+    border-color: var(--fg);
   }
 
   /* Text on an orange fill is --ink, never white — white on orange is 3.67:1
@@ -242,7 +255,7 @@ const { fields, honeypot } = form;
     min-height: 44px;
     padding: 0.6rem 0.85rem;
     background: transparent;
-    border: var(--hairline) solid var(--line);
+    border: var(--hairline) solid var(--muted);
     color: var(--fg);
     transition: border-color 0.3s ease;
   }
@@ -252,8 +265,9 @@ const { fields, honeypot } = form;
     opacity: 1;
   }
 
-  .field__input:hover {
-    border-color: var(--muted);
+  .field__input:hover,
+  .field__input:focus {
+    border-color: var(--fg);
   }
 
   .field__textarea {
@@ -289,9 +303,10 @@ const { fields, honeypot } = form;
       color 0.3s ease;
   }
 
+  /* The orange stays as the border; the label goes to --fg. */
   .submit:hover {
     background: transparent;
-    color: var(--orange);
+    color: var(--fg);
   }
 
   .submit[disabled] {
@@ -305,8 +320,15 @@ const { fields, honeypot } = form;
     min-height: 1.5rem;
   }
 
-  .status[data-state='ok'] {
-    color: var(--orange);
+  /* Sent: --muted text with an orange dot, not orange text. */
+  .status[data-state='ok']::before {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.6em;
+    background: var(--orange);
+    vertical-align: 0.05em;
   }
 
   @media (max-width: 860px) {

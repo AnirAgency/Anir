@@ -1,0 +1,929 @@
+---
+import '../../styles/fonts.css';
+import '../../styles/tokens.css';
+import '../../styles/base.css';
+import { seed, site } from '../../content/site';
+import { admin } from '../../content/admin';
+import { placeholderMode } from '../../lib/placeholders.mjs';
+import { checkAdmin, type Obj } from '../../scripts/admin-schema';
+
+/*
+  No field the admin shows may fall back to its English key: every field,
+  section, list, length and value needs Mongolian words, and the build stops
+  here — `npm run build`, and so every publish — naming each one missing.
+*/
+const missing = checkAdmin(seed as unknown as Obj, admin);
+if (missing.length) {
+  throw new Error(`admin copy: ${missing.length} missing (src/content/admin.ts, src/scripts/admin-schema.ts)\n  ${missing.join('\n  ')}`);
+}
+
+/*
+  /admin/ — where the team edits the site (src/scripts/admin.ts). Not linked
+  from anywhere and kept out of search; signing in is what guards it, and
+  the database decides what a signed-in user may do.
+
+  The page is a shell: the app draws everything into #admin. Two copies of
+  the content ride along as data, not code: site.ts as written — the forms'
+  shapes and templates, and the content while the database holds nothing —
+  and the site as this build published it, which the preview finds on the
+  page. `<` is escaped so no string in them can close the script element.
+
+  A production build leaves the placeholder paths out of it, as it leaves
+  them out of every page (CLAUDE.md > Budget); the build lays the seed's back
+  over whatever is saved, so preview builds still show them.
+*/
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const data = JSON.stringify({ seed, published: site }, (_key, value) =>
+  !placeholders && typeof value === 'string' && value.startsWith('/media/placeholder/') ? undefined : value
+).replace(/</g, '\\u003c');
+---
+
+<!doctype html>
+<html lang="mn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{admin.title}</title>
+  </head>
+  <body class="admin-page">
+    <div class="admin" id="admin" data-state="loading">
+      <p class="admin__message">{admin.loading}</p>
+      <noscript><p class="admin__message">{admin.noscript}</p></noscript>
+    </div>
+    <script type="application/json" id="admin-data" set:html={data} />
+    <script>
+      import '../../scripts/admin.ts';
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  /*
+    The admin's own look, in the site's tokens: dark ground, hairlines, no
+    radii, mono for the working text. It is a tool, so it is plain — the
+    orange marks what can be pressed and what is current, as on the site.
+  */
+  /* A tool, not the site: no film grain over the forms. */
+  body.admin-page::after {
+    content: none;
+  }
+
+  .admin {
+    --bar-h: 3.5rem;
+    --bg: var(--ink);
+    --fg: var(--paper);
+    --muted: var(--dim);
+    --line: var(--line-dark);
+    --plate: var(--ink-2);
+
+    min-height: 100svh;
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+
+  .admin button,
+  .admin input,
+  .admin textarea {
+    font: inherit;
+  }
+
+  .admin__message {
+    padding: 4rem 2rem;
+    color: var(--muted);
+  }
+
+  .admin__message--bad {
+    color: var(--fg);
+  }
+
+  /* -------------------------------------------------------------- bar */
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 70;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    min-height: var(--bar-h);
+    padding: 0.5rem 1.25rem;
+    background: var(--ink);
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .bar__brand {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .bar__status {
+    flex: 1;
+    min-width: 12rem;
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .bar__status[data-tone='ok'] {
+    color: var(--fg);
+  }
+
+  .bar__status[data-tone='bad'] {
+    color: var(--orange);
+  }
+
+  .bar__who {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  /*
+    The line under the bar: anything with more to say than the bar holds —
+    a failure and its next step, a build under way — at the screen's full
+    width, so a long sentence never wraps the bar. Gone when there is
+    nothing to say.
+  */
+  .admin[data-state='ready'] {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    height: 100svh;
+  }
+
+  .strip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: var(--hairline) solid var(--line);
+    background: var(--ink-2);
+  }
+
+  .strip[hidden] {
+    display: none;
+  }
+
+  .strip__line:empty {
+    display: none;
+  }
+
+  .strip__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.9rem;
+    color: var(--fg);
+  }
+
+  .strip__line[data-tone='bad'] {
+    color: var(--orange);
+  }
+
+  .strip__line[data-tone='busy'] {
+    color: var(--muted);
+  }
+
+  .said__action {
+    min-height: 2rem;
+  }
+
+  /* ------------------------------------------------------------- body */
+
+  /*
+    The whole screen: sections down the left, the form in the middle, the
+    page it edits on the right. Each column scrolls on its own, so the page
+    stays beside the field being edited.
+  */
+  .body {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .admin[data-preview='on'] .body {
+    grid-template-columns: 16rem minmax(24rem, 1fr) minmax(0, 1.15fr);
+  }
+
+  .nav,
+  .main,
+  .preview {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    border-right: var(--hairline) solid var(--line);
+  }
+
+  /* A section that is switched off: dimmed, and saying so, never hidden. */
+  .nav__item--off {
+    color: var(--muted);
+  }
+
+  .nav__off {
+    margin-left: auto;
+    padding: 0.05rem 0.4rem;
+    border: var(--hairline) solid var(--line);
+    color: var(--muted);
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .nav__count,
+  .summary__count {
+    color: var(--muted);
+  }
+
+  /* Unsaved edits wait here: a live state, so orange. */
+  .nav__dot {
+    flex: none;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--orange);
+  }
+
+  /* New enquiries: text on an orange fill is --ink. */
+  .nav__badge {
+    margin-left: auto;
+    min-width: 1.5rem;
+    padding: 0 0.4rem;
+    background: var(--orange);
+    color: var(--ink);
+    text-align: center;
+    font-size: 0.6875rem;
+  }
+
+  .nav__title {
+    margin: 1rem 0 0.25rem;
+    color: var(--muted);
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* The three steps: choose, edit and save, publish — under the tree. */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 1.25rem 0 0;
+    padding: 0.75rem 0.75rem 0.75rem 2rem;
+    background: var(--ink-2);
+    color: var(--fg);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .steps li::marker {
+    color: var(--orange);
+  }
+
+  .nav__title:first-child {
+    margin-top: 0;
+  }
+
+  .nav__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .nav__product {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .nav__item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    color: var(--fg);
+    background: none;
+    border: 0;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+  }
+
+  .nav__item:hover {
+    background: var(--ink-2);
+  }
+
+  .nav__item[aria-current='true'] {
+    border-left-color: var(--orange);
+    background: var(--ink-2);
+  }
+
+  .main {
+    padding: 1.5rem clamp(1.25rem, 1rem + 1.5vw, 2.5rem) 6rem;
+  }
+
+  .main__about {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1.5rem;
+    padding: 0.9rem 1rem;
+    border-left: 2px solid var(--line);
+    background: var(--ink-2);
+  }
+
+  .main__about p {
+    margin: 0;
+  }
+
+  .main__hint {
+    color: var(--muted);
+  }
+
+  .main__off {
+    color: var(--fg);
+  }
+
+  .main__keys {
+    margin: 2rem 0 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  /* A draft from another visit, waiting for «сэргээх үү?». */
+  .banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 0.9rem 1rem;
+    border-left: 2px solid var(--orange);
+    background: var(--ink-2);
+  }
+
+  .banner p {
+    margin: 0;
+  }
+
+  /* The raw detail behind a sentence, for whoever is debugging. */
+  .said > summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .said pre {
+    max-height: 12rem;
+    margin: 0.4rem 0 0;
+    overflow: auto;
+    color: var(--muted);
+    font-size: 0.6875rem;
+    white-space: pre-wrap;
+  }
+
+  /* ------------------------------------------------------------ help */
+
+  .f__label,
+  .summary__name,
+  .group__title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* One line under every field: where it shows, and what happens past its length. */
+  .f__help {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  /* Past the measured length: guidance, never a block. */
+  .f__count {
+    margin: 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+    color: var(--fg);
+    font-size: 0.75rem;
+  }
+
+  .f__count[hidden] {
+    display: none;
+  }
+
+  /* ---------------------------------------------------------- preview */
+
+  .preview {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: var(--hairline) solid var(--line);
+  }
+
+  .preview[hidden] {
+    display: none;
+  }
+
+  .preview__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.6rem 1rem;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .preview__device[aria-pressed='true'] {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .preview__note {
+    flex: 1;
+    min-width: 14rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .preview__stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--ink-2);
+  }
+
+  /* Scaled to the pane and centred in it by the script (fit()). */
+  .preview__frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: 0;
+    background: var(--ink);
+    transform-origin: 0 0;
+  }
+
+  .preview__empty {
+    padding: 2rem;
+    color: var(--muted);
+  }
+
+  .main__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .main__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--size-display-m);
+    font-weight: 600;
+    line-height: 1.02;
+    text-transform: uppercase;
+  }
+
+  .main__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--muted);
+  }
+
+  .main__meta p {
+    margin: 0;
+  }
+
+  /* ----------------------------------------------------------- fields */
+
+  .group__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .group {
+    border: var(--hairline) solid var(--line);
+  }
+
+  /* Group titles read as plain headings: normal case, the working size. */
+  .group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    color: var(--fg);
+  }
+
+  .group[open] > summary {
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .group > .group__body,
+  .group > .list {
+    padding: 1rem 0.9rem;
+  }
+
+  .group--item > summary {
+    font-size: 0.8125rem;
+  }
+
+  .group--image {
+    padding: 0.9rem;
+  }
+
+  .group__title {
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    color: var(--fg);
+  }
+
+  .f {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .f__row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  /* A field's name: normal case, legible, not the site's tiny spaced capitals. */
+  .f__label {
+    color: var(--fg);
+    font-size: 0.8125rem;
+    letter-spacing: 0.01em;
+  }
+
+  .f input[type='text'],
+  .f input[type='email'],
+  .f input[type='password'],
+  .f input[type='number'],
+  .f textarea {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.75rem;
+    color: var(--fg);
+    background: transparent;
+    border: var(--hairline) solid var(--muted);
+    resize: vertical;
+  }
+
+  .f input:focus,
+  .f textarea:focus {
+    border-color: var(--fg);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .list__row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+
+  .list__row > :first-child {
+    flex: 1;
+  }
+
+  /*
+    A row in a list of things says what it holds: its number small and
+    muted, its first words, a second muted line. ↑ ↓ ✕ wait at the right
+    edge until the row is hovered or has the keyboard; on a touchscreen,
+    with no hover, they are always there.
+  */
+  .row__ord {
+    flex: none;
+    min-width: 2.75rem;
+    color: var(--muted);
+    font-size: var(--size-mono-label);
+    letter-spacing: 0.08em;
+  }
+
+  .enquiry .row__ord {
+    min-width: 8.5rem;
+  }
+
+  .row__text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .row__title,
+  .row__sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row__title--empty,
+  .row__sub {
+    color: var(--muted);
+  }
+
+  .row__sub {
+    font-size: 0.75rem;
+  }
+
+  .row__controls {
+    flex: none;
+    display: inline-flex;
+    gap: 0.25rem;
+    margin-left: auto;
+    opacity: 0;
+  }
+
+  .group--item:hover > summary .row__controls,
+  .group--item > summary:focus-within .row__controls,
+  .list__row:hover .row__controls,
+  .list__row:focus-within .row__controls {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .row__controls {
+      opacity: 1;
+    }
+  }
+
+  /* ✕ pressed once: it asks before it removes. */
+  .btn--armed {
+    min-width: auto;
+    padding: 0 0.6rem;
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  /* ----------------------------------------------------------- inbox */
+
+  .inbox__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .inbox__filter[aria-pressed='true'] {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .inbox__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .enquiry__body p {
+    margin: 0;
+  }
+
+  .enquiry__message {
+    white-space: pre-wrap;
+  }
+
+  .enquiry__contact {
+    color: var(--orange);
+    text-decoration: underline;
+  }
+
+  /* Stored as sent, but worth a second look. */
+  .enquiry__flags {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  /* A section the page code switches off: read only, and looks it. */
+  [data-readonly] input,
+  [data-readonly] textarea {
+    color: var(--muted);
+    border-color: var(--line);
+  }
+
+  /* ----------------------------------------------------------- images */
+
+  .img {
+    display: grid;
+    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .img__preview {
+    aspect-ratio: 4 / 3;
+    background: var(--ink-2);
+    overflow: hidden;
+  }
+
+  .img__preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .img__side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .img__note,
+  .img__size {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .img__note {
+    color: var(--fg);
+  }
+
+  .img__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .img__error {
+    margin: 0;
+    min-height: 0;
+    color: var(--orange);
+  }
+
+  .img__error:empty {
+    display: none;
+  }
+
+  /* What a chosen file will do: allowed, with the reason in a visitor's terms. */
+  .img__warn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .img__warn:empty {
+    display: none;
+  }
+
+  .img__warn p {
+    margin: 0;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--orange);
+  }
+
+  .img__size[hidden] {
+    display: none;
+  }
+
+  /* ---------------------------------------------------------- buttons */
+
+  .btn {
+    min-height: 2.5rem;
+    padding: 0 1rem;
+    color: var(--fg);
+    background: transparent;
+    border: var(--hairline) solid var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: var(--size-mono-label);
+  }
+
+  .btn:hover {
+    border-color: var(--fg);
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* What publishes or saves: orange, with --ink on it. */
+  .btn--primary {
+    color: var(--ink);
+    background: var(--orange);
+    border-color: var(--orange);
+  }
+
+  .btn--primary:hover {
+    color: var(--fg);
+    background: transparent;
+  }
+
+  .btn--ghost {
+    border-color: var(--line);
+    align-self: start;
+  }
+
+  .btn--small {
+    min-height: 2rem;
+    margin: 0.75rem 0.9rem;
+  }
+
+  .btn--icon {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0;
+    border-color: var(--line);
+  }
+
+  .btn--danger:hover {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  /* --------------------------------------------------- sign in, new */
+
+  .sign,
+  .new {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: min(26rem, 100% - 2rem);
+    margin: 0 auto;
+    padding: 12svh 0 4rem;
+  }
+
+  .sign .btn--primary,
+  .new .btn--primary {
+    align-self: start;
+  }
+
+  .new {
+    margin: 0;
+    padding-top: 0;
+  }
+
+  /* Narrow screens: one column, the page preview off (no room beside it). */
+  @media (max-width: 1099px) {
+    .admin[data-preview='on'] .body,
+    .body {
+      grid-template-columns: 14rem minmax(0, 1fr);
+    }
+
+    .preview,
+    .bar__preview {
+      display: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .admin[data-state='ready'] {
+      display: block;
+      height: auto;
+    }
+
+    .admin[data-preview='on'] .body,
+    .body {
+      grid-template-columns: minmax(0, 1fr);
+      height: auto;
+    }
+
+    .nav,
+    .main {
+      overflow: visible;
+    }
+
+    .nav {
+      border-right: 0;
+      border-bottom: var(--hairline) solid var(--line);
+    }
+
+    .img {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

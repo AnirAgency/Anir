@@ -12,9 +12,19 @@
   margin: 0;
 }
 
+/*
+  No scrollbar, by the owner's direction: the rail's progress line already
+  says where you are. Only the bar goes — wheel, trackpad, touch, keyboard
+  and find-in-page all scroll as before.
+*/
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -39,6 +49,69 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* The page is one column of full-bleed sections; nothing should scroll sideways. */
   overflow-x: hidden;
+}
+
+/*
+  Film grain. Large near-black grounds band on 8-bit panels, and the grain
+  dithers the steps away; and it gives the black the texture of film. Fixed,
+  so it reads as the screen itself rather than a texture printed on the page.
+
+  Matched, by the owner's direction, to visioned.ch's grain
+  (scripts/grain.mjs): every pixel white or black, half and half, at 5% —
+  dense and even, a texture rather than specks — drawn at one tile pixel to
+  the CSS pixel and scaled as theirs is. The black half is at 30% of
+  theirs, a little under the most the contrast table allows; on the dark
+  grounds it would change nothing anyway.
+
+  And it boils as theirs does: three frames of fresh noise, 0.15 s each,
+  round and round. A frame is the tile at a new offset — a transform of an
+  already rasterised layer, compositor work, never a repaint (never animate
+  background-position or background-image here; those are repaints). The
+  offsets are about 50–60px apart each way, modulo the 168px tile, from
+  every frame to the next: far too far for the eye to follow a grain from
+  one frame to the next, so each reads as fresh noise, not as a field
+  sliding. (Small steps are what made an earlier version read as a pattern
+  jumping.) The layer bleeds one tile past the screen on every side, so no
+  edge shows. Phones, saveData, slow devices and reduced motion get the
+  same grain, still (html.shimmer, set in Base.astro).
+
+  It lies over everything, the nav included: one layer, so there is nothing
+  to keep in step. The hairline grids paint every cell in the ground colour
+  (Grid.astro), so a grain beneath content would vanish across the cards and
+  rows; over everything, the page is one even surface, and the contrast table
+  in CLAUDE.md is measured with grain on text and ground alike.
+*/
+body::after {
+  content: '';
+  position: fixed;
+  inset: -168px;
+  z-index: 60;
+  pointer-events: none;
+  background-image: var(--grain-image);
+  background-repeat: repeat;
+  background-size: 168px 168px;
+  mix-blend-mode: var(--grain-blend);
+  opacity: var(--grain-opacity);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.shimmer body::after {
+    will-change: transform;
+    animation: grain-boil 0.45s steps(1, end) infinite;
+  }
+}
+
+/* Three frames, 0.15 s each. */
+@keyframes grain-boil {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  33.333% {
+    transform: translate3d(61px, 107px, 0);
+  }
+  66.667% {
+    transform: translate3d(119px, 47px, 0);
+  }
 }
 
 h1,

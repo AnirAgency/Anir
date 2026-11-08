@@ -19,11 +19,17 @@ npm run dev          # http://localhost:4321
 | Script | What it does |
 |---|---|
 | `npm run dev` | Dev server with HMR |
-| `npm run build` | Static build into `dist/` |
+| `npm run build` | Pulls the admin's content from Supabase, then a static build into `dist/` |
 | `npm run preview` | Serves the built `dist/` locally |
-| `npm run budget` | Builds, then enforces the weight budget. **Exits non-zero if the page is over.** |
+| `npm run budget` | Builds, then enforces the weight budget, the contrast table, the video budget and no placeholder in the output. **Exits non-zero if a page is over, a pair fails, a committed video is over its cap, or a production build names a placeholder.** |
+| `npm run ci` | What Workers Builds runs: `npm run budget`, reporting its start and its end to the admin (`scripts/build-report.mjs`). The report can never change the build's exit code. |
+| `npm run copy:export` | Writes `mongolian-copy.md`: every Mongolian string the site and the admin show, in order, with where it appears. `-- --visitor`: only what visitors read, the launch-blocking subset; `-- --admin`: only the admin's words |
+| `npm run labels` | Lists any field the admin would show without Mongolian words (the build runs the same check) |
+| `npm run contrast` | Measures the CLAUDE.md contrast table under the film grain, from `tokens.css` and the shipped tile |
+| `npm run grain` | Remakes the film grain tile, `src/assets/grain.webp`, matched to the owner's references — run `npm run contrast` after |
 | `npm run fonts` | Rebuilds the subset woff2 files in `public/fonts/` |
 | `npm run shot` | Screenshots and measures a page — see [Screenshots](#screenshots) |
+| `npm run test:publish` · `test:builds` · `test:inbox` | Exercise the admin's Worker routes against stubs — see [The admin](#the-admin) |
 
 ## The styleguide
 
@@ -188,9 +194,10 @@ site from `dist/` as static files and answers the contact form at
    about a minute later. Nobody deploys by hand.
 
 If a build fails, nothing goes live — the last good version keeps serving. The
-build runs `npm run budget`, so a page over its weight budget fails on purpose.
-To see why: Workers & Pages → **anir** → Deployments → the failed build → read
-the last lines of the log. Fix it on the branch and push again.
+build runs `npm run budget`, so a page over its weight budget, or a text colour
+that no longer clears its contrast bar, fails on purpose. To see why: Workers &
+Pages → **anir** → Deployments → the failed build → read the last lines of the
+log. Fix it on the branch and push again.
 
 Run the same check on your own computer before pushing: `npm run budget`.
 
@@ -218,8 +225,33 @@ npm run deploy         # runs the budget, then uploads
 
 ### When an enquiry arrives
 
-Every enquiry sends a notification (Telegram now, email too once the domain exists — see setup step 7)
-that starts with one of two lines:
+Every enquiry **with nothing to check** sends a notification at once (Telegram now,
+email too once the domain exists — see setup step 7). A **flagged** one — stored
+like any other, under the inbox's «Шалгах» — does not: Telegram is the only channel
+until the domain exists, and a channel full of bot submissions is how a real enquiry
+gets missed. Instead the Worker's 15-minute schedule (`worker/watch.ts`) sends:
+
+- **«Шалгах: N шинэ»** — at most one message an hour, nothing else: how many flagged
+  enquiries arrived since the last one.
+- **«Өнөөдөр N хүсэлт хадгалагдлаа…»** — once, the day (Ulaanbaatar's) the stored
+  enquiries pass 50, buffered ones counted. The rate limiter is the only bound on the
+  table and it fails open, so a flood is made visible rather than stopped.
+- If the limiter ever fails open — KV unreachable, or unbound — the Worker logs
+  `ALERT limiter-open`, records it in `worker_alerts`, and the admin shows it on its
+  status line for a day. The limiter is never made to fail closed: a dropped
+  enquiry is worse than an unbounded table.
+- **An enquiry stuck in the buffer** over an hour — the drain has failed on it every
+  pass: a paused project, a revoked grant, a schema behind the Worker — raises a
+  `drain-stuck` alert on every pass while it lasts, its detail carrying Supabase's
+  own reason (`PGRST204: Could not find the 'diagnostics' column…`), and sends one
+  Telegram line, «N хүсэлт … түр санд хүлээж байна», again a day later if it lasts.
+  This watch needs no database, so a paused project — when the admin cannot load —
+  is still told. Once nothing waits, the alert is cleared. The kinds of alert are listed in the
+  Worker (`ALERT_KINDS` in `worker/alerts.ts`), not in the table — migration 0007
+  dropped its check, so a new kind is never refused — and the admin shows a kind it
+  has no words for by its code rather than hiding it.
+
+An immediate notification starts with one of two lines:
 
 - **"Stored in Supabase."** — the normal case. It is in the `enquiries` table.
 - **"BUFFERED in Cloudflare KV"** — Supabase did not take it, almost always
@@ -253,10 +285,18 @@ Connect → GitHub → `AnirAgency/Anir`.
 | Setting | Value |
 |---|---|
 | Production branch | `main` |
-| Build command | `npm run budget` |
+| Build command | `npm run budget` — becomes `npm run ci` (which runs it and reports to the admin) only at the last step of [the publishing order](#setting-it-up-once) |
 | Deploy command | `npx wrangler deploy` |
-| Builds for non-production branches | on (`npx wrangler versions upload`) |
+| Builds for non-production branches | on |
+| Preview command | `npx wrangler preview` (the default) |
 | Build variable | `NODE_VERSION` = `22` |
+
+Each pull request gets a **Preview** named after its branch; Cloudflare turns
+`feat/x` into `feat-x` in the URL itself. A Preview takes only the bindings in
+the `previews` block of `wrangler.jsonc` — without that block every preview
+build fails. A preview has no database and its own KV, so an enquiry sent from
+one is answered as received but never reaches the `enquiries` table and
+notifies nobody.
 
 **5. The database** — `supabase/migrations/0001_enquiries.sql`, applied 31 August
 2026. RLS on, no policies, all grants revoked from `anon` and `authenticated`:
@@ -402,6 +442,28 @@ The script prints a source → encoded table and **exits non-zero** if any clip
 lands over 400 kB or any poster over 40 kB. If that trips, shorten the clip or
 lower `targetKB` — do not raise the cap.
 
+Then every run ends on the **video budget**: every video and poster in
+`public/media/` — what it just encoded, and anything copied in by hand, such as
+the showreel's MP4 — held to its cap, and a **FAIL** that exits non-zero, the way
+`npm run budget` fails:
+
+| File | Cap |
+|---|---|
+| a clip this pipeline encodes (`media.config.json`) | 400 kB (`failOverKB`) |
+| any other video (`.mp4`, `.webm`) | 1.2 MB — the same `VIDEO_MAX` `npm run budget` holds a page to (`scripts/limits.mjs`) |
+| a poster | 40 kB |
+| a placeholder video or poster (`placeholder/`) | 3 MB — looser, never exempt: every preview serves them |
+
+`npm run media -- --check` runs the budget alone — no ffmpeg, no sources — and
+`npm run budget` runs it on every build, so an oversized video fails the build that
+would ship it. Video is committed, so an oversized export is permanent in git and
+downloaded by every visitor — run the check before committing one.
+
+And `scripts/no-placeholders.mjs`, last in `npm run budget`, fails a production build
+whose output — any page, script, style or data file — names a placeholder file, or
+holds `media/placeholder/` at all. "Production never ships placeholders" is checked
+on every build, not assumed.
+
 ### How components find the output
 
 `site.ts` stores a **basename** (`plate-01`), never a path. At build time
@@ -429,15 +491,43 @@ else is a static file.
   action="/api/enquiry">`, so it submits with JavaScript switched off. The
   inline script is enhancement only: it swaps a page navigation for an inline
   status message.
-- **`worker/enquiry.ts`** — validates, rate-limits by IP, inserts one
+- **`worker/enquiry.ts`** — checks, rate-limits by IP, inserts one
   row into Supabase over the REST endpoint. Answers JSON to `fetch` and a small
   HTML page to a plain browser post. If Supabase will not take the row, it
   buffers the enquiry in KV (`ENQUIRY_BUFFER`) and still answers success; a
   cron every 15 minutes drains the buffer. Every enquiry notifies the team.
+- **No visitor input causes an enquiry not to be stored.** A chip the published
+  form does not have, a contact that is neither an email nor a phone number, an
+  empty name — each is stored as sent and named in the row's `unrecognised`, and
+  the inbox and the notification say what to check. The text is made storable
+  first (no NUL, no broken character) and cut to what its column holds
+  ([`src/lib/enquiry-limits.ts`](src/lib/enquiry-limits.ts): name 100, contact
+  120, message 2000, User-Agent 1000 characters, counted as Postgres counts them),
+  so the table can never refuse what the Worker sends. A cut is never silent. A cut
+  name, contact, message or chip is flagged `cut:<field>:<characters it came with>`
+  — the form's own maxlength keeps a browser inside those, so a cut means the
+  enquiry did not come from the form. A cut User-Agent is **not** a flag: it is a
+  header, its length says nothing about whether a visitor is real (the Facebook and
+  Instagram in-app browsers, where much of the traffic opens, append a block of
+  their own — 165 characters in all for Facebook on Android, captured from a real
+  phone and kept as a test fixture; longer on iOS), so it is only noted in `diagnostics` (migration
+  0008) — never «Шалгах», never a held-back notification. 1000 leaves every real
+  browser room. Even a body that cannot be read is stored, its raw text in the
+  message. Answers to questions added in the admin go in `answers`. Only the
+  honeypot and the rate limit keep one out — and the health check, known by its
+  credential (`HEALTH_CHECK_SECRET`), never by its shape.
+- **The rate limit is the only bound on the table now.** It stands in front of
+  everything that is stored, flagged or not, 5 per IP an hour; it fails open if KV
+  is unbound, and it is per IP, so a bot spread across many addresses is held back
+  only by the honeypot. What gets through lands flagged in the inbox's **Шалгах**,
+  not in **Шинэ**, so the badge keeps counting people.
 - **`supabase/migrations/0001_enquiries.sql`** — the table, with RLS on and
-  deliberately **no policies**.
+  deliberately **no policies**; **`0005`** drops its checks on chip values and
+  minimum lengths, so the table never refuses an enquiry the Worker keeps.
 - **`scripts/test-enquiry.ts`** — `node scripts/test-enquiry.ts` exercises the
-  real handler with a stubbed Supabase and KV. No Wrangler needed.
+  real handler with a stubbed Supabase and KV. No Wrangler needed. It holds the
+  invariant with 400 seeded hostile submissions — JSON and form, Supabase up and
+  down — against a stub that refuses what the real table would.
 
 The chip groups are native radio inputs. That is deliberate — a radio group
 gives arrow-key navigation, roving focus and an accessible name from its
@@ -480,7 +570,210 @@ studio's own address and is not filed as spam.
 ## Content
 
 Every Mongolian string and every price lives in [`src/content/site.ts`](src/content/site.ts),
-typed. Nothing Mongolian is hardcoded in a component: the team proofreads one file,
-and a non-technical person can change a price without opening markup.
+typed, as its seed — and the team edits it in [the admin](#the-admin), which is laid
+over the seed at build time. Nothing Mongolian is hardcoded in a component.
 
-As of Phase 01 that file is shape-only — the types are final-ish, the values are empty.
+## The admin
+
+`https://aniragency.mn/admin/` — sign in, edit any section or product, **Хадгалах**
+(save), then **Нийтлэх** (publish). The site rebuilds in two to three minutes. Saving
+alone changes nothing on the site; publishing is what ships it.
+
+What an editor gets:
+
+- **The tree**, in the order a visitor meets things: **Хүсэлтүүд** (the enquiries,
+  with the number of new ones) first; the home page's sections in page order, each
+  list's length beside it, Pricing and Team dimmed as switched off; the products;
+  then what is on every page.
+- **A line of help under every field** — where it shows on the site, and, where
+  length matters, what happens past a measured length. Past it, a counter says so;
+  nothing blocks typing.
+- **Rows that name themselves** — a process step by its title and column, not `№5`.
+  ↑ ↓ ✕ at the row's right edge; ✕ asks once.
+- **Nothing typed is lost**: every change is kept in the browser until it is saved,
+  and offered back after a closed tab. A dot in the tree marks unsaved edits.
+- **The page beside the form**: focusing a field lights it up on the page, and
+  clicking anything on the page opens its field.
+- **Publish says what happened**: started, building, done — or failed, why, and what
+  to do. No status codes.
+- **Uploads say their limits before the picker**, and warn — never silently — when a
+  picture is too small for its slot or large for Storage (1 GB on the Free plan).
+  Over 15 MB is refused before it is sent.
+- `Ctrl+S` saves; `Esc` closes the open row.
+
+How it fits together (CLAUDE.md > The admin has the rules):
+
+| Piece | What it does |
+|---|---|
+| [`src/scripts/admin.ts`](src/scripts/admin.ts) | The admin app. Talks to Supabase directly with the publishable key and the editor's session. |
+| [`src/scripts/admin-schema.ts`](src/scripts/admin-schema.ts) | What the admin shows: the tree, hidden values, row titles, measured lengths — and `checkAdmin`, which stops the build if any field would show without Mongolian words. |
+| [`src/content/admin.ts`](src/content/admin.ts) | Every word the admin says: labels, the help under each field, messages. |
+| [`supabase/migrations/0002_content.sql`](supabase/migrations/0002_content.sql) | `site_content`, `products`, `editors`, the `media` bucket, and the policies that let only editors write. |
+| [`supabase/migrations/0004_enquiry_status.sql`](supabase/migrations/0004_enquiry_status.sql) | The enquiries' `status` for the inbox, and the storage figure. |
+| [`worker/publish.ts`](worker/publish.ts) | `POST /api/publish`: checks the caller is an editor, then posts to the deploy hook. `GET /api/publish?build=…`: how that build is going, and why it failed. |
+| [`worker/inbox.ts`](worker/inbox.ts) | `GET /api/enquiries`, `POST /api/enquiries/<id>`, `GET /api/storage` — editors only; the only code that reads enquiries, with the service key. No delete. |
+| [`scripts/content-pull.mjs`](scripts/content-pull.mjs) | First step of every build: content into `src/content/live.json`, uploads encoded into `public/media/live/`. |
+| [`src/content/live.ts`](src/content/live.ts) | Lays the content over `site.ts`; a value of the wrong kind stops the build. |
+| [`src/lib/supabase.json`](src/lib/supabase.json) | The project URL and **publishable** key — public by design; row level security guards writes. |
+
+### Setting it up (once)
+
+1. **The tables.** Paste [`supabase/migrations/0002_content.sql`](supabase/migrations/0002_content.sql)
+   into the project's SQL editor and run it (or `supabase db push`). Until then the
+   build says *the admin tables are not set up yet* and the site is `site.ts` as written.
+2. **No sign-ups.** Authentication → Sign In / Providers → turn **Allow new users to sign
+   up** off. Accounts are made by the owner, not by visitors.
+3. **The team's accounts.** Authentication → Users → **Add user** → *Create new user*, with
+   each person's email and a password, *Auto Confirm User* on. Then, in the SQL editor:
+
+   ```sql
+   insert into public.editors (user_id, email)
+   select id, email from auth.users where email in ('one@example.com', 'two@example.com');
+   ```
+
+   Someone signed in but not in `editors` can read and do nothing else. To take access
+   away: `delete from public.editors where email = '…';`
+
+   **Passwords, before the accounts:** Authentication → Providers → Email → minimum
+   length **12**, and require **all four character classes** (lowercase, uppercase,
+   digits, symbols). Supabase checks a password only when it is set, so an account
+   made before this keeps its old password until it is changed — change any that
+   would not pass.
+
+   **The security advisor, read once and accepted.** Four findings stay, on purpose:
+   - *RLS enabled, no policy* on `enquiries`, `build_status` and `worker_alerts` —
+     the design: only the Worker, with service_role, reads or writes them. Adding a
+     policy to clear it would expose them. (See each migration's lockdown note.)
+   - *Signed-in users can execute `is_editor()`* — they must: every save's row level
+     security calls it. Anon cannot (0003).
+   - *Leaked password protection disabled* — **accepted: Pro plan only.** This
+     project is on Free, where the setting does not exist. The password rules above
+     are what Free offers, and they are set.
+4. **Publishing, in this order — each step needs the one before it.**
+
+   1. **The migrations.** Paste [`0004_enquiry_status.sql`](supabase/migrations/0004_enquiry_status.sql),
+      [`0005_keep_every_enquiry_and_build_status.sql`](supabase/migrations/0005_keep_every_enquiry_and_build_status.sql)
+      and [`0006_worker_alerts.sql`](supabase/migrations/0006_worker_alerts.sql), in that
+      order, into the SQL editor and run them. 0004 gives enquiries a status (the
+      inbox); 0005 drops the checks that refused an enquiry, adds its flags, and makes
+      the one-row `build_status` table; 0006 makes `worker_alerts`, where the Worker
+      records the rate limiter failing open. Then
+      [`0007_any_alert_kind.sql`](supabase/migrations/0007_any_alert_kind.sql), which
+      lets `worker_alerts` take any kind the Worker raises, and
+      [`0008_user_agent_room_and_diagnostics.sql`](supabase/migrations/0008_user_agent_room_and_diagnostics.sql),
+      which gives the User-Agent 1000 characters and adds `diagnostics`, the notes
+      that route nothing. None adds a policy to `enquiries`, and none should ever be
+      added. The Worker that the merge deploys needs all five. (On the live project
+      all five were applied on 7 November.) Then
+      [`0009_applied_migrations.sql`](supabase/migrations/0009_applied_migrations.sql),
+      a service-role-only function that reads Supabase's own migration history, so
+      the test suite can check it.
+
+      **A migration pasted into the SQL editor is not recorded** in
+      `supabase_migrations.schema_migrations` — so whoever rebuilds from that history
+      gets a schema without it. Record it straight after it runs:
+      `npm run migration:record -- 0009` prints the SQL to paste (same convention as
+      the rows the connector writes; `--at <ISO time>` for one that ran earlier). `npm
+      run test:enquiry`, with the service role key in `.dev.vars`, fails naming every
+      file with no history row, and every row with no file. **This check is manual,
+      never automated:** it needs the service role key, and no build has that key or
+      ever should. Without the key the suite does not fail — it prints a boxed
+      `SKIPPED — NOT CHECKED` and counts the check apart from the passes — so a green
+      run without the key says nothing about the history. Note that the Supabase
+      CLI keys migrations on the file name's leading digits, which here are `0001`…,
+      not the history's timestamps — so `supabase db push` cannot be used on this
+      folder as it stands; the parity check matches by name.
+   2. **The build secret.** Make one random secret —
+      `node -e "console.log(crypto.randomBytes(32).toString('hex'))"` — and add it as a
+      build secret: Workers & Pages → anir → Settings → Build → Variables and secrets →
+      `BUILD_REPORT_SECRET`, type *Secret*. Keep the value at hand for step 4, never in
+      a file or a chat. Nothing reads it yet.
+   3. **The merge**, with the build command **unchanged** — it is `npm run budget`
+      today; leave it. **Before it, by hand: the migration parity check** — the
+      service role key in `.dev.vars`, `npm run test:enquiry`, and no
+      `SKIPPED — NOT CHECKED` box at the end. The Worker the merge deploys expects
+      every migration in the folder; this is the one check that the live project has
+      them, and nothing runs it for you. This deploys `POST /api/builds`. Switching to `npm run ci` before
+      this would make the first report post to a route that does not exist yet, and
+      the admin would show a fifteen-minute silence on a build that worked.
+   4. **The Worker secret**, the identical value: `npx wrangler secret put
+      BUILD_REPORT_SECRET`. After the merge, so `secret put` finds the live version the
+      newest one (it refuses otherwise).
+   5. **The publish button.** Workers & Pages → anir → Settings → Builds → **Deploy
+      Hooks** → the hook for `main`. Copy its URL — it is a credential: whoever has it
+      can start builds — and set it as a Worker secret, never in a file:
+      `npx wrangler secret put DEPLOY_HOOK_URL`. If the URL ever leaks, delete the hook
+      and make a new one.
+   6. **The health check's secret — required, not optional:** `npx wrangler secret put
+      HEALTH_CHECK_SECRET`, any long random string. Since every POST without it is
+      stored as an enquiry, a health check run against a Worker that does not hold it
+      would leave a junk enquiry behind every time — the bug the secret exists to fix.
+      `scripts/test-headers.mjs` asks `GET /api/health` first (it stores nothing) and
+      posts only when this Worker holds the same secret, but **do not point the health
+      check at production until this step is done.** `GET /api/health` says "alive" to
+      the secret's holder and nothing else; anyone else — a wrong secret, none, or a
+      Worker with none set — gets the same 401, so it never tells a stranger whether
+      the secret is set. The admin's routes and the build's report likewise check who
+      is asking before saying whether anything is set up.
+   7. **Only then, the build command**: `npm run budget` → `npm run ci`. Do it straight
+      after step 6: a publish in between would start a build that does not report, and
+      show the fifteen-minute silence.
+
+   The report's secret can write the one status row and nothing else: at worst, a
+   leaked one makes the admin say a build failed when it did not. No Cloudflare API
+   token is involved. Until aniragency.mn is the address, the report goes to
+   `anir.b-batuka0627.workers.dev`; after, set the build variable `BUILD_REPORT_URL` to
+   `https://aniragency.mn/api/builds`.
+5. **Running the health check**: `HEALTH_CHECK_SECRET=… npm run test:headers --
+   https://…`, with the value from step 4.6. It is how the Worker knows a health
+   check — by a credential, never by its body: every POST without it is an enquiry and
+   is stored. Without the secret in the shell the check skips its POST; with one the
+   Worker does not hold, it asks first and skips too.
+
+### When a publish does not show up
+
+The admin follows the build and says *Нийтэллээ* when it is done, or why it failed. If
+it says the build never reported (fifteen minutes with nothing), the build died before
+it could, or the report did not arrive: Workers & Pages → anir → Deployments → the
+newest build's log names the reason — a page over the weight budget, or
+`content: … is number in the database, string in site.ts` for a value of the wrong
+kind.
+
+### Saving over someone else
+
+Every save sends back the `updated_at` the admin read, and writes only if the row
+still has it. If someone else saved that part in between, nothing is overwritten:
+the admin says «Өөр хүн энэ хэсгийг хадгалсан байна…», reads the table afresh, and
+keeps the editor's typing in the browser — **Дахин нээх** opens the part as the
+other editor saved it, with this editor's changes laid back over it.
+
+### Testing it
+
+`npm run test:publish` exercises the publish endpoint: an editor publishes; no token, a
+dead token and a non-editor are refused; a failing Supabase or hook is reported; a
+build is followed from queued to done or failed, from its own report — and no
+Cloudflare API is ever called.
+
+`npm run test:builds` exercises the report: only its secret is accepted; only the
+production branch is kept; it writes one row; a failure's cause is read from its
+lines; a late "started" never undoes how a build ended; and the reporter stays quiet,
+and exits 0, anywhere but a production build.
+
+`npm run test:watch` exercises the schedule's watches: the flagged digest at most hourly,
+exactly «Шалгах: N шинэ»; the flood message once per Ulaanbaatar day past 50, buffered
+enquiries counted; one watch failing never stops the other.
+
+`npm run test:inbox` exercises the inbox: only editors get anything; enquiries are read
+and changed with the service key only; a status change records who and when; and no
+route — through the Worker's own router — deletes one.
+
+`npm run labels` lists any field the admin would show without Mongolian words. The
+build runs the same check, and stops naming every one missing.
+
+`npm run copy:export` writes `mongolian-copy.md` — not committed; run it when a
+proofread is due — every Mongolian string, the site's as saved now, in the admin's
+tree order with where each appears, then the admin's own words with their keys.
+`-- --visitor` writes only what visitors read (`mongolian-copy-visitor.md`): the
+home page, the products and product pages, the contact form, the menu, Google and
+the screen readers' words — the subset that blocks a launch. `-- --admin` writes
+only the admin's words (`mongolian-copy-admin.md`).

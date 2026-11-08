@@ -6,11 +6,16 @@
  * pipeline writes the variants beside it. Nothing here guesses: if the shoot
  * has not happened, every list comes back empty and the component renders its
  * placeholder instead of a broken <source>.
+ *
+ * A `demo` slot (site.ts > Media) comes back empty in production whatever is
+ * on disk. It is checked here, in the one function every picture and video
+ * passes through, so no component can show one by resolving it some other way.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { Media } from '../content/site';
+import { placeholderMode } from './placeholders.mjs';
 
 /** Best first. A browser takes the first source it understands, so AV1 — the
  *  smaller encode — has to precede VP9, and AVIF has to precede WebP. */
@@ -44,6 +49,7 @@ const onDisk = (publicPath: string) => existsSync(publicFile(publicPath));
 
 function resolve(media: Media, variants: readonly { ext: string; type: string }[]): ResolvedMedia {
   if (!media.name) return { sources: [], fallback: null, present: false };
+  if (media.demo && !placeholderMode({ dev: import.meta.env.DEV })) return { sources: [], fallback: null, present: false };
 
   const sources: MediaSource[] = [];
   for (const variant of variants) {
@@ -67,6 +73,19 @@ export const resolveVideo = (media: Media) => resolve(media, VIDEO_VARIANTS);
 export function resolveImage(media: Media): ResolvedMedia {
   const resolved = resolve(media, IMAGE_VARIANTS);
   return { ...resolved, present: resolved.fallback !== null };
+}
+
+/**
+ * What an image slot can show without a labelled plate: the real encodes, or,
+ * while the asset is unshot and `placeholders` is on (dev and preview builds),
+ * its stand-in. null when neither — for a composition that leaves the slot
+ * out rather than draw an empty plate in it.
+ */
+export function pictureOf(media: Media, placeholders: boolean): { sources: MediaSource[]; src: string } | null {
+  const real = resolveImage(media);
+  if (real.present && real.fallback) return { sources: real.sources, src: real.fallback };
+  if (placeholders && media.placeholder) return { sources: [], src: media.placeholder };
+  return null;
 }
 
 /** The sprite sheet's layout, as the render pipeline writes it to `${name}.json`. */

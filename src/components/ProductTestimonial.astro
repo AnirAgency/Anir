@@ -1,0 +1,200 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  What someone who uses the product said, on the light ground: their
+  portrait in a circle inside a hairline ring, their name and position under
+  it, all centred on the screen; then their words in two parts, the first in
+  a column left of centre and the second set apart, further right and lower,
+  where it ends the quote. The ring draws itself round as it comes into
+  view; the words come up as they arrive. Without scroll-driven animation,
+  under reduced motion and with JS off, all of it is simply there.
+
+  Real words only. A product's testimonial is shown only when it has one —
+  someone's name and what they said; one added in the admin and left empty
+  does not count. Without one, dev and preview builds show the stand-in from
+  site.ts, which says what belongs there, so the section can be judged on a
+  preview URL and never mistaken for a real one, and production emits
+  nothing. The section says when it is the stand-in, and a production build
+  that ships it fails (scripts/budget.mjs): the backstop behind this gate,
+  as /media/placeholder/ is behind the pictures'.
+
+  The portrait is round and so is its ring, by the owner's direction
+  (CLAUDE.md > Layout).
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { testimonial: copy } = site.products.pages;
+const own = product.testimonial;
+const real = !!own && own.name.trim() !== '' && own.quote.some((part) => part.trim() !== '');
+const said = real ? own : placeholderMode({ dev: import.meta.env.DEV }) ? copy.stand : null;
+---
+
+{
+  said && (
+    <Section tone="light" id="testimonial" label={copy.label} heading={false}>
+      <div class="said" data-stand-in={real ? undefined : ''}>
+        <h2 class="visually-hidden">{copy.label}</h2>
+
+        <div class="who" data-reveal>
+          <div class="face">
+            <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="49.75" pathLength="1" />
+            </svg>
+            <div class="photo">
+              <Plate media={said.portrait} ratio="1 / 1" kind="image" />
+            </div>
+          </div>
+          <p class="who__name t-display-s">{said.name}</p>
+          <p class="who__role t-mono-label">{said.role}</p>
+        </div>
+
+        <blockquote class="quote">
+          <p class="quote__part quote__part--a t-serif-italic" data-reveal>
+            {said.quote[0]}
+          </p>
+          <p class="quote__part quote__part--b t-serif-italic" data-reveal>
+            {said.quote[1]}
+          </p>
+        </blockquote>
+      </div>
+    </Section>
+  )
+}
+
+<style>
+  /* Out to the screen's edges, past the content's insets, so its centre is
+     the screen's. */
+  .said {
+    margin: 0 calc(-1 * var(--inset-right)) 0 calc(-1 * var(--inset));
+    padding-inline: 1rem;
+  }
+
+  .who {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    text-align: center;
+  }
+
+  /* The ring a half again as wide as the photo, the photo at its centre. */
+  .face {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: clamp(15rem, 10rem + 10vw, 26rem);
+    aspect-ratio: 1;
+    margin-bottom: clamp(1.5rem, 1rem + 1vw, 2.5rem);
+  }
+
+  .ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    stroke: var(--line);
+    rotate: -90deg;
+  }
+
+  .ring circle {
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .photo {
+    width: 66%;
+    border-radius: 50%;
+    overflow: clip;
+  }
+
+  /* The labelled plate, while there is no portrait, in the circle's middle. */
+  .photo :global(.plate__pending) {
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .who__name,
+  .who__role {
+    margin: 0;
+  }
+
+  .who__role {
+    max-width: 32ch;
+    color: var(--muted);
+  }
+
+  /*
+    The words: the first part in a column a little left of centre, the
+    second further right and lower, the two overlapping by a sliver so they
+    still read as one quote.
+  */
+  .quote {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2rem, 1rem + 3vw, 4.5rem);
+    width: min(62rem, 100%);
+    margin: clamp(4rem, 2rem + 6vw, 8rem) auto 0;
+  }
+
+  .quote__part {
+    margin: 0;
+    max-width: 30rem;
+  }
+
+  .quote__part--b {
+    align-self: flex-end;
+  }
+
+  @media (max-width: 860px) {
+    .said {
+      margin-inline: 0;
+      padding-inline: 0;
+    }
+
+    .quote__part {
+      max-width: none;
+    }
+
+    .quote__part--b {
+      padding-left: 18%;
+    }
+  }
+
+  /* The ring draws itself round from the top as it comes into view. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .ring {
+        view-timeline: --ring block;
+      }
+
+      .ring circle {
+        stroke-dasharray: 1;
+        animation: draw linear both;
+        animation-timeline: --ring;
+        animation-range: entry 20% cover 55%;
+      }
+    }
+
+    @keyframes draw {
+      from {
+        stroke-dashoffset: 1;
+      }
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+  }
+</style>

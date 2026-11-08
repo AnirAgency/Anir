@@ -1,0 +1,139 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product's general impressions, on the light ground: a heading in three
+  lines, then its pictures one after another, each 80% of the screen's
+  width, both centred on the screen rather than on the content beside the
+  rail — the content's full width on a phone. Each arrives a
+  little enlarged in its frame and settles to rest as it comes into view,
+  as the products page's cards do.
+
+  Each picture is shown only where there is something to show — the real
+  encode, or its stand-in on dev and preview builds — and with none, before
+  the shoot in production, the section is not emitted. Plain lazy <img>s in
+  the tile lane.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { overview } = site.products.pages;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const shots = product.gallery.more
+  .map((media) => ({ media, pic: pictureOf(media, placeholders) }))
+  .filter((shot) => shot.pic);
+---
+
+{
+  shots.length > 0 && (
+    <Section tone="light" id="overview" label={overview.slice(1).join(' ')} heading={false}>
+      <h2 class="title t-display-l" data-reveal>
+        {overview.map((line) => (
+          <span class="title__line">{line}</span>
+        ))}
+      </h2>
+
+      <div class="shots">
+        {shots.map(({ media, pic }) => (
+          <div class="shot" style={`aspect-ratio: ${media.width} / ${media.height};`}>
+            <picture>
+              {pic!.sources.map((s) => (
+                <source srcset={s.src} type={s.type} />
+              ))}
+              <img
+                src={pic!.src}
+                width={media.width}
+                height={media.height}
+                alt={media.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+            </picture>
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+<style>
+  /* Out to the screen's edges, past the content's insets, so its centre is
+     the screen's. */
+  .title {
+    margin: clamp(2rem, 1rem + 4vw, 6rem) calc(-1 * var(--inset-right)) 0 calc(-1 * var(--inset));
+    text-align: center;
+  }
+
+  .title__line {
+    display: block;
+  }
+
+  .shots {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2rem, 1rem + 3vw, 4.5rem);
+    margin-top: clamp(3rem, 2rem + 4vw, 7rem);
+  }
+
+  /* 80% of the screen, its left edge a tenth of the screen in from the
+     screen's — measured from the content's edge, which is --inset in. */
+  .shot {
+    width: 80vw;
+    margin-left: calc(10vw - var(--inset));
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .shot :global(picture) {
+    display: contents;
+  }
+
+  .shot img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @media (max-width: 860px) {
+    .title {
+      margin-inline: 0;
+    }
+
+    .shot {
+      width: 100%;
+      margin-left: 0;
+    }
+  }
+
+  /* The settle: on the frame's own timeline, the frame clipping. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .shot {
+        view-timeline: --shot block;
+      }
+
+      .shot img {
+        animation: settle linear both;
+        animation-timeline: --shot;
+        animation-range: entry 0% cover 50%;
+      }
+    }
+
+    @keyframes settle {
+      from {
+        scale: 1.12;
+      }
+      to {
+        scale: 1;
+      }
+    }
+  }
+</style>

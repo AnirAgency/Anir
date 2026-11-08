@@ -3,28 +3,42 @@
  * pulls — including fonts, which are only reachable through the CSS — and
  * exits non-zero if the page breaks the CLAUDE.md ceilings.
  *
- * Two budgets, checked separately (CLAUDE.md > Budget): the first load, which
- * everyone pays, and the lazy budget — at most one asset requested after first
- * paint on capable desktops. Breaking either one fails the run.
+ * Three budgets, checked separately (CLAUDE.md > Budget): the first load, which
+ * everyone pays; the lazy budget — at most one asset requested after first
+ * paint on capable desktops; and below-the-fold media, the lazy images and
+ * gated video further down the page. Breaking any one fails the run, and so
+ * does placeholder media in a build that should not have it
+ * (src/lib/placeholders.mjs).
  *
  * Budgets are decimal bytes, because the constraint they encode is bandwidth
  * (17 Mbps mobile) and link speed is measured decimally.
  *
- * Usage: npm run budget
+ * Usage: npm run budget — the home page here, every other page through
+ * scripts/budget-pages.mjs. `node scripts/budget.mjs products/index.html`
+ * measures one page.
  */
 import { brotliCompressSync, constants } from 'node:zlib';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { placeholderMode, placeholderReason } from '../src/lib/placeholders.mjs';
+import { POSTER_MAX, VIDEO_MAX } from './limits.mjs';
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
-const entry = join(dist, 'index.html');
+const entry = join(dist, process.argv[2] ?? 'index.html');
 
 const TOTAL_MAX = 1_000_000; // 1 MB first load
 const JS_MAX = 200_000; //     200 kB JS
 const LAZY_MAX = 500_000; //   500 kB after first paint, desktop only
 const LAZY_MAX_COUNT = 1; //   CLAUDE.md allows one lazy asset
+const BELOW_MAX = 1_600_000; //  1.6 MB below-the-fold media
+const TILES_MAX = 300_000; //    300 kB of tiles, together
+// VIDEO_MAX (1.2 MB per video) and POSTER_MAX (40 kB per poster): scripts/limits.mjs.
+const SAVE_DATA_MAX = 300_000; // no single file over 300 kB on saveData
+
+const placeholderBuild = placeholderMode();
 
 const TYPES = {
   '.html': 'html',
@@ -75,14 +89,49 @@ function resolveRef(ref, fromFile) {
   return existsSync(target) && statSync(target).isFile() ? target : null;
 }
 
+/*
+  Below-the-fold media declares its lane on the element — data-lane="tile",
+  "poster" or "video" — and is lazy by construction: an <img> with
+  loading="lazy", a <video> with preload="none" and no src (a script attaches
+  it from data-defer). Such an element is left out of the first load and
+  counted in its own lane. One that claims a lane without being lazy is still
+  counted in the first load, and fails the lane.
+*/
+const LANE = /\bdata-lane\s*=\s*["']?(\w+)/i;
+
+function isDeferred(name, attrs) {
+  if (name === 'img') return /\bloading\s*=\s*["']?lazy\b/i.test(attrs);
+  if (name === 'video') return /\bpreload\s*=\s*["']?none\b/i.test(attrs) && !/\ssrc\s*=/i.test(attrs);
+  return false;
+}
+
 /** First URL of each srcset candidate. */
 const fromSrcset = (value) => value.split(',').map((part) => part.trim().split(/\s+/)[0]).filter(Boolean);
+
+/*
+  A <picture> is one image, not three. A browser takes the first <source> it
+  understands and fetches that alone — every browser this site supports
+  understands AVIF, which Plate and the admin's uploads put first — so each
+  picture is read as its <img> showing its first source. Counting the WebP
+  and the JPEG beside it would charge a visitor for files they never fetch.
+*/
+function asFetched(html) {
+  return html.replace(/<picture\b[^>]*>([\s\S]*?)<\/picture>/gi, (whole, inner) => {
+    const img = /<img\b([^>]*)>/i.exec(inner);
+    const first = /<source\b[^>]*\bsrcset\s*=\s*("[^"]*"|'[^']*')/i.exec(inner);
+    if (!img || !first) return whole;
+    const src = fromSrcset(first[1].slice(1, -1))[0];
+    const attrs = img[1].replace(/\s(src|srcset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    return `<img src="${src}"${attrs}>`;
+  });
+}
 
 function refsInHtml(html) {
   const found = [];
   for (const tag of html.matchAll(/<(\w+)\b([^>]*)>/g)) {
     const [, name, attrs] = tag;
     if (name.toLowerCase() === 'a') continue; // navigation, not a page asset
+    if (LANE.test(attrs) && isDeferred(name.toLowerCase(), attrs)) continue; // below the fold
     for (const match of attrs.matchAll(/\b(src|href|poster|content)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
       const [, key, raw] = match;
       // <meta content> is only an asset for og:image / twitter:image.
@@ -140,7 +189,8 @@ while (queue.length) {
   const type = typeOf(file);
   if (type !== 'html' && type !== 'css') continue;
 
-  const source = readFileSync(file, 'utf8');
+  const raw = readFileSync(file, 'utf8');
+  const source = type === 'html' ? asFetched(raw) : raw;
   // For HTML, refsInCss also sweeps inline <style> blocks and style="" attributes.
   const refs = type === 'html' ? [...refsInHtml(source), ...refsInCss(source)] : refsInCss(source);
 
@@ -164,7 +214,7 @@ const inline = inlineBytes(readFileSync(entry, 'utf8'));
   though nothing declared it, so no asset can slip past both budgets.
 */
 const LAZY_EXT = /\.(avif|webp|png|jpe?g|gif|svg|webm|mp4|json)$/i;
-const pageHtml = readFileSync(entry, 'utf8');
+const pageHtml = asFetched(readFileSync(entry, 'utf8'));
 
 const declaredLazy = [...pageHtml.matchAll(/\bdata-lazy\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)].map((m) => clean(m[1]));
 
@@ -195,6 +245,91 @@ for (const ref of literalLazy) {
   if (!target || seen.has(target) || lazy.has(target)) continue;
   lazy.set(target, false);
   lazyProblems.push(`${ref} is requested from JS without a data-lazy declaration.`);
+}
+
+// ------------------------------------------------------------ below the fold
+
+/*
+  Every item lazy and out of the critical path; no single file over 300 kB
+  fetched when navigator.connection.saveData is true. Tiles and posters load
+  on every connection, so each of them is checked against that cap — on top
+  of the tiles' own 300 kB total, which applies everywhere. The video is
+  gated, and its src is never in the markup for the first-load scan to find.
+*/
+const LANES = new Set(['tile', 'poster', 'video']);
+const belowProblems = [];
+const below = [];
+
+for (const tag of pageHtml.matchAll(/<(\w+)\b([^>]*)>/g)) {
+  const [, rawName, attrs] = tag;
+  const lane = LANE.exec(attrs)?.[1];
+  if (!lane) continue;
+
+  const name = rawName.toLowerCase();
+  const has = (key) => new RegExp(`(^|\\s)${key}(\\s|=|$)`, 'i').test(attrs);
+  const value = (key) => {
+    const match = new RegExp(`(?:^|\\s)${key}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, 'i').exec(attrs);
+    return match ? clean(match[1]) : null;
+  };
+  const ref = name === 'video' ? value('data-defer') : value('src');
+  const label = `<${name} data-lane="${lane}"> ${ref ?? '(no source)'}`;
+
+  if (!LANES.has(lane)) belowProblems.push(`${label}: unknown lane; use tile, poster or video.`);
+  if (lane === 'video' ? name !== 'video' : name !== 'img') belowProblems.push(`${label}: wrong element for its lane.`);
+  if (!isDeferred(name, attrs)) belowProblems.push(`${label}: not lazy, so it is counted in the first load.`);
+  if (!has('width') || !has('height')) belowProblems.push(`${label}: needs explicit width and height.`);
+  if (name === 'img' && value('decoding') !== 'async') belowProblems.push(`${label}: needs decoding="async".`);
+  if (name === 'video') {
+    for (const key of ['muted', 'playsinline', 'loop']) {
+      if (!has(key)) belowProblems.push(`${label}: needs ${key}.`);
+    }
+  }
+
+  const target = ref ? resolveRef(ref, entry) : null;
+  if (!target) {
+    belowProblems.push(`${label}: does not resolve to a file in dist/.`);
+    continue;
+  }
+  // A browser fetches a file once however many elements show it, so a file
+  // counts once. Real media is one file per slot; the placeholders repeat.
+  if (below.some((item) => item.target === target)) continue;
+  below.push({
+    target,
+    lane,
+    path: relative(dist, target).split(sep).join(posix.sep),
+    bytes: statSync(target).size,
+    gated: lane === 'video',
+  });
+}
+
+const laneTotal = (lane) => below.filter((item) => item.lane === lane).reduce((sum, item) => sum + item.bytes, 0);
+const belowTotal = below.reduce((sum, item) => sum + item.bytes, 0);
+const tilesTotal = laneTotal('tile');
+const ungated = below.filter((item) => !item.gated);
+const saveDataLargest = Math.max(0, ...ungated.map((item) => item.bytes));
+const overSaveData = ungated.filter((item) => item.bytes > SAVE_DATA_MAX);
+const overVideos = below.filter((item) => item.lane === 'video' && item.bytes > VIDEO_MAX);
+const overPosters = below.filter((item) => item.lane === 'poster' && item.bytes > POSTER_MAX);
+
+// The backstop behind the showreel's render gate (src/components/Showreel.astro).
+if (!placeholderBuild) {
+  if (pageHtml.includes('/media/placeholder/')) {
+    belowProblems.push('the page references /media/placeholder/ in a production build.');
+  }
+  if (existsSync(join(dist, 'media', 'placeholder'))) {
+    belowProblems.push('dist/media/placeholder/ exists in a production build.');
+  }
+  // Two stand-ins that would make a claim, not just look unfinished: a
+  // quote nobody said (ProductTestimonial.astro), and a before-and-after for
+  // a product that was never redesigned (ProductFront.astro, Media.demo).
+  // Their render gates keep both off production pages; these fail the build
+  // if a gate ever lets one through.
+  if (/\bdata-stand-in\b/.test(pageHtml)) {
+    belowProblems.push('the page shows the stand-in testimonial in a production build.');
+  }
+  if (/\bdata-demo\b/.test(pageHtml)) {
+    belowProblems.push('the page shows a demo before-and-after in a production build.');
+  }
 }
 
 // -------------------------------------------------------------------- report
@@ -339,10 +474,28 @@ for (const file of lazyFiles) {
   console.log(`  ${file.path.padEnd(width)}  ${kb(file.bytes)}  ${kb(file.brotli)}  ${file.declared ? 'data-lazy' : 'UNDECLARED'}`);
 }
 
+console.log('\n  BELOW THE FOLD - lazy media further down the page; not part of the first load\n');
+if (below.length === 0) console.log('  none');
+for (const item of below) {
+  console.log(`  ${item.path.padEnd(width)}  ${kb(item.bytes)}  ${item.lane.padEnd(6)}  ${item.gated ? 'gated' : 'always'}`);
+}
+if (placeholderBuild) console.log(`\n  PLACEHOLDER BUILD (${placeholderReason()}) - measured, never deployed to production`);
+
+/*
+  The film grain tile is part of the page's ground, so it is inlined into the
+  CSS rather than requested. Vite inlines assets under 4 kB; a tile that grows
+  past that would quietly become a request, so it is caught here.
+*/
+const grainRequests = files.filter((file) => /(^|\/)grain[.-]/i.test(file.path));
+
 const overTotal = total > TOTAL_MAX;
 const overJs = jsTotal > JS_MAX;
 const overLazy = lazyTotal > LAZY_MAX;
 const tooManyLazy = lazyFiles.length > LAZY_MAX_COUNT;
+const overBelow = belowTotal > BELOW_MAX;
+const overTiles = tilesTotal > TILES_MAX;
+const belowFails =
+  overBelow || overTiles || overSaveData.length > 0 || overVideos.length > 0 || overPosters.length > 0;
 
 console.log('\n  BUDGET\n');
 console.log(`  total   ${kb(total)} of ${kb(TOTAL_MAX)}   ${pct(total, TOTAL_MAX).padStart(6)}  ${overTotal ? 'OVER' : 'ok'}`);
@@ -351,14 +504,43 @@ console.log(
   `  lazy    ${kb(lazyTotal)} of ${kb(LAZY_MAX)}   ${pct(lazyTotal, LAZY_MAX).padStart(6)}  ${overLazy ? 'OVER' : 'ok'}` +
     `   ${lazyFiles.length} of ${LAZY_MAX_COUNT} asset${tooManyLazy ? '  OVER' : ''}`
 );
+console.log(
+  `  below   ${kb(belowTotal)} of ${kb(BELOW_MAX)}   ${pct(belowTotal, BELOW_MAX).padStart(6)}  ${overBelow ? 'OVER' : 'ok'}`
+);
+console.log(`    tiles     ${kb(tilesTotal)} of ${kb(TILES_MAX)}  ${overTiles ? 'OVER' : 'ok'}`);
+console.log(`    video     ${kb(laneTotal('video'))} of ${kb(VIDEO_MAX)}  ${overVideos.length ? 'OVER' : 'ok'}`);
+console.log(`    poster    ${kb(laneTotal('poster'))} of ${kb(POSTER_MAX)}  ${overPosters.length ? 'OVER' : 'ok'}`);
+console.log(
+  `    saveData  ${kb(saveDataLargest)} of ${kb(SAVE_DATA_MAX)}  ${overSaveData.length ? 'OVER' : 'ok'}   largest single file`
+);
 console.log(`  (brotli ${kb(totalBrotli)} over the wire - informational; the budget is enforced on raw bytes)\n`);
 
-if (overTotal || overJs || overLazy || tooManyLazy || lazyProblems.length > 0) {
+if (
+  overTotal ||
+  overJs ||
+  overLazy ||
+  tooManyLazy ||
+  lazyProblems.length > 0 ||
+  belowFails ||
+  belowProblems.length > 0 ||
+  grainRequests.length > 0
+) {
   if (overTotal) console.error(`  FAIL  total is ${kb(total - TOTAL_MAX).trim()} over the 1 MB first-load budget.`);
   if (overJs) console.error(`  FAIL  JS is ${kb(jsTotal - JS_MAX).trim()} over the 200 kB budget.`);
   if (overLazy) console.error(`  FAIL  lazy is ${kb(lazyTotal - LAZY_MAX).trim()} over the 500 kB lazy budget.`);
   if (tooManyLazy) console.error(`  FAIL  ${lazyFiles.length} lazy assets; CLAUDE.md allows ${LAZY_MAX_COUNT}.`);
   for (const problem of lazyProblems) console.error(`  FAIL  ${problem}`);
+  if (overBelow) console.error(`  FAIL  below-the-fold media is ${kb(belowTotal - BELOW_MAX).trim()} over 1.6 MB.`);
+  if (overTiles) console.error(`  FAIL  tiles are ${kb(tilesTotal - TILES_MAX).trim()} over 300 kB together.`);
+  for (const item of overVideos) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - VIDEO_MAX).trim()} over the 1.2 MB video cap.`);
+  for (const item of overPosters) console.error(`  FAIL  ${item.path} is ${kb(item.bytes - POSTER_MAX).trim()} over the 40 kB poster cap.`);
+  for (const item of overSaveData) {
+    console.error(`  FAIL  ${item.path} is fetched on saveData at ${kb(item.bytes).trim()}; no single file may exceed 300 kB.`);
+  }
+  for (const problem of belowProblems) console.error(`  FAIL  ${problem}`);
+  for (const file of grainRequests) {
+    console.error(`  FAIL  ${file.path} is a separate request; keep the grain tile under 4 kB so it is inlined.`);
+  }
   console.error('');
   process.exit(1);
 }

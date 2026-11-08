@@ -1,0 +1,513 @@
+---
+import Plate from './Plate.astro';
+import Section from './Section.astro';
+import SectionHead from './SectionHead.astro';
+import { site } from '../content/site';
+
+/*
+  Anir's own products, as a reel — a slideshow read like a spec sheet rather
+  than a carousel of pictures. One product at a time: its name rises out of a
+  mask, its screen wipes in from the right as the last one wipes off to the
+  left, and the tagline, description and spec rows follow it in. An orange
+  bar fills across the active segment and the reel moves on when it is full.
+
+  It waits for the reader: hovering it with a mouse, focusing anything in it,
+  scrolling it off the screen or switching tabs all hold the bar, and the
+  pause button holds it until pressed again. Each segment is a button to its
+  product, and the hero's cards open their product's slide.
+
+  Without JS it is what the markup says — three products, one after another,
+  each with its own anchor. Under reduced motion it is the same reel without
+  the motion: nothing advances on its own, and the segments switch at once.
+*/
+
+const { intro, specLabels, controls, items } = site.products;
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<Section tone="light" id="products" label={intro.label} heading={false}>
+  <SectionHead intro={intro} id="products-title" />
+
+  <div class="reel" data-reel role="region" aria-roledescription="carousel" aria-label={controls.label}>
+    <ol class="slides" data-slides>
+      {
+        items.map((product, i) => (
+          <li
+            class="slide"
+            id={`product-${product.id}`}
+            data-slide
+            aria-roledescription={controls.slide}
+            aria-label={`${i + 1} / ${items.length}`}
+          >
+            <div class="slide__text">
+              <p class="slide__count t-mono-label" style="--i: 0">
+                <span class="slide__now">{pad(i + 1)}</span> / {pad(items.length)}
+              </p>
+              <h3 class="slide__name t-display-xl">
+                <span class="mask">
+                  <span class="mask__in">{product.name}</span>
+                </span>
+              </h3>
+              <p class="slide__tagline t-serif-italic" style="--i: 1">
+                {product.tagline}
+              </p>
+              <p class="slide__desc t-mono-body" style="--i: 2">
+                {product.description}
+              </p>
+              <dl class="spec" style="--i: 3">
+                {(['role', 'tech', 'year'] as const).map((key) => (
+                  <div class="spec__row">
+                    <dt class="t-mono-label">{specLabels[key]}</dt>
+                    <dd class="t-mono-spec">{product.spec[key]}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div class="slide__visual">
+              <div class="slide__frame">
+                <Plate media={product.shot} ratio="16 / 10" kind="image" />
+              </div>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="bar" data-bar>
+      {
+        items.map((product, i) => (
+          <button class="seg" type="button" data-go={i} aria-controls={`product-${product.id}`}>
+            <span class="seg__track">
+              <span class="seg__fill" />
+            </span>
+            <span class="seg__label t-mono-label">
+              {pad(i + 1)} {product.name}
+            </span>
+          </button>
+        ))
+      }
+      <button class="pause t-mono-label" type="button" data-pause aria-pressed="false" data-play={controls.play} data-hold={controls.pause}>
+        {controls.pause}
+      </button>
+    </div>
+  </div>
+</Section>
+
+<script>
+  /*
+    The reel. Timing lives in CSS: the active segment's fill runs for
+    --dwell, and its animationend moves the reel on, so holding the reel is
+    just pausing that one animation. Every reason to hold — hover, focus,
+    off screen, a hidden tab, the button — is tracked separately, and the
+    reel runs only when there are none.
+  */
+  const reel = document.querySelector<HTMLElement>('[data-reel]');
+  if (reel) {
+    const slides = Array.from(reel.querySelectorAll<HTMLElement>('[data-slide]'));
+    const segs = Array.from(reel.querySelectorAll<HTMLButtonElement>('[data-go]'));
+    const live = reel.querySelector<HTMLElement>('[data-slides]')!;
+    const pause = reel.querySelector<HTMLButtonElement>('[data-pause]')!;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const holds = new Set<string>();
+    let current = -1;
+    let leaving: number | undefined;
+
+    const hold = (reason: string, on: boolean) => {
+      if (on) holds.add(reason);
+      else holds.delete(reason);
+      const held = holds.size > 0 || still;
+      reel.classList.toggle('is-held', held);
+      // Announce slide changes only when they are the reader's own doing.
+      live.setAttribute('aria-live', held ? 'polite' : 'off');
+    };
+
+    const show = (next: number) => {
+      if (next === current) return;
+      const previous = current;
+      current = next;
+      slides.forEach((slide, i) => {
+        const on = i === next;
+        slide.classList.toggle('is-active', on);
+        slide.classList.toggle('is-leaving', i === previous);
+        slide.inert = !on;
+      });
+      clearTimeout(leaving);
+      leaving = window.setTimeout(() => slides[previous]?.classList.remove('is-leaving'), still ? 0 : 1100);
+      segs.forEach((seg, i) => {
+        seg.setAttribute('aria-current', String(i === next));
+        seg.classList.toggle('is-done', i < next);
+        const fill = seg.querySelector<HTMLElement>('.seg__fill')!;
+        // Restart the active fill from empty.
+        fill.style.animation = 'none';
+        void fill.offsetWidth;
+        fill.style.animation = '';
+      });
+    };
+
+    segs.forEach((seg, i) => {
+      seg.addEventListener('click', () => show(i));
+      seg.querySelector('.seg__fill')!.addEventListener('animationend', () => {
+        if (i === current) show((current + 1) % slides.length);
+      });
+    });
+
+    pause.addEventListener('click', () => {
+      const held = pause.getAttribute('aria-pressed') !== 'true';
+      pause.setAttribute('aria-pressed', String(held));
+      pause.textContent = held ? pause.dataset.play! : pause.dataset.hold!;
+      hold('button', held);
+    });
+
+    reel.addEventListener('pointerenter', (e) => e.pointerType === 'mouse' && hold('hover', true));
+    reel.addEventListener('pointerleave', () => hold('hover', false));
+    reel.addEventListener('focusin', () => hold('focus', true));
+    reel.addEventListener('focusout', (e) => {
+      if (!reel.contains(e.relatedTarget as Node | null)) hold('focus', false);
+    });
+    document.addEventListener('visibilitychange', () => hold('tab', document.hidden));
+
+    // The first product makes its entrance when the reel comes into view,
+    // not at page load, a screen or two above it.
+    new IntersectionObserver(
+      ([entry]) => {
+        hold('away', !entry.isIntersecting);
+        if (entry.isIntersecting && current === -1) show(0);
+      },
+      { threshold: 0.35 }
+    ).observe(reel);
+
+    // A link to a product — the hero's cards — opens its slide. Capture
+    // phase, so the slide is no longer inert by the time the smooth-scroll
+    // handler moves focus to it.
+    const open = (hash: string) => {
+      const i = slides.findIndex((slide) => `#${slide.id}` === hash);
+      if (i !== -1) show(i);
+      return i !== -1;
+    };
+    document.addEventListener(
+      'click',
+      (e) => {
+        const link = (e.target as Element | null)?.closest?.('a[href^="#product-"]');
+        if (link) open(link.getAttribute('href')!);
+      },
+      true
+    );
+
+    reel.classList.add('is-reel');
+    hold('away', true);
+    if (!open(location.hash) && still) show(0);
+  }
+</script>
+
+<style>
+  .reel {
+    --dwell: 6s;
+    --ease: cubic-bezier(0.7, 0, 0.2, 1);
+    --move: 0.95s;
+  }
+
+  .slides {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Without JS: one product after another, ruled apart. */
+  .slide {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: clamp(1.75rem, 0.5rem + 3.5vw, 4.5rem);
+    /* Top-aligned, so the count and the name stand in the same place on every
+       slide, whatever the length of the text below them. */
+    align-items: start;
+    padding-block: clamp(2rem, 1rem + 3vw, 3.5rem);
+    border-top: var(--hairline) solid var(--line);
+    scroll-margin-top: var(--header-h);
+  }
+
+  .slide__text {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .slide__count {
+    color: var(--muted);
+  }
+
+  /* The live figure reads in full; the total stays quiet. */
+  .slide__now {
+    color: var(--fg);
+  }
+
+  /* The mask is a little taller than the line so it never clips the type. */
+  .slide__name {
+    margin: 0;
+  }
+
+  .mask {
+    display: block;
+    overflow: clip;
+    padding-block: 0.12em;
+    margin-block: -0.12em;
+  }
+
+  .mask__in {
+    display: block;
+  }
+
+  .slide__tagline {
+    max-width: 30ch;
+  }
+
+  .slide__desc {
+    max-width: 44ch;
+    color: var(--muted);
+  }
+
+  .spec {
+    width: 100%;
+    max-width: 28rem;
+    margin: 0.5rem 0 0;
+    border-top: var(--hairline) solid var(--line);
+  }
+
+  .spec__row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 1rem;
+    padding-block: 0.65rem;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+
+  .spec dt {
+    color: var(--muted);
+  }
+
+  .spec dd {
+    margin: 0;
+  }
+
+  .slide__frame {
+    overflow: clip;
+  }
+
+  /* ------------------------------------------------------------ the bar */
+
+  /* Only where a script will run it. */
+  .bar {
+    display: none;
+    align-items: end;
+    gap: clamp(0.75rem, 0.25rem + 1.5vw, 1.5rem);
+    margin-top: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+  }
+
+  :global(html.js) .bar {
+    display: flex;
+  }
+
+  .seg {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.5rem 0 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .seg[aria-current='true'] {
+    color: var(--fg);
+  }
+
+  .seg__track {
+    position: relative;
+    display: block;
+    height: 2px;
+    background: var(--line);
+    overflow: clip;
+  }
+
+  .seg__fill {
+    position: absolute;
+    inset: 0;
+    background: var(--orange);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+
+  .seg.is-done .seg__fill {
+    transform: scaleX(1);
+  }
+
+  .seg:hover .seg__label,
+  .seg:focus-visible .seg__label {
+    color: var(--orange);
+  }
+
+  .pause {
+    flex: none;
+    padding: 0.5rem 0 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .pause:hover,
+  .pause:focus-visible,
+  .pause[aria-pressed='true'] {
+    color: var(--orange);
+  }
+
+  /* -------------------------------------------------- the reel, with JS */
+
+  /* All three in one cell, from the first paint, so the reel is as tall as
+     its tallest product before the script arrives and changing slides never
+     moves the page. */
+  :global(html.js) .slides {
+    display: grid;
+  }
+
+  :global(html.js) .slide {
+    grid-area: 1 / 1;
+    border-top: 0;
+    padding-block: 0;
+    visibility: hidden;
+  }
+
+  :global(html.js) .slide.is-active,
+  :global(html.js) .slide.is-leaving {
+    visibility: visible;
+  }
+
+  /* Until the script has started the reel, the first product stands in. */
+  :global(html.js) .reel:not(.is-reel) .slide:first-child {
+    visibility: visible;
+  }
+
+  :global(html.js) .slide.is-active {
+    z-index: 2;
+  }
+
+  /* Reduced motion: no bar runs, so the active segment simply reads full,
+     and there is nothing to pause. */
+  .is-reel .seg[aria-current='true'] .seg__fill {
+    transform: scaleX(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pause {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .is-reel .seg[aria-current='true'] .seg__fill {
+      transform: scaleX(0);
+      animation: seg-fill var(--dwell) linear forwards;
+    }
+
+    /* As specific as the rule above, whose shorthand would otherwise reset it. */
+    .is-reel.is-held .seg[aria-current='true'] .seg__fill {
+      animation-play-state: paused;
+    }
+
+    /* The name: up out of its mask, the next one up into it. */
+    .is-reel .mask__in {
+      translate: 0 110%;
+      transition: translate var(--move) var(--ease);
+    }
+
+    .is-reel .is-active .mask__in {
+      translate: 0 0;
+    }
+
+    .is-reel .is-leaving .mask__in {
+      translate: 0 -110%;
+    }
+
+    /* The screen: wiped in from the right, off to the left. */
+    .is-reel .slide__frame {
+      clip-path: inset(0 0 0 100%);
+      transition: clip-path var(--move) var(--ease);
+    }
+
+    .is-reel .is-active .slide__frame {
+      clip-path: inset(0 0 0 0);
+    }
+
+    .is-reel .is-leaving .slide__frame {
+      clip-path: inset(0 100% 0 0);
+    }
+
+    .is-reel .slide__frame :global(.plate) {
+      scale: 1.08;
+      transition: scale calc(var(--move) * 2) var(--ease);
+    }
+
+    .is-reel .is-active .slide__frame :global(.plate) {
+      scale: 1;
+    }
+
+    /* The rest follows the name in. */
+    .is-reel :is(.slide__count, .slide__tagline, .slide__desc, .spec) {
+      opacity: 0;
+      translate: 0 0.75rem;
+      transition:
+        opacity 0.35s ease,
+        translate 0.35s ease;
+    }
+
+    .is-reel .is-active :is(.slide__count, .slide__tagline, .slide__desc, .spec) {
+      opacity: 1;
+      translate: 0 0;
+      transition:
+        opacity 0.6s ease calc(0.35s + var(--i) * 0.08s),
+        translate 0.6s var(--ease) calc(0.35s + var(--i) * 0.08s);
+    }
+
+    /* A slide that has finished leaving goes back below its mask unseen. */
+    .is-reel .slide:not(.is-active, .is-leaving) :is(.mask__in, .slide__frame, .slide__frame :global(.plate)) {
+      transition: none;
+    }
+  }
+
+  @keyframes seg-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @media (max-width: 860px) {
+    .slide {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .slide__visual {
+      order: -1;
+    }
+
+    .bar {
+      flex-wrap: wrap;
+    }
+
+    .seg {
+      flex-basis: calc((100% - 2 * 0.75rem) / 3);
+    }
+
+    .seg__label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+</style>

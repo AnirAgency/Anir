@@ -32,3 +32,18 @@ worker/*.generated.json
 
 # Local Worker secrets for `wrangler dev` (copy .dev.vars.example).
 .dev.vars
+
+# Written by scripts/content-pull.mjs before every build: the admin's content
+# and the images it uploaded, pulled from Supabase. Never committed.
+src/content/live.json
+public/media/live/
+
+# Generated: the proofreading list (npm run copy:export), and the CI wrapper's scratch files (npm run ci).
+mongolian-copy*.md
+.build-log
+.build-exit
+
+# The placeholder media as it arrived. Its contents are already extracted into
+# public/media/placeholder/ and committed; the archive would store the same
+# ~3 MB twice, in git's history forever.
+anir-placeholder-media-v*.zip

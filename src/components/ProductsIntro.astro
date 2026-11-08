@@ -1,0 +1,213 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+
+/*
+  The home page's word on the products: one statement, set large and
+  centred, that lights up word by word as it passes through the screen, and
+  the way to the products page. Behind it, orange silk flows through the
+  dark — a still, generated for Anir, drifting very slowly — with a soft
+  shade behind the words so they stay readable wherever the silk runs.
+
+  The words are read from a view timeline on the statement: each one comes
+  up over its own short stretch of the scroll, in order, so the sentence
+  fills in as you read it. Opacity only. The statement is one string in
+  site.ts, split into words here — presentation, not copy.
+
+  Without scroll-driven animation, under reduced motion and with JS off, the
+  statement is simply there in full, and the silk holds still.
+
+  `light` sets it on the light ground instead — the same silk on --paper,
+  shaded with --paper behind the words — which /v2 tries against the dark.
+*/
+
+interface Props {
+  light?: boolean;
+}
+
+const { light = false } = Astro.props;
+const { intro, statement } = site.products;
+const backdrop = light ? statement.backdropLight : statement.backdrop;
+const words = statement.text.split(' ');
+---
+
+{/* Busy on dark: the nav's orange would sink into the silk (Header.astro). */}
+<Section
+  tone={light ? 'light' : 'dark'}
+  id="products"
+  label={intro.label}
+  heading={false}
+  class={light ? undefined : 'section--busy'}
+>
+  <div class="backdrop" aria-hidden="true">
+    <img
+      class="backdrop__image"
+      src={backdrop.src}
+      width={backdrop.width}
+      height={backdrop.height}
+      alt=""
+      loading="lazy"
+      decoding="async"
+    />
+  </div>
+
+  <div class="say">
+    <p class="say__eyebrow t-mono-label">{statement.eyebrow}</p>
+    <h2 class="say__text t-serif-display" style={`--n: ${words.length}`}>
+      {
+        words.map((word, i) => (
+          <span class="word" style={`--i: ${i}`}>
+            {word}{' '}
+          </span>
+        ))
+      }
+    </h2>
+    <a class="say__cta t-mono-label" href="/products/">
+      {statement.cta}
+    </a>
+  </div>
+</Section>
+
+<style>
+  /* Out to the section's edges, past the content's inset. */
+  .backdrop {
+    position: absolute;
+    inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-right)) calc(-1 * var(--section-pad-y))
+      calc(-1 * var(--inset));
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  .backdrop__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 60% 50%;
+  }
+
+  /* The shade behind the words, in the section's own ground: the silk can
+     run anywhere, the text cannot sit on bright orange. */
+  .backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse 52% 42% at 50% 46%,
+      color-mix(in srgb, var(--bg) 72%, transparent),
+      color-mix(in srgb, var(--bg) 30%, transparent) 60%,
+      transparent
+    );
+  }
+
+  .say {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(1.5rem, 1rem + 1.5vw, 2.5rem);
+    max-width: 58rem;
+    margin-inline: auto;
+    padding-block: clamp(5rem, 2rem + 9vw, 11rem);
+    text-align: center;
+  }
+
+  .say__eyebrow {
+    margin: 0;
+    padding: 0.4rem 0.75rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  .say__text {
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  /* Clickable, so orange — as the label on a dark plate, the way the
+     reference has it; reversed on hover. */
+  .say__cta {
+    display: inline-block;
+    padding: 1rem 1.6rem;
+    background: var(--ink);
+    color: var(--orange);
+    text-decoration: none;
+    transition:
+      background 0.3s ease,
+      color 0.3s ease;
+  }
+
+  .say__cta:hover,
+  .say__cta:focus-visible {
+    background: var(--orange);
+    color: var(--ink);
+  }
+
+  @media (max-width: 860px) {
+    .backdrop {
+      inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-mobile));
+    }
+
+    /* A tall screen shows a slice of the image: the one with the curl. */
+    .backdrop__image {
+      object-position: 72% 50%;
+    }
+
+    .backdrop::after {
+      background: radial-gradient(
+        ellipse 80% 40% at 50% 46%,
+        color-mix(in srgb, var(--bg) 78%, transparent),
+        color-mix(in srgb, var(--bg) 35%, transparent) 65%,
+        transparent
+      );
+    }
+  }
+
+  /* The silk breathes: a slow drift and swell, on the compositor. */
+  @media (prefers-reduced-motion: no-preference) {
+    .backdrop__image {
+      animation: drift 26s ease-in-out infinite alternate;
+    }
+  }
+
+  @keyframes drift {
+    from {
+      scale: 1;
+      translate: 0 0;
+    }
+    to {
+      scale: 1.07;
+      translate: -2% -2%;
+    }
+  }
+
+  /*
+    The words: each comes up over its own stretch while the statement moves
+    from the lower part of the screen to the upper — together they take 40%
+    of its passage, starting a fifth of the way in.
+  */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .say__text {
+        view-timeline: --say block;
+        --step: calc(40% / var(--n));
+      }
+
+      .word {
+        animation: word-in linear both;
+        animation-timeline: --say;
+        animation-range: cover calc(20% + var(--i) * var(--step)) cover calc(26% + var(--i) * var(--step));
+      }
+    }
+
+    @keyframes word-in {
+      from {
+        opacity: 0.16;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+  }
+</style>

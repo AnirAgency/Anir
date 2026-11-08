@@ -2,19 +2,31 @@
 import Base from '../layouts/Base.astro';
 import Hero from '../components/Hero.astro';
 import Marquee from '../components/Marquee.astro';
-import Disciplines from '../components/Disciplines.astro';
-import Work from '../components/Work.astro';
+import Showreel from '../components/Showreel.astro';
+import ProductsIntro from '../components/ProductsIntro.astro';
+import ProductsBeam from '../components/ProductsBeam.astro';
 import Process from '../components/Process.astro';
+import Services from '../components/Services.astro';
 import Contact from '../components/Contact.astro';
 import Footer from '../components/Footer.astro';
 ---
 
 <Base>
+  {/*
+    The work, then a word on Anir's own products — each has its own page
+    under /products/ — then how a project runs, what it can be made of, and
+    the form. Where two darks meet — the sparse process, then the ruled
+    services — density tells them apart (CLAUDE.md > Layout). The showreel
+    renders only once real media exists.
+  */}
   <Hero />
   <Marquee />
-  <Disciplines />
-  <Work />
+  <Showreel />
+  <ProductsIntro />
+  {/* The products lit one at a time — kept from the comparison with the reel. */}
+  <ProductsBeam />
   <Process />
+  <Services />
   <Contact />
   <Footer />
 </Base>

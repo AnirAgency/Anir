@@ -13,13 +13,19 @@ interface Props {
   description?: string;
   /** The styleguide renders its own chrome-free page. */
   chrome?: boolean;
+  /** A review page, like /v2: kept out of search, and pointing at the home
+   *  page as the real one. */
+  noindex?: boolean;
+  /** False on the products pages, which do not hold the home page's
+   *  sections: the nav's anchors lead back to it. */
+  home?: boolean;
 }
 
-const { title, description, chrome = true } = Astro.props;
+const { title, description, chrome = true, noindex = false, home = true } = Astro.props;
 
 const pageTitle = title ?? site.meta.title;
 const pageDescription = description ?? site.meta.description;
-const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const canonical = new URL(noindex ? '/' : Astro.url.pathname, Astro.site).href;
 const ogImage = site.meta.ogImage ? new URL(site.meta.ogImage, Astro.site).href : null;
 
 /*
@@ -44,9 +50,9 @@ const jsonLd = {
   },
   areaServed: site.meta.country,
   knowsLanguage: 'mn',
-  makesOffer: site.disciplines.items.map((item) => ({
+  makesOffer: site.services.items.map((item) => ({
     '@type': 'Offer',
-    itemOffered: { '@type': 'Service', name: item.title },
+    itemOffered: { '@type': 'Service', name: item.name },
   })),
 };
 ---
@@ -59,6 +65,7 @@ const jsonLd = {
     <title>{pageTitle}</title>
     <meta name="description" content={pageDescription} />
     <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
@@ -102,21 +109,32 @@ const jsonLd = {
     {/*
       Runs before the body paints, so [data-reveal] is hidden before it can
       flash. Inline and tiny on purpose: as an external file it would race the
-      first paint. `js` says only that scripts run — the header CTA keys its
-      no-JS fallback off it. `motion` is added only when the visitor has not
-      asked for reduced motion, which is what keeps that page completely static.
+      first paint. Adds nothing when the visitor asked for reduced motion, which
+      is what keeps that page completely static.
+
+      .shimmer lets the film grain boil (base.css): a fine pointer, no
+      saveData, more than four cores — the same gates as the hero mark. It
+      runs as long as the page is open, so a phone would pay for it in
+      battery; phones get the same grain, still.
+
+      .js is for layouts that a script will drive, like the products reel, so
+      they take their final shape at the first paint instead of when the
+      script arrives — which, with the stream stalled, could be seconds later.
     */}
     <script is:inline>
       document.documentElement.classList.add('js');
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion');
+        if (matchMedia('(pointer: fine)').matches && !navigator.connection?.saveData && (navigator.hardwareConcurrency || 8) > 4) {
+          document.documentElement.classList.add('shimmer');
+        }
       }
     </script>
   </head>
   <body id="top">
     <a class="skip-link t-mono-label" href="#main">{site.chrome.skipToContent}</a>
 
-    {chrome && <Header />}
+    {chrome && <Header home={home} />}
     {chrome && <Rail />}
 
     <main id="main">

@@ -1,0 +1,193 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  The end of a product's page: the way to the next one, the full screen and
+  all one link. The next product's big picture fills it, dimmed far into
+  the dark; at the foot, its name small and the way on large at the left,
+  and a round orange button at the right — the link, so orange, with --ink
+  on it (CLAUDE.md > Contrast, rule 3). The picture settles as it arrives,
+  and on hover it leans in and the button swells.
+
+  The picture is decoration here — the words name where the link goes — so
+  alt="". It is shown only where there is something to show, the next
+  product's big picture or else its shot, and without either, before the
+  shoot in production, the section is the words and the button on the
+  dark. A plain lazy <img> in the tile lane. The button is round by the
+  owner's direction (CLAUDE.md > Layout).
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { pages } = site.products;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const backdrop = [product.feature, product.shot]
+  .map((media) => ({ media, pic: pictureOf(media, placeholders) }))
+  .find((candidate) => candidate.pic);
+---
+
+<Section tone="dark" id="next" label={pages.next} heading={false}>
+  <a class="next" href={`/products/${product.id}/`}>
+    {
+      backdrop && (
+        <div class="backdrop" aria-hidden="true">
+          <picture>
+            {backdrop.pic!.sources.map((s) => (
+              <source srcset={s.src} type={s.type} />
+            ))}
+            <img
+              class="backdrop__image"
+              src={backdrop.pic!.src}
+              width={backdrop.media.width}
+              height={backdrop.media.height}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              data-lane="tile"
+            />
+          </picture>
+        </div>
+      )
+    }
+
+    <div class="next__text">
+      <p class="next__name t-mono-label">{product.name}</p>
+      <h2 class="next__title t-display-xl">{pages.next}</h2>
+    </div>
+
+    <span class="next__button t-mono-label">{pages.about}</span>
+  </a>
+</Section>
+
+<style>
+  /* The screen's height, less the section's padding: the words at its foot. */
+  .next {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+    min-height: calc(100svh - 2 * var(--section-pad-y));
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  /* Out to the section's edges, past the content's inset. */
+  .backdrop {
+    position: absolute;
+    inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-right)) calc(-1 * var(--section-pad-y))
+      calc(-1 * var(--inset));
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .backdrop :global(picture) {
+    display: contents;
+  }
+
+  .backdrop__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  /* Dimmed throughout, and to near the ground at the foot, under the words. */
+  .backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--bg) 90%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 62%, transparent) 40%,
+      color-mix(in srgb, var(--bg) 50%, transparent) 100%
+    );
+  }
+
+  .next__text,
+  .next__button {
+    position: relative;
+  }
+
+  .next__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .next__name,
+  .next__title {
+    margin: 0;
+  }
+
+  .next__name {
+    color: var(--muted);
+  }
+
+  .next__button {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: clamp(7rem, 5rem + 3vw, 9rem);
+    aspect-ratio: 1;
+    padding: 1rem;
+    border-radius: 50%;
+    background: var(--orange);
+    color: var(--ink);
+    text-align: center;
+    transition: scale 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .next:hover .backdrop__image,
+  .next:focus-visible .backdrop__image {
+    transform: scale(1.04);
+  }
+
+  .next:hover .next__button,
+  .next:focus-visible .next__button {
+    scale: 1.08;
+  }
+
+  @media (max-width: 860px) {
+    .backdrop {
+      inset: calc(-1 * var(--section-pad-y)) calc(-1 * var(--inset-mobile));
+    }
+
+    .next {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-end;
+    }
+  }
+
+  /* The settle: scale, while hover uses transform, so the two compose. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .backdrop {
+        view-timeline: --next block;
+      }
+
+      .backdrop__image {
+        animation: settle linear both;
+        animation-timeline: --next;
+        animation-range: entry 0% cover 50%;
+      }
+    }
+
+    @keyframes settle {
+      from {
+        scale: 1.12;
+      }
+      to {
+        scale: 1;
+      }
+    }
+  }
+</style>

@@ -1,0 +1,310 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product on a phone: a label in the margin, a two-line heading, and five
+  of its pages, whole, as tall phone screenshots in a row across the
+  screen's full width — a staircase rising to the right, the outer two cut
+  by the screen's edges. The highest stands beside the heading; the heading
+  sits where the stair has not yet climbed. As the section passes, each
+  phone lifts a little more than the one to its left, so the stair steepens.
+  Translate only, on one view timeline; still without it.
+
+  In the room under the stair's high end, fine arcs ring the section's
+  bottom-right corner, standing still. On each, a short brighter stretch of
+  the line runs along it toward its left end as you scroll down, each from
+  its own place on its line, scattered. The glint is a piece of the same circle
+  in its own box, turned about the corner — rotate only, on the compositor,
+  and nothing clipped or masked. A decorative mark, so a hairline grey, not
+  orange. Under reduced motion the glints hold where they start.
+
+  Each page is shown only where there is something to show — the real
+  encode, or its stand-in on dev and preview builds — and with none, before
+  the shoot in production, the section is not emitted: the heading means
+  nothing without the phones. Plain lazy <img>s in the tile lane.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { responsive } = site.products.pages;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const phones = product.responsive
+  .map((media, i) => ({ media, i, pic: pictureOf(media, placeholders) }))
+  .filter((phone) => phone.pic);
+
+// The arcs' radii, in % of the screen's width, inside out, and where each
+// glint starts on its arc, in degrees turned from the top end — scattered,
+// and no more than 32 so that, turning 44 more, none runs past its line's
+// end at 90 (it is 14 long). Presentation.
+const radii = [9, 19, 29, 39, 49];
+const starts = [20, 4, 32, 12, 28];
+const outer = radii[radii.length - 1];
+---
+
+{
+  phones.length > 0 && (
+    <Section tone="dark" id="responsive" label={responsive.label} heading={false}>
+      <div class="show">
+        <div class="rings" aria-hidden="true" style={`--r: ${outer};`}>
+          {/* The arcs, still: quarter circles about the box's bottom-right corner. */}
+          <svg class="arcs" viewBox={`0 0 ${outer} ${outer}`}>
+            {radii.map((r) => (
+              <path d={`M ${outer} ${outer - r} A ${r} ${r} 0 0 0 ${outer - r} ${outer}`} />
+            ))}
+          </svg>
+
+          {/* The glints: 14 degrees of each circle, from its top end, in a box
+              of that circle's size, turned about the same corner. */}
+          {radii.map((r, k) => (
+            <svg class="glint" viewBox="0 0 100 100" style={`--r: ${r}; --from: ${-starts[k]}deg;`}>
+              <path d="M 100 0 A 100 100 0 0 0 75.81 2.97" />
+            </svg>
+          ))}
+        </div>
+
+        <div class="head">
+          <p class="head__label t-mono-label" data-reveal>{responsive.label}</p>
+          <h2 class="head__title t-display-l" data-reveal>
+            {responsive.title.map((line) => (
+              <span class="head__line">{line}</span>
+            ))}
+          </h2>
+        </div>
+
+        <div class="row">
+          {phones.map(({ media, i, pic }) => (
+            <div class="phone" style={`--i: ${i}; --drop: ${i === 0 ? 4.5 : 4 - i};`}>
+              <picture>
+                {pic!.sources.map((s) => (
+                  <source srcset={s.src} type={s.type} />
+                ))}
+                <img
+                  src={pic!.src}
+                  width={media.width}
+                  height={media.height}
+                  alt={media.alt}
+                  loading="lazy"
+                  decoding="async"
+                  data-lane="tile"
+                />
+              </picture>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+<style>
+  /*
+    Out to both edges of the screen, past the content's inset, clipping
+    sideways only: the stair overruns the screen at both ends, and the lift
+    carries the phones upward, which must not be cut.
+  */
+  .show {
+    position: relative;
+    margin-left: calc(-1 * var(--inset));
+    margin-right: calc(-1 * var(--inset-right));
+    overflow-x: clip;
+  }
+
+  /*
+    The label at the content's edge, the heading in the column the
+    impressions' paragraph keeps (15% of the way into the content), both over
+    the stair's low end, where no phone has climbed to yet.
+  */
+  .head {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 1;
+  }
+
+  .head__label {
+    position: absolute;
+    top: 0.9rem;
+    left: var(--inset);
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .head__title {
+    position: absolute;
+    top: 0;
+    left: calc(var(--inset) + (100% - var(--inset)) * 0.15);
+    margin: 0;
+  }
+
+  .head__line {
+    display: block;
+  }
+
+  /*
+    The stair. Five phones 22.9% of the screen wide, 1.5% apart, centred, so
+    the row overruns both edges equally; each one a step of 10% of the
+    screen's width higher than the one to its left, the first a step and a
+    half lower again. The third stands two steps down, clear of the heading
+    above it at every width.
+  */
+  .row {
+    --w: 22.9vw;
+    --step: 10vw;
+
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1.5vw;
+  }
+
+  .phone {
+    flex: 0 0 var(--w);
+    aspect-ratio: 780 / 1688;
+    margin-top: calc(var(--drop) * var(--step));
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .phone :global(picture) {
+    display: contents;
+  }
+
+  .phone img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /*
+    The arcs: quarter circles about the section's bottom-right corner, 9% of
+    the screen's width out and 10% apart. Strokes are a pixel at any size
+    (non-scaling-stroke), so the glints lie exactly on their lines. The grey
+    is the ground's own text colour mixed into the ground, as the hairlines
+    are, and the glint the same, brighter — derived, not new colours.
+  */
+  .rings {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: calc(var(--r) * 1vw);
+    aspect-ratio: 1;
+    pointer-events: none;
+  }
+
+  .arcs,
+  .glint {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    overflow: visible;
+    fill: none;
+  }
+
+  .arcs {
+    width: 100%;
+    height: 100%;
+    stroke: color-mix(in srgb, var(--fg) 20%, var(--bg));
+  }
+
+  .glint {
+    width: calc(var(--r) * 1vw);
+    height: calc(var(--r) * 1vw);
+    stroke: color-mix(in srgb, var(--fg) 70%, var(--bg));
+    stroke-linecap: round;
+    transform-origin: 100% 100%;
+    rotate: var(--from);
+  }
+
+  .arcs path,
+  .glint path {
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* A phone: the heading above the stair, two and a bit phones on screen. */
+  @media (max-width: 860px) {
+    .show {
+      margin-left: calc(-1 * var(--inset-mobile));
+      margin-right: calc(-1 * var(--inset-mobile));
+    }
+
+    .head,
+    .head__label,
+    .head__title {
+      position: static;
+    }
+
+    .head {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding-inline: var(--inset-mobile);
+      margin-bottom: 2rem;
+    }
+
+    .row {
+      --w: 44vw;
+      --step: 12vw;
+      gap: 3vw;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .row {
+        view-timeline: --stair block;
+      }
+
+      .phone {
+        animation: lift linear both;
+        animation-timeline: --stair;
+        animation-range: cover 0% cover 100%;
+      }
+    }
+
+    /* Each phone lifts 2.5svh more than the one to its left. */
+    @keyframes lift {
+      from {
+        translate: 0 0;
+      }
+      to {
+        translate: 0 calc(var(--i) * -2.5svh);
+      }
+    }
+
+    /*
+      The glints run toward the arcs' left ends as you scroll down, across
+      the arcs' whole passage through the screen: each turns 44 degrees from
+      its own start (`starts`, above), so the furthest ends just at its
+      line's end and none runs past it.
+    */
+    @media (prefers-reduced-motion: no-preference) {
+      .rings {
+        view-timeline: --rings block;
+      }
+
+      .glint {
+        animation: glide linear both;
+        animation-timeline: --rings;
+        animation-range: cover 0% cover 100%;
+      }
+    }
+
+    @keyframes glide {
+      from {
+        rotate: var(--from);
+      }
+      to {
+        rotate: calc(var(--from) - 44deg);
+      }
+    }
+  }
+</style>

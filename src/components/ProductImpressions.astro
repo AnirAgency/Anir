@@ -1,0 +1,271 @@
+---
+import Section from './Section.astro';
+import { pictureOf } from '../lib/media';
+import { placeholderMode } from '../lib/placeholders.mjs';
+import { site, type Product } from '../content/site';
+
+/*
+  A product's impressions, composed to the screen: a label in the margin, a
+  paragraph on what the product is for set large at the top left, and two
+  pictures set against it — a wide one at the right, running out to the
+  screen's edge, as large as fits on the screen with the paragraph running
+  onto it, and a tall one laid over the wide one's lower-left corner and
+  hanging below the screen. With the section's top at the screen's, the
+  paragraph and the wide picture are in view whole. As it passes, the tall
+  picture rises a little slower than the rest, so the two part like prints
+  at different heights. Translate only, on one view timeline; still without
+  it.
+
+  Where the paragraph lies on the wide picture, a shade of the ground sits
+  between them, and a halo of it round the letters, so the words keep their
+  contrast whatever the screenshot is — the rule the silk follows
+  (CLAUDE.md > The orange rule).
+
+  Each picture is shown only where there is something to show — the real
+  encode, or its stand-in on dev and preview builds — so in production,
+  before the shoot, the impressions are the paragraph alone. Plain lazy
+  <img>s in the tile lane.
+*/
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const { pages } = site.products;
+const placeholders = placeholderMode({ dev: import.meta.env.DEV });
+const [wide, tall] = product.impressions.images.map((media) => ({ media, pic: pictureOf(media, placeholders) }));
+const pics = [
+  { ...wide, kind: 'wide' },
+  { ...tall, kind: 'tall' },
+].filter((p) => p.pic);
+---
+
+<Section tone="dark" id="impressions" label={pages.impressions} heading={false}>
+  <div class="box">
+    <div class:list={['stage', { 'stage--text': pics.length === 0 }]}>
+      <h2 class="label t-mono-label" data-reveal>{pages.impressions}</h2>
+      <p class="text t-serif-display" data-reveal>{product.impressions.text}</p>
+
+      {
+        pics.map(({ media, pic, kind }) => (
+          <div class={`pic pic--${kind}`}>
+            <picture>
+              {pic!.sources.map((s) => (
+                <source srcset={s.src} type={s.type} />
+              ))}
+              <img
+                src={pic!.src}
+                width={media.width}
+                height={media.height}
+                alt={media.alt}
+                loading="lazy"
+                decoding="async"
+                data-lane="tile"
+              />
+            </picture>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</Section>
+
+<style>
+  /* 156px above, by the owner's direction, and the section's usual padding
+     below, less than it usually takes. */
+  :global(#impressions) {
+    --section-pad-y: 3rem;
+    --pad-top: 9.75rem;
+    padding-top: var(--pad-top);
+  }
+
+  /*
+    --stage-h is the screen below that top padding: with the section's top at
+    the screen's, the stage's foot is the screen's. The stage runs out past
+    the content's right inset to the screen's edge, and everything in it is
+    placed in shares of its width and of --stage-h, so the composition holds
+    at every screen size.
+
+    The wide picture stands on the stage's foot — the screen's — as large as
+    fits: 72% of the stage wide, but never so tall at 16:10 that its top
+    would rise above --min-top, 16% of the way down and 40px more, so the
+    paragraph keeps its room. --wide-w is in cqw, not %: it is also used for
+    heights. The tall picture is placed from the wide one.
+    The box around the stage is the container, the stage's own width, so the
+    stage's height and its pictures measure against the same thing.
+
+    The tall picture hangs below; the stage is as tall as it needs to be to
+    hold it — its height, 0.48 of --wide-w, plus the 12% of that it travels
+    down as the section passes — so it never crosses the section's foot.
+  */
+  .box {
+    container-type: inline-size;
+    margin-right: calc(-1 * var(--inset-right));
+  }
+
+  .stage {
+    --stage-h: calc(100svh - var(--pad-top));
+    --min-top: calc(var(--stage-h) * 0.16 + 2.5rem);
+    --wide-w: min(72cqw, calc((var(--stage-h) - var(--min-top)) * 1.6));
+    --wide-top: calc(var(--stage-h) - var(--wide-w) * 0.625);
+
+    position: relative;
+    height: calc(var(--wide-top) + var(--wide-w) * 0.882);
+  }
+
+  /* With no pictures to show, the paragraph alone takes only its own room. */
+  .stage--text {
+    height: auto;
+  }
+
+  .label {
+    position: absolute;
+    top: 0.9rem;
+    left: 0;
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .stage--text .label {
+    position: static;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Over the pictures: it may run onto the wide one, a halo of the ground
+     round each letter. */
+  .text {
+    position: relative;
+    z-index: 2;
+    width: min(34rem, 46%);
+    margin: 0 0 0 15%;
+    text-shadow:
+      0 0 0.4em color-mix(in srgb, var(--bg) 70%, transparent),
+      0 0 1.2em color-mix(in srgb, var(--bg) 55%, transparent);
+  }
+
+  .stage--text .text {
+    width: auto;
+    max-width: 34rem;
+  }
+
+  .pic {
+    position: absolute;
+    overflow: clip;
+    background: var(--plate);
+  }
+
+  .pic :global(picture) {
+    display: contents;
+  }
+
+  .pic img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .pic--wide {
+    top: var(--wide-top);
+    right: 0;
+    width: var(--wide-w);
+    aspect-ratio: 16 / 10;
+  }
+
+  /* The shade under the paragraph: from the corner the words lie on. */
+  .pic--wide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      155deg,
+      color-mix(in srgb, var(--bg) 80%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 55%, transparent) 30%,
+      transparent 56%
+    );
+  }
+
+  /* 36% of the wide one's width at 3:4, over its lower-left corner, its top
+     55% of the way down the wide one, its foot well below it. */
+  .pic--tall {
+    z-index: 1;
+    top: calc(var(--wide-top) + var(--wide-w) * 0.344);
+    left: calc(100% - var(--wide-w) * 1.14);
+    width: calc(var(--wide-w) * 0.36);
+    aspect-ratio: 3 / 4;
+  }
+
+  /*
+    A phone: the paragraph, then the pictures under it in their own box, the
+    paragraph's foot running onto the wide one, the tall one over its corner.
+    Stacked, it still comes to about a screen.
+  */
+  @media (max-width: 860px) {
+    .box {
+      margin-right: calc(-1 * var(--inset-mobile));
+    }
+
+    /* Room under the tall picture for the 12% of its height it travels. */
+    .stage {
+      display: grid;
+      height: auto;
+      padding-bottom: 8%;
+    }
+
+    .label {
+      position: static;
+      margin-bottom: 1rem;
+    }
+
+    .text {
+      width: auto;
+      margin: 0;
+      padding-right: var(--inset-mobile);
+    }
+
+    .pic--wide,
+    .pic--tall {
+      position: relative;
+      top: auto;
+      right: auto;
+      left: auto;
+      grid-column: 1;
+    }
+
+    .pic--wide {
+      width: 96%;
+      margin: 0.5rem 0 0 auto;
+    }
+
+    .pic--tall {
+      width: 50%;
+      margin: -26% 0 0 0;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .stage {
+        view-timeline: --stage block;
+      }
+
+      .pic--tall {
+        animation: lag linear both;
+        animation-timeline: --stage;
+        animation-range: cover 0% cover 100%;
+      }
+    }
+
+    /* Against the page's direction, so the tall one rises slower; level
+       with the composition when the section lies on the screen. */
+    @keyframes lag {
+      from {
+        translate: 0 -12%;
+      }
+      to {
+        translate: 0 12%;
+      }
+    }
+  }
+</style>

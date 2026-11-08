@@ -1,5 +1,8 @@
 // @ts-check
+import { rmSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
+
+import { placeholderMode, placeholderReason } from './src/lib/placeholders.mjs';
 
 /**
  * /styleguide exists in `astro dev` and nowhere else.
@@ -25,13 +28,34 @@ function devStyleguide() {
   };
 }
 
-// Static output only. Cloudflare Pages serves dist/ from its Ulaanbaatar PoP and
-// picks up functions/ on its own — no SSR adapter, see README > Cloudflare Pages.
+/**
+ * public/media/placeholder/ is for dev and preview builds only. Astro copies
+ * all of public/ into dist/, so every other build — production included —
+ * deletes the copy afterwards: the placeholders are never deployed to
+ * production, referenced or not.
+ */
+function stripPlaceholders() {
+  return {
+    name: 'anir:strip-placeholders',
+    hooks: {
+      'astro:build:done': ({ dir, logger }) => {
+        if (placeholderMode()) {
+          logger.warn(`placeholder media kept in dist/ (${placeholderReason()}). Not a production build.`);
+          return;
+        }
+        rmSync(new URL('media/placeholder/', dir), { recursive: true, force: true });
+      },
+    },
+  };
+}
+
+// Static output only. Workers Static Assets serves dist/, and the Worker in
+// worker/ answers the contact endpoint — no SSR adapter, see README > Cloudflare Workers.
 export default defineConfig({
   site: 'https://aniragency.mn',
   output: 'static',
   compressHTML: true,
-  integrations: [devStyleguide()],
+  integrations: [devStyleguide(), stripPlaceholders()],
   build: {
     assets: '_astro',
     // Small sheets get inlined; anything larger stays a cacheable file.

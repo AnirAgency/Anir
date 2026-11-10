@@ -341,12 +341,19 @@ domain.
 5. Send one enquiry through the live form. The group should get it within
    seconds, starting "Stored in Supabase."
 
-**Email, later.** The Worker already sends email through Resend when
-`RESEND_API_KEY` and `NOTIFY_EMAIL` are set — leave them unset until
-`aniragency.mn` is registered and verified in Resend with SPF, DKIM and DMARC
-records, then set `NOTIFY_FROM` to an address on the domain. Mail from an
-unauthenticated sender is how a new domain starts life in spam folders. Once
-it works, keep both: one channel is a single point of failure.
+**Email.** Every enquiry is also emailed through Resend, from
+`Anir site <site@send.aniragency.mn>` — `NOTIFY_FROM` in `wrangler.jsonc`.
+`send.aniragency.mn` is the sending domain verified in Resend (region Tokyo):
+its SPF and DKIM records live in the Cloudflare zone. `RESEND_API_KEY` is a
+Worker secret restricted to sending from that domain; `NOTIFY_EMAIL`, a secret
+too, is the inbox — comma-separated for more than one. A From address on any
+other domain is refused by that key: email fails, and nothing else does.
+
+The two channels are sent separately, after the enquiry is stored and the
+visitor answered: a wrong key, Resend down or unreachable costs neither the
+enquiry nor the Telegram message, and is logged as `via email: FAILED`
+(`npm run test:enquiry` holds all four). Keep both: one channel is a single
+point of failure.
 
 Until a channel is set, every enquiry logs "no channel configured" — and nobody
 hears about it.

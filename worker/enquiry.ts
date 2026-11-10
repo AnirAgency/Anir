@@ -68,7 +68,11 @@ export interface Env {
   /** Email notification through Resend: the key, and comma-separated recipients. */
   RESEND_API_KEY?: string;
   NOTIFY_EMAIL?: string;
-  /** Sender. Defaults to Resend's test sender until a domain is verified. */
+  /**
+   * Sender: an address on send.aniragency.mn, the domain verified in Resend
+   * (wrangler.jsonc > vars). Unset, Resend's test sender — which a key
+   * restricted to that domain refuses, so email would fail (and only email).
+   */
   NOTIFY_FROM?: string;
   /** Chat notification through a Telegram bot. */
   TELEGRAM_BOT_TOKEN?: string;

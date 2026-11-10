@@ -19,8 +19,20 @@
     "run_worker_first": ["/api/*"]
   },
 
-  // anir.<account>.workers.dev stays on: it is the live address until
-  // aniragency.mn is registered, and the base for preview URLs after.
+  // The site's address: aniragency.mn, the Worker's Custom Domain. On deploy
+  // Cloudflare creates its DNS record and certificate itself — none is added
+  // by hand. It must be the host src/lib/site-url.mjs names: `npm run seo`
+  // fails the build otherwise, and checks this host is never sent noindex.
+  //
+  // www is NOT a second Custom Domain: that would give every page two
+  // addresses where the canonical names one. A Redirect Rule in the zone
+  // (Rules > Redirect Rules) sends www.aniragency.mn/* to
+  // https://aniragency.mn/${1} with a 301, over a proxied www DNS record —
+  // a zone setting, not this file's; README > The domain.
+  "routes": [{ "pattern": "aniragency.mn", "custom_domain": true }],
+
+  // anir.<account>.workers.dev stays on: the base for preview URLs, and a
+  // copy of the site that always says noindex (dist/_headers, the Worker).
   "workers_dev": true,
 
   // Every non-production build gets its own URL — each PR is reviewable live.

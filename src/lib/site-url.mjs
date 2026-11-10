@@ -3,17 +3,18 @@
  * og:url, the sitemap — astro.config.mjs) and the Worker's test for which
  * hosts search engines may index (worker/index.ts) both read it here.
  *
- * aniragency.mn is not registered yet. Until it is, every address the site
- * answers on is a copy — anir.<account>.workers.dev and each preview — and
- * every one of them says noindex (here for the Worker's own responses, and
- * in dist/_headers for everything else: scripts/headers.mjs).
+ * aniragency.mn is the Worker's Custom Domain (wrangler.jsonc > routes), and
+ * www.aniragency.mn redirects to it (a zone Redirect Rule, 301). Every other
+ * address the site answers on is a copy — anir.<account>.workers.dev and
+ * each preview — and every one of them says noindex (here for the Worker's
+ * own responses, and in dist/_headers for everything else:
+ * scripts/headers.mjs).
  *
  * Held, not hoped: `npm run seo` matches dist/_headers as Cloudflare does
  * and fails if any rule would noindex a page on these hosts, if a
  * workers.dev host would go without it, or if wrangler.jsonc attaches a
- * custom domain that is not one of them. When the domain is registered,
- * attach it in wrangler.jsonc (routes, custom_domain) — and if it is not
- * aniragency.mn, change SITE_URL here first; the build says so otherwise.
+ * custom domain that is not one of them. To move the site to another
+ * domain, change SITE_URL here first; the build says so otherwise.
  */
 export const SITE_URL = 'https://aniragency.mn';
 

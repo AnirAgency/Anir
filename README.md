@@ -302,15 +302,29 @@ notifies nobody.
 2026. RLS on, no policies, all grants revoked from `anon` and `authenticated`:
 an anonymous client can neither read nor write the table.
 
-**6. The domain.** `aniragency.mn` is **not registered yet**. Cloudflare does not
-sell `.mn`, so: register it with a Mongolian registrar; add `aniragency.mn` as a
-site in Cloudflare; at the registrar, change the nameservers to the two
-Cloudflare gives you; then Workers & Pages → **anir** → Settings → Domains &
-Routes → add `aniragency.mn`. For `www`, add a proxied `www` DNS record and a
-Redirect Rule (the zone → Rules → Redirect Rules) sending it to
-`https://aniragency.mn` with a 301 — a zone rule, because static files are
-served before any Worker code runs. Wait until the certificate shows **Active**
-before announcing the address.
+**6. The domain.** `aniragency.mn` is registered (a Mongolian registrar —
+Cloudflare does not sell `.mn`) and its zone is on Cloudflare, nameservers
+`cleo.ns.cloudflare.com` and `dalary.ns.cloudflare.com`.
+
+- **The apex is the Worker's Custom Domain**, declared in `wrangler.jsonc`
+  (`routes`, `custom_domain: true`). The deploy attaches it, and Cloudflare
+  creates the DNS record and the certificate itself — never add the apex
+  record by hand. `npm run seo` fails the build if `wrangler.jsonc` names any
+  other host than `src/lib/site-url.mjs`.
+- **`www` redirects; it is not a second Custom Domain** — two hostnames would
+  give every page two addresses, and the canonical names one. Two settings in
+  the zone, both in the dashboard:
+  1. DNS → Records → add `AAAA`, name `www`, address `100::`, **Proxied**. (It
+     only has to reach Cloudflare; the rule answers before anything else.)
+  2. Rules → Redirect Rules → create: when the request URL matches the
+     wildcard `https://www.aniragency.mn/*`, redirect to
+     `https://aniragency.mn/${1}`, status **301**, preserving the query string.
+- **Check it** — the production host must not say noindex, every workers.dev
+  host must:
+  `curl -sI https://aniragency.mn/ | grep -i x-robots-tag` prints nothing;
+  `curl -sI https://anir.b-batuka0627.workers.dev/ | grep -i x-robots-tag`
+  prints `noindex`; `curl -sI https://www.aniragency.mn/products/` answers
+  `301` to `https://aniragency.mn/products/`.
 
 **7. Notifications — Telegram now, email once the domain exists.** Telegram is
 where the team already talks, a bot is free and takes minutes, and it needs no

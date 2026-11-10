@@ -855,7 +855,7 @@ await check('Resend failing — a wrong key, down, unreachable — costs neither
     console.log = () => {};
     assert.equal(response.status, 200, `${how}: the visitor is answered`);
     assert.deepEqual(captured.map((r) => r.name), [name], `${how}: stored`);
-    assert.equal(captured[0].unrecognised?.length ?? 0, 0, `${how}: in «Шинэ», not «Шалгах»`);
+    assert.equal((captured[0].unrecognised as unknown[] | undefined)?.length ?? 0, 0, `${how}: in «Шинэ», not «Шалгах»`);
     const telegram = notified.filter((n) => n.channel === 'telegram');
     assert.equal(telegram.length, 1, `${how}: Telegram still told`);
     assert.ok(telegram[0].text.includes(name) && telegram[0].text.includes('Stored in Supabase.'));

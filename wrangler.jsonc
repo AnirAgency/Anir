@@ -45,8 +45,14 @@
   // (worker/builds.ts): `npx wrangler secret put BUILD_REPORT_SECRET`, and the
   // same value as a build secret (Settings > Build > Variables and secrets).
   // It can write one status row and nothing else.
+  //
+  // NOTIFY_FROM is who the team's enquiry email comes from: an address on
+  // send.aniragency.mn, the domain verified in Resend (SPF and DKIM on its
+  // records). Not a secret. RESEND_API_KEY — restricted to sending from that
+  // domain — and NOTIFY_EMAIL, the inbox, are secrets.
   "vars": {
-    "SUPABASE_URL": "https://tyrzajpotvtirfjmacfm.supabase.co"
+    "SUPABASE_URL": "https://tyrzajpotvtirfjmacfm.supabase.co",
+    "NOTIFY_FROM": "Anir site <site@send.aniragency.mn>"
   },
 
   "kv_namespaces": [
@@ -62,9 +68,10 @@
   "triggers": { "crons": ["*/15 * * * *"] },
 
   // Notification secrets, set with `npx wrangler secret put`, never here:
-  // RESEND_API_KEY + NOTIFY_EMAIL for email, or TELEGRAM_BOT_TOKEN +
-  // TELEGRAM_CHAT_ID for a Telegram chat. Either, both, or — until set — a
-  // warning in the logs on every enquiry.
+  // RESEND_API_KEY + NOTIFY_EMAIL for email (from NOTIFY_FROM, above), and
+  // TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID for the Telegram group. Each channel
+  // is sent on its own, after the enquiry is stored: one failing — a wrong
+  // key, Resend down — never costs the enquiry or the other channel.
 
   // Pull-request builds run `wrangler preview`, and a Preview inherits none
   // of the vars or bindings above — only what is listed here. So a preview

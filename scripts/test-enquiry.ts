@@ -44,8 +44,11 @@ type Row = Record<string, unknown>;
 let captured: Row[] = [];
 let preferHeaders: string[] = [];
 let supabaseStatus = 201;
-let notified: Array<{ channel: string; text: string }> = [];
+let notified: Array<{ channel: string; text: string; from?: string }> = [];
 let notifyStatus = 200;
+/** Resend on its own: a status of its own, or no answer at all (the network failing). */
+let resendStatus: number | null = null;
+let resendThrows = false;
 
 /**
  * What the real table would refuse: an unknown column, a NOT NULL left out,
@@ -99,9 +102,10 @@ globalThis.fetch = (async (input: any, init: any) => {
     return new Response('{}', { status: notifyStatus });
   }
   if (url.startsWith('https://api.resend.com/')) {
+    if (resendThrows) throw new TypeError('fetch failed: api.resend.com unreachable');
     const body = JSON.parse(String(init.body));
-    notified.push({ channel: 'email', text: `${body.subject}\n${body.text}` });
-    return new Response('{}', { status: notifyStatus });
+    notified.push({ channel: 'email', text: `${body.subject}\n${body.text}`, from: body.from });
+    return new Response('{}', { status: resendStatus ?? notifyStatus });
   }
   return realFetch(input, init);
 }) as typeof fetch;
@@ -825,6 +829,45 @@ await check('a failed notification never fails the request', async () => {
   notifyStatus = 200;
   assert.equal(response.status, 200);
   return '200 with both channels answering 500';
+});
+
+// An email provider being down is not a reason to lose an enquiry — or to
+// miss it: the row is stored, the visitor answered, and Telegram still told.
+await check('Resend failing — a wrong key, down, unreachable — costs neither the enquiry nor Telegram', async () => {
+  const ways: Array<[string, () => void]> = [
+    ['wrong key (401)', () => (resendStatus = 401)],
+    ['restricted key, wrong sender (403)', () => (resendStatus = 403)],
+    ['Resend down (503)', () => (resendStatus = 503)],
+    ['unreachable (fetch throws)', () => (resendThrows = true)],
+  ];
+  const seen: string[] = [];
+  let ip = 60;
+  for (const [how, breakIt] of ways) {
+    captured = [];
+    notified = [];
+    const logs: string[] = [];
+    console.log = (line: unknown) => void logs.push(String(line));
+    breakIt();
+    const name = `Resend: ${how}`;
+    const response = await onRequestPost({ request: post({ ...valid, name }, { json: true, ip: `198.51.100.${ip++}` }), env: { ...notifying(), NOTIFY_FROM: 'Anir site <site@send.aniragency.mn>' } });
+    resendStatus = null;
+    resendThrows = false;
+    console.log = () => {};
+    assert.equal(response.status, 200, `${how}: the visitor is answered`);
+    assert.deepEqual(captured.map((r) => r.name), [name], `${how}: stored`);
+    assert.equal(captured[0].unrecognised?.length ?? 0, 0, `${how}: in «Шинэ», not «Шалгах»`);
+    const telegram = notified.filter((n) => n.channel === 'telegram');
+    assert.equal(telegram.length, 1, `${how}: Telegram still told`);
+    assert.ok(telegram[0].text.includes(name) && telegram[0].text.includes('Stored in Supabase.'));
+    assert.ok(logs.some((l) => /via email: FAILED/.test(l)), `${how}: the failure is logged, not swallowed`);
+    assert.ok(logs.some((l) => /via telegram: sent/.test(l)), `${how}: Telegram logged as sent`);
+    seen.push(how);
+  }
+  // And working, it sends from the verified domain — never Resend's test sender.
+  notified = [];
+  await onRequestPost({ request: post(valid, { json: true, ip: '198.51.100.70' }), env: { ...notifying(), NOTIFY_FROM: 'Anir site <site@send.aniragency.mn>' } });
+  assert.equal(notified.find((n) => n.channel === 'email')?.from, 'Anir site <site@send.aniragency.mn>');
+  return `${seen.join('; ')}: stored, 200, in «Шинэ», Telegram sent, "email: FAILED" logged; working, from site@send.aniragency.mn`;
 });
 
 Object.assign(console, quiet);
